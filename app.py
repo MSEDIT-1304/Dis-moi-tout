@@ -167,20 +167,17 @@ def check_login(username):
 
     return "ok"
 
+
 # ==========================================================
 # WEBHOOK MAKE
 # ==========================================================
 
-def send_to_webhook(username):
+def send_to_webhook(username, price=0, trial=True):
 
     data = {
-
         "username": username,
-
-        "trial": True,
-
-        "price": 0
-
+        "price": price,
+        "trial": trial
     }
 
     try:
