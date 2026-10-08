@@ -636,3 +636,534 @@ if __name__ == "__main__":
         debug=True
     )
 
+# ==========================================================
+# RÉCUPÉRATION DE LA FAMILLE
+# ==========================================================
+
+def get_family(admin_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM famille
+        WHERE admin_id = ?
+        """,
+        (admin_id,)
+    )
+
+    famille = cursor.fetchone()
+
+    conn.close()
+
+    return famille
+
+# ==========================================================
+# RÉCUPÉRATION DES MEMBRES
+# ==========================================================
+
+def get_members(famille_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM membres
+        WHERE famille_id = ?
+        ORDER BY prenom, nom
+        """,
+        (famille_id,)
+    )
+
+    membres = cursor.fetchall()
+
+    conn.close()
+
+    return membres
+
+# ==========================================================
+# NOMBRE DE MEMBRES
+# ==========================================================
+
+def count_members(famille_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM membres
+        WHERE famille_id = ?
+        """,
+        (famille_id,)
+    )
+
+    total = cursor.fetchone()[0]
+
+    conn.close()
+
+    return total
+
+# ==========================================================
+# VÉRIFICATION ACCÈS ADMINISTRATEUR
+# ==========================================================
+
+def admin_required():
+
+    return (
+        session.get("logged") is True
+        and session.get("admin_logged") is True
+    )
+
+# ==========================================================
+# CRÉATION D'UN MEMBRE
+# ==========================================================
+
+def create_member(
+    famille_id,
+    prenom,
+    nom,
+    email,
+    password,
+    peut_modifier=True
+):
+
+    hashed = hash_password(password)
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO membres
+        (
+            famille_id,
+            prenom,
+            nom,
+            email,
+            password,
+            role,
+            peut_modifier
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            famille_id,
+            prenom,
+            nom,
+            email,
+            hashed,
+            "membre",
+            1 if peut_modifier else 0
+        )
+    )
+
+    conn.commit()
+
+    conn.close()
+
+    return True
+
+# ==========================================================
+# VÉRIFICATION E-MAIL MEMBRE
+# ==========================================================
+
+def member_email_exists(email):
+
+    if not email.strip():
+        return False
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM membres
+        WHERE email = ?
+        """,
+        (email.strip().lower(),)
+    )
+
+    membre = cursor.fetchone()
+
+    conn.close()
+
+    return membre is not None
+
+# ==========================================================
+# SUPPRESSION D'UN MEMBRE
+# ==========================================================
+
+def delete_member(
+    membre_id,
+    famille_id
+):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        DELETE FROM membres
+        WHERE id = ?
+        AND famille_id = ?
+        """,
+        (
+            membre_id,
+            famille_id
+        )
+    )
+
+    conn.commit()
+
+    deleted = cursor.rowcount > 0
+
+    conn.close()
+
+    return deleted
+
+# ==========================================================
+# VÉRIFICATION FAMILLE EXISTANTE
+# ==========================================================
+
+def family_exists(admin_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM famille
+        WHERE admin_id = ?
+        """,
+        (admin_id,)
+    )
+
+    famille = cursor.fetchone()
+
+    conn.close()
+
+    return famille is not None
+
+# ==========================================================
+# RÉCUPÉRER L'ID D'UNE FAMILLE
+# ==========================================================
+
+def get_family_id(admin_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM famille
+        WHERE admin_id = ?
+        """,
+        (admin_id,)
+    )
+
+    famille = cursor.fetchone()
+
+    conn.close()
+
+    if famille:
+        return famille[0]
+
+    return None
+
+# ==========================================================
+# RÉCUPÉRER L'ADMINISTRATEUR D'UNE FAMILLE
+# ==========================================================
+
+def get_family_admin(famille_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT admin_id
+        FROM famille
+        WHERE id = ?
+        """,
+        (famille_id,)
+    )
+
+    famille = cursor.fetchone()
+
+    conn.close()
+
+    if famille:
+        return famille[0]
+
+    return None
+
+# ==========================================================
+# VÉRIFIER L'APPARTENANCE D'UN MEMBRE À UNE FAMILLE
+# ==========================================================
+
+def member_belongs_to_family(
+    membre_id,
+    famille_id
+):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM membres
+        WHERE id = ?
+        AND famille_id = ?
+        """,
+        (
+            membre_id,
+            famille_id
+        )
+    )
+
+    membre = cursor.fetchone()
+
+    conn.close()
+
+    return membre is not None
+
+# ==========================================================
+# VÉRIFIER SI UN EMAIL DE MEMBRE EXISTE
+# ==========================================================
+
+def member_exists_by_email(email):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM membres
+        WHERE email = ?
+        """,
+        (email,)
+    )
+
+    membre = cursor.fetchone()
+
+    conn.close()
+
+    return membre is not None
+
+# ==========================================================
+# RÉCUPÉRER UN MEMBRE PAR SON EMAIL
+# ==========================================================
+
+def get_member_by_email(email):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM membres
+        WHERE email = ?
+        """,
+        (email,)
+    )
+
+    membre = cursor.fetchone()
+
+    conn.close()
+
+    return membre
+
+# ==========================================================
+# RÉCUPÉRER UN MEMBRE PAR SON ID
+# ==========================================================
+
+def get_member_by_id(membre_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM membres
+        WHERE id = ?
+        """,
+        (membre_id,)
+    )
+
+    membre = cursor.fetchone()
+
+    conn.close()
+
+    return membre
+
+# ==========================================================
+# RÉCUPÉRER L'ID DU MEMBRE CONNECTÉ
+# ==========================================================
+
+def get_current_member_id(email):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM membres
+        WHERE email = ?
+        """,
+        (email,)
+    )
+
+    membre = cursor.fetchone()
+
+    conn.close()
+
+    if membre:
+        return membre[0]
+
+    return None
+
+
+# ==========================================================
+# VÉRIFIER LES DROITS DE MODIFICATION D'UN MEMBRE
+# ==========================================================
+
+def member_can_modify(membre_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT peut_modifier
+        FROM membres
+        WHERE id = ?
+        """,
+        (membre_id,)
+    )
+
+    membre = cursor.fetchone()
+
+    conn.close()
+
+    if membre:
+        return bool(membre[0])
+
+    return False
+
+# ==========================================================
+# RÉCUPÉRER LE MEMBRE ET SA FAMILLE
+# ==========================================================
+
+def get_member_family(membre_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            membres.id,
+            membres.famille_id,
+            membres.prenom,
+            membres.nom,
+            membres.email,
+            membres.peut_modifier,
+            famille.admin_id
+        FROM membres
+        JOIN famille
+            ON membres.famille_id = famille.id
+        WHERE membres.id = ?
+        """,
+        (membre_id,)
+    )
+
+    result = cursor.fetchone()
+
+    conn.close()
+
+    return result
+
+# ==========================================================
+# VÉRIFIER SI UN MEMBRE EST ADMINISTRATEUR
+# ==========================================================
+
+def is_family_admin(admin_id, famille_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT id
+        FROM famille
+        WHERE id = ?
+        AND admin_id = ?
+        """,
+        (
+            famille_id,
+            admin_id
+        )
+    )
+
+    result = cursor.fetchone()
+
+    conn.close()
+
+    return result is not None
+
+# ==========================================================
+# RÉCUPÉRER UN UTILISATEUR PAR SON ID
+# ==========================================================
+
+def get_user_by_id(user_id):
+
+    conn = get_connection()
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,)
+    )
+
+    user = cursor.fetchone()
+
+    conn.close()
+
+    return user
+
