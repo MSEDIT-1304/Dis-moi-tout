@@ -22,13 +22,38 @@ from datetime import datetime
 
 from config import (
     DATABASE,
-    WEBHOOK_URL,
-    SHEET_ID,
-    PRICE_TVAC,
-    TRIAL_LINK,
-    STRIPE_LINK,
     SECRET_KEY
 )
+
+
+# ==========================================================
+# CONFIGURATION GOOGLE SHEETS
+# ==========================================================
+
+SHEET_ID = "1JWwwLP3IKaG-ELsC3li84eouOFVFnv_C5MxBDQSfz3M"
+
+
+# ==========================================================
+# CONFIGURATION MAKE
+# ==========================================================
+
+WEBHOOK_URL = "https://hook.eu1.make.com/942mf8fk2jehv637xc3s0tsjsxrad0gu"
+
+
+# ==========================================================
+# CONFIGURATION STRIPE — DIS-MOI TOUT
+# ==========================================================
+
+# Essai gratuit : 7 jours
+TRIAL_DAYS = 7
+
+TRIAL_LINK = "https://buy.stripe.com/00w28s2wifc1cmn7PW9fW0g"
+
+# Abonnement : 10 € TTC / mois
+PRICE_TVAC = 10
+
+STRIPE_LINK = "https://buy.stripe.com/aFa14odaWd3Tdqrc6c9fW0n"
+
 
 # ==========================================================
 # APPLICATION FLASK
