@@ -79,19 +79,6 @@ def get_connection():
 
     return conn
 
-# ==========================================================
-# INITIALISATION SQLITE
-# ==========================================================
-
-def init_database():
-
-    conn = get_connection()
-
-    cursor = conn.cursor()
-
-    conn.commit()
-
-    conn.close()
 
 # ==========================================================
 # GOOGLE SHEETS
@@ -214,12 +201,6 @@ def verify_password(
         hashed_password
     )
 
-# ==========================================================
-# DÉMARRAGE
-# ==========================================================
-
-init_database()
-
 
 # ==========================================================
 # ACCUEIL
@@ -235,118 +216,7 @@ def home():
         stripe_link=STRIPE_LINK
     )
 
-# ==========================================================
-# INSCRIPTION
-# ==========================================================
 
-@app.route(
-    "/register",
-    methods=["POST"]
-)
-def register():
-
-    prenom = request.form.get("prenom", "").strip()
-
-    nom = request.form.get("nom", "").strip()
-
-    email = request.form.get("email", "").strip().lower()
-
-    password = request.form.get("password", "")
-
-    password2 = request.form.get("password2", "")
-
-    if prenom == "":
-
-        flash("Veuillez saisir votre prénom.")
-
-        return redirect(url_for("home"))
-
-    if nom == "":
-
-        flash("Veuillez saisir votre nom.")
-
-        return redirect(url_for("home"))
-
-    if email == "":
-
-        flash("Veuillez saisir votre adresse e-mail.")
-
-        return redirect(url_for("home"))
-
-    if password == "":
-
-        flash("Veuillez saisir un mot de passe.")
-
-        return redirect(url_for("home"))
-
-    if password != password2:
-
-        flash("Les mots de passe sont différents.")
-
-        return redirect(url_for("home"))
-
-    conn = get_connection()
-
-    cursor = conn.cursor()
-
-    cursor.execute(
-
-        """
-        SELECT id
-        FROM admin
-        WHERE email = ?
-        """,
-
-        (email,)
-    )
-
-    existe = cursor.fetchone()
-
-    if existe:
-
-        conn.close()
-
-        flash("Cette adresse e-mail existe déjà.")
-
-        return redirect(url_for("home"))
-
-    hashed = hash_password(password)
-
-    cursor.execute(
-
-        """
-        INSERT INTO admin
-        (
-            nom,
-            prenom,
-            email,
-            password
-        )
-
-        VALUES
-        (?, ?, ?, ?)
-        """,
-
-        (
-            nom,
-            prenom,
-            email,
-            hashed
-        )
-
-    )
-
-    conn.commit()
-
-    conn.close()
-
-    send_to_webhook(email)
-
-    flash(
-        "Compte créé avec succès."
-    )
-
-    return redirect(TRIAL_LINK)
 
 # ==========================================================
 # CONNEXION
@@ -1345,6 +1215,12 @@ def init_database():
     conn.commit()
 
     conn.close()
+
+# ==========================================================
+# INITIALISATION DE LA BASE
+# ==========================================================
+
+init_database()
 
 # ==========================================================
 # INSCRIPTION ADMINISTRATEUR
