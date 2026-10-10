@@ -308,52 +308,7 @@ def login():
         url_for("dashboard")
     )
 
-    conn = get_connection()
-
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        SELECT *
-        FROM admin
-        WHERE email = ?
-        """,
-        (email,)
-    )
-
-    admin = cursor.fetchone()
-
-    conn.close()
-
-    if admin is None:
-
-        flash("Compte introuvable.")
-
-        return redirect(url_for("home"))
-
-    if not verify_password(
-        password,
-        admin["password"]
-    ):
-
-        flash("Mot de passe incorrect.")
-
-        return redirect(url_for("home"))
-
-    session["logged"] = True
-
-    session["admin_logged"] = True
-
-    session["admin_id"] = admin["id"]
-
-    session["user_name"] = (
-        f"{admin['prenom']} {admin['nom']}"
-    )
-
-    return redirect(
-        url_for("dashboard")
-    )
-
+    
 # ==========================================================
 # DÉCONNEXION
 # ==========================================================
@@ -365,76 +320,8 @@ def logout():
 
     return redirect(url_for("home"))
 
-# ==========================================================
-# CRÉATION FAMILLE
-# ==========================================================
 
-@app.route(
-    "/create_family",
-    methods=["POST"]
-)
-def create_family():
 
-    if not session.get("logged"):
-
-        return redirect(url_for("home"))
-
-    nom_famille = request.form.get(
-        "nom_famille",
-        ""
-    ).strip()
-
-    if nom_famille == "":
-
-        flash("Veuillez saisir un nom.")
-
-        return redirect(url_for("dashboard"))
-
-    conn = get_connection()
-
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO famille
-        (
-            admin_id,
-            nom_famille
-        )
-        VALUES
-        (?, ?)
-        """,
-        (
-            session["admin_id"],
-            nom_famille
-        )
-    )
-
-    conn.commit()
-
-    conn.close()
-
-    flash("Famille créée.")
-
-    return redirect(url_for("dashboard"))
-
-# ==========================================================
-# AJOUT MEMBRE
-# ==========================================================
-
-@app.route(
-    "/add_member",
-    methods=["POST"]
-)
-def add_member():
-
-    if not session.get("logged"):
-
-        return redirect(url_for("home"))
-
-    return render_template(
-        "add_member.html"
-    )
 
 # ==========================================================
 # LISTE MEMBRES
@@ -472,35 +359,8 @@ def members():
         membres=membres
     )
 
-# ==========================================================
-# CALENDRIER
-# ==========================================================
 
-@app.route("/calendar")
-def calendar():
 
-    if not session.get("logged"):
-
-        return redirect(url_for("home"))
-
-    return render_template(
-        "calendar.html"
-    )
-
-# ==========================================================
-# PARAMÈTRES
-# ==========================================================
-
-@app.route("/settings")
-def settings():
-
-    if not session.get("logged"):
-
-        return redirect(url_for("home"))
-
-    return render_template(
-        "settings.html"
-    )
 
 # ==========================================================
 # PROFIL
@@ -517,17 +377,6 @@ def profile():
         "profile.html"
     )
 
-# ==========================================================
-# LANCEMENT
-# ==========================================================
-
-if __name__ == "__main__":
-
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True
-    )
 
 # ==========================================================
 # RÉCUPÉRATION DE LA FAMILLE
