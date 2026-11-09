@@ -1,1 +1,27 @@
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+.env
+
+# Base de données
+*.db
+*.sqlite
+*.sqlite3
+
+# Fichiers temporaires
+*.log
+.DS_Store
+Thumbs.db
+
+# Fichiers envoyés par les utilisateurs
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Secrets et identifiants
+credentials.json
+token.json
+
