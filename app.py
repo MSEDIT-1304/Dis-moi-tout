@@ -870,30 +870,7 @@ def is_family_admin(admin_id, famille_id):
 
     return result is not None
 
-# ==========================================================
-# RÉCUPÉRER UN UTILISATEUR PAR SON ID
-# ==========================================================
 
-def get_user_by_id(user_id):
-
-    conn = get_connection()
-
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        SELECT *
-        FROM users
-        WHERE id = ?
-        """,
-        (user_id,)
-    )
-
-    user = cursor.fetchone()
-
-    conn.close()
-
-    return user
 
 # ==========================================================
 # INITIALISATION SQLITE
