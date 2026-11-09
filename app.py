@@ -362,20 +362,6 @@ def members():
 
 
 
-# ==========================================================
-# PROFIL
-# ==========================================================
-
-@app.route("/profile")
-def profile():
-
-    if not session.get("logged"):
-
-        return redirect(url_for("home"))
-
-    return render_template(
-        "profile.html"
-    )
 
 
 # ==========================================================
