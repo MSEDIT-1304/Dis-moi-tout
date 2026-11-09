@@ -219,4 +219,17 @@ tr:nth-child(even) {
     background: #FCE4EC;
 }
 
+/* Images et logos : affichage carré 192 x 192 */
+.logo img,
+.app-image,
+.user-image {
+    width: 192px;
+    height: 192px;
+    object-fit: contain;
+    display: block;
+}
 
+/* Photos remplissant entièrement le carré */
+.user-image.cover {
+    object-fit: cover;
+}
