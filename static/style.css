@@ -161,3 +161,62 @@ textarea {
     }
 }
 
+/* Calendrier mauve clair */
+.calendar,
+.calendar-container,
+.fc,
+.fc-view-harness {
+    background: #E8DDF5;
+    border-radius: 14px;
+}
+
+/* Cases et jours du calendrier */
+.fc-daygrid-day,
+.fc-timegrid-slot {
+    background: #F7F2FC;
+}
+
+/* Formulaires blancs */
+form,
+.form-container,
+.form-card {
+    background: #FFFFFF;
+    color: #45647F;
+    padding: 22px;
+    border-radius: 14px;
+}
+
+/* Textes des formulaires */
+form label,
+.form-container label,
+.form-card label {
+    color: #45647F;
+}
+
+/* Tableaux rose soutenu */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #F4B6CC;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+th {
+    background: #EFA3BF;
+    color: #FFFFFF;
+    padding: 13px;
+    text-align: left;
+}
+
+td {
+    color: #45647F;
+    padding: 12px;
+    border-bottom: 1px solid #FCE4EC;
+}
+
+tr:nth-child(even) {
+    background: #FCE4EC;
+}
+
+
