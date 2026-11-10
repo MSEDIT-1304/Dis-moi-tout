@@ -1,21 +1,24 @@
 
 import os
 
-# Configuration de l'application
-SECRET_KEY = os.environ.get("SECRET_KEY", "cle-secrete-a-remplacer-en-production")
-
-# Base de données SQLite
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DATABASE_PATH = os.path.join(BASE_DIR, "database", "dismoitout.db")
 
-# Configuration des sessions
-SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Lax"
+# Base locale ou base persistante Render Disk
+LOCAL_DATABASE = os.path.join(
+    BASE_DIR,
+    "database",
+    "dismoitout.db"
+)
 
-# Configuration des fichiers envoyés
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
-MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 Mo
+DATABASE = os.environ.get(
+    "DATABASE_PATH",
+    LOCAL_DATABASE
+)
 
-# Extensions autorisées
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "pdf", "ics"}
+os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
 
+# Clé secrète Flask
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "cle-provisoire-de-developpement"
+)
