@@ -44,8 +44,8 @@ WEBHOOK_URL = "https://hook.eu1.make.com/942mf8fk2jehv637xc3s0tsjsxrad0gu"
 # CONFIGURATION STRIPE — DIS-MOI TOUT
 # ==========================================================
 
-# Essai gratuit : 7 jours
-TRIAL_DAYS = 7
+# Essai gratuit : 15 jours
+TRIAL_DAYS = 15
 
 TRIAL_LINK = "https://buy.stripe.com/00w28s2wifc1cmn7PW9fW0g"
 
@@ -53,6 +53,11 @@ TRIAL_LINK = "https://buy.stripe.com/00w28s2wifc1cmn7PW9fW0g"
 PRICE_TVAC = 10
 
 STRIPE_LINK = "https://buy.stripe.com/aFa14odaWd3Tdqrc6c9fW0n"
+
+# Abonnement : 90 € TTC / an
+PRICE_TVAC = 90
+
+STRIPE_LINK = "https://buy.stripe.com/dRmaEY6Mye7Xcmngms9fW14"
 
 
 # ==========================================================
