@@ -1,1 +1,73 @@
 
+{% extends "base.html" %}
+
+{% block content %}
+<div class="home-container">
+
+    <h1>Bienvenue sur Dis-moi tout</h1>
+
+    <p class="home-intro">
+        Un espace privé pour partager, organiser et conserver
+        vos souvenirs en famille.
+    </p>
+
+    <section class="subscription-section">
+        <h2>Commencez gratuitement</h2>
+
+        <p>Profitez de 15 jours d'essai gratuit.</p>
+
+        <a href="{{ trial_link }}" class="subscription-button">
+            Démarrer mon essai gratuit
+        </a>
+    </section>
+
+    <section class="subscription-section">
+        <h2>Choisissez votre abonnement</h2>
+
+        <div class="subscription-options">
+
+            <div class="subscription-card">
+                <h3>Abonnement mensuel</h3>
+
+                <p class="subscription-price">
+                    {{ price_monthly }} € <span>/ mois</span>
+                </p>
+
+                <p class="subscription-description">
+                    Un seul abonnement pour toute la famille :
+                    partagez votre espace avec vos proches.
+                </p>
+
+                <a href="{{ stripe_link_monthly }}" class="subscription-button">
+                    Choisir le mensuel
+                </a>
+            </div>
+
+            <div class="subscription-card">
+                <h3>Abonnement annuel</h3>
+
+                <p class="subscription-price">
+                    {{ price_yearly }} € <span>/ an</span>
+                </p>
+
+                <p class="subscription-description">
+                    Un seul abonnement pour toute la famille :
+                    profitez de votre espace familial toute l'année.
+                </p>
+
+                <a href="{{ stripe_link_yearly }}" class="subscription-button">
+                    Choisir l'annuel
+                </a>
+            </div>
+
+        </div>
+    </section>
+
+    <p class="home-login">
+        Déjà inscrit ?
+        <a href="{{ url_for('login') }}">Se connecter</a>
+    </p>
+
+</div>
+{% endblock %}
+
