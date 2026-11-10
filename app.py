@@ -211,15 +211,18 @@ def verify_password(
 # ACCUEIL
 # ==========================================================
 
+
 @app.route("/")
 def home():
-
     return render_template(
         "index.html",
-        price=PRICE_TVAC,
         trial_link=TRIAL_LINK,
-        stripe_link=STRIPE_LINK
+        price_monthly=PRICE_MONTHLY,
+        stripe_link_monthly=STRIPE_LINK_MONTHLY,
+        price_yearly=PRICE_YEARLY,
+        stripe_link_yearly=STRIPE_LINK_YEARLY
     )
+
 
 
 
