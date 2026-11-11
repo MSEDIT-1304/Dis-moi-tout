@@ -1,1 +1,167 @@
 
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="login-page">
+
+    <header class="login-header">
+        <h1>Connexion</h1>
+        <p>Bienvenue sur Dis-moi tout !</p>
+    </header>
+
+    <div class="login-grid">
+
+        <section class="login-card">
+            <h2>Espace administrateur</h2>
+            <p>Connectez-vous pour gérer votre espace familial.</p>
+
+            <form method="POST" action="{{ url_for('login') }}">
+
+                <label for="admin-email">Adresse e-mail</label>
+                <input
+                    type="email"
+                    id="admin-email"
+                    name="email"
+                    placeholder="Votre adresse e-mail"
+                    required
+                >
+
+                <label for="admin-password">Mot de passe</label>
+                <input
+                    type="password"
+                    id="admin-password"
+                    name="password"
+                    placeholder="Votre mot de passe"
+                    required
+                >
+
+                <button type="submit" class="login-button">
+                    Se connecter
+                </button>
+
+            </form>
+        </section>
+
+        <section class="login-card">
+            <h2>Espace membre</h2>
+            <p>Connectez-vous avec vos identifiants de membre.</p>
+
+            <form method="POST" action="{{ url_for('member_login') }}">
+
+                <label for="member-email">Adresse e-mail</label>
+                <input
+                    type="email"
+                    id="member-email"
+                    name="email"
+                    placeholder="Votre adresse e-mail"
+                    required
+                >
+
+                <label for="member-password">Mot de passe</label>
+                <input
+                    type="password"
+                    id="member-password"
+                    name="password"
+                    placeholder="Votre mot de passe"
+                    required
+                >
+
+                <button type="submit" class="login-button">
+                    Se connecter
+                </button>
+
+            </form>
+        </section>
+
+    </div>
+
+    <p class="login-back">
+        <a href="{{ url_for('home') }}">Retour à l'accueil</a>
+    </p>
+
+</div>
+
+<style>
+.login-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 30px 15px;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+}
+
+.login-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+}
+
+.login-card h2,
+.login-card p,
+.login-card label {
+    color: white;
+}
+
+.login-card label {
+    display: block;
+    margin: 18px 0 7px;
+}
+
+.login-card input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.login-button {
+    width: 100%;
+    margin-top: 22px;
+    padding: 13px;
+    background: #c5a15b;
+    color: #172b40;
+    border: none;
+    border-radius: 7px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.login-button:hover {
+    background: #dfbd78;
+}
+
+.login-back {
+    text-align: center;
+    margin-top: 25px;
+}
+
+.login-back a {
+    color: #c5a15b;
+    font-weight: bold;
+}
+
+@media (max-width: 650px) {
+    .login-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .login-card {
+        padding: 20px;
+    }
+}
+</style>
+
+{% endblock %}
+
