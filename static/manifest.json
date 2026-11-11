@@ -1,0 +1,17 @@
+{
+  "name": "Dis-moi tout",
+  "short_name": "Dis-moi tout",
+  "description": "L'assistant qui pense avec vous.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/static/images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
