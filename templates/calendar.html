@@ -12,7 +12,47 @@
             Retour au tableau de bord
         </a>
     </header>
+<section class="calendar-card calendar-import-card">
+    <h2>Importer mes calendriers externes</h2>
+    <p>Importez vos événements Google ou iCloud dans le calendrier familial.</p>
 
+    <div class="calendar-import-grid">
+
+        <div class="calendar-import-provider">
+            <h3>Google Calendar</h3>
+            <p>Connectez votre compte Google puis lancez l'import.</p>
+
+            <a class="calendar-button" href="{{ url_for('google_connect') }}">
+                Connecter Google
+            </a>
+
+            <form method="POST" action="{{ url_for('calendar_import') }}">
+                <button type="submit" class="calendar-button">
+                    Importer tous mes agendas Google
+                </button>
+            </form>
+        </div>
+
+        <div class="calendar-import-provider">
+            <h3>Apple Calendar / iCloud</h3>
+            <p>Utilisez votre identifiant Apple et un mot de passe spécifique d'application.</p>
+
+            <form method="POST" action="{{ url_for('apple_import') }}">
+                <label for="apple_id">Identifiant Apple</label>
+                <input type="text" id="apple_id" name="apple_id" required>
+
+                <label for="apple_app_password">Mot de passe spécifique d'application</label>
+                <input type="password" id="apple_app_password"
+                       name="apple_app_password" required>
+
+                <button type="submit" class="calendar-button">
+                    Importer mes agendas Apple
+                </button>
+            </form>
+        </div>
+
+    </div>
+</section>
     <section class="calendar-card">
         <h2>Ajouter un événement</h2>
 
