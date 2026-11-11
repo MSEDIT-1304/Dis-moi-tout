@@ -394,7 +394,7 @@ def members():
     conn.close()
 
     return render_template(
-        "dashboard_members.html",
+        "dashboard_member.html",
         membres=membres
     )
 
