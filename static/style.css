@@ -343,3 +343,23 @@ textarea {
         gap: 8px;
     }
 }
+/* TITRE CENTRÉ ET AGRANDI — PC UNIQUEMENT */
+@media (min-width: 801px) {
+
+    .site-header {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .site-name {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 36px !important;
+        font-weight: bold;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+}
