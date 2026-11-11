@@ -4,6 +4,24 @@
 {% block content %}
 
 <div class="login-page">
+{% if request.args.get('abonnement') == 'expire' %}
+        <section class="login-card">
+            <h2>Votre essai gratuit est expiré</h2>
+            <p>Veuillez vous abonner pour continuer à utiliser Dis-moi tout.</p>
+
+            <p>
+                <a class="login-button" href="{{ stripe_link_monthly }}">
+                    Abonnement mensuel — {{ price_monthly }} €
+                </a>
+            </p>
+
+            <p>
+                <a class="login-button" href="{{ stripe_link_yearly }}">
+                    Abonnement annuel — {{ price_yearly }} €
+                </a>
+            </p>
+        </section>
+    {% endif %}
 
     <header class="login-header">
         <h1>Connexion</h1>
