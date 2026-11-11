@@ -230,11 +230,11 @@ def home():
 # CONNEXION
 # ==========================================================
 
-@app.route(
-    "/login",
-    methods=["POST"]
-)
+@app.route("/login", methods=["GET", "POST"])
 def login():
+
+    if request.method == "GET":
+        return render_template("login.html")
 
     email = request.form.get(
         "email",
