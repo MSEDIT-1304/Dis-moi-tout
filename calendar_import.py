@@ -127,7 +127,8 @@ def import_events(
             membre_id,
             event["titre"],
             event["date"],
-            event["heure"]
+            event["heure"],
+            calendrier
         ):
 
             save_imported_event(
