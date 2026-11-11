@@ -257,19 +257,19 @@ def login():
     if result == "trial_expired":
 
         flash(
-            "Votre essai gratuit est terminé."
+            "Votre essai gratuit est terminé. Choisissez votre abonnement pour continuer."
         )
 
-        return redirect(STRIPE_LINK)
+        return redirect(url_for("home"))
 
     if result == "subscription_expired":
 
         flash(
-            "Votre abonnement est expiré."
+            "Votre abonnement est expiré. Choisissez votre formule pour renouveler votre accès."
         )
 
-        return redirect(STRIPE_LINK)
-
+        return redirect(url_for("home"))
+        
     conn = get_connection()
 
     cursor = conn.cursor()
