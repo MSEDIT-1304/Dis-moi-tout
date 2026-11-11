@@ -9,5 +9,4 @@ google-auth-httplib2
 icalendar
 python-dateutil
 pandas
-icalendar
 recurring-ical-events
