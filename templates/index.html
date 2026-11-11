@@ -12,32 +12,32 @@
     </p>
 
     <section class="subscription-section">
-        <h2>Commencez gratuitement</h2>
+        <h2>Créer votre compte</h2>
 
-        <p>Profitez de 15 jours d'essai gratuit.</p>
+        <p>Inscrivez-vous pour accéder à Dis-moi tout.</p>
 
         <a href="{{ url_for('register') }}" class="subscription-button">
-            Démarrer mon essai gratuit
+            Inscrivez-vous
         </a>
-    </section>
 
+        <p class="home-login">
+            Déjà inscrit ?
+            <a href="{{ url_for('login') }}">Connectez-vous</a>
+        </p>
+    </section>
+{% if request.args.get('abonnement') == 'expire' %}
     <section class="subscription-section">
-        <h2>Choisissez votre abonnement</h2>
+        <h2>Votre période d'essai est terminée</h2>
+
+        <p>Choisissez votre formule pour continuer.</p>
 
         <div class="subscription-options">
 
             <div class="subscription-card">
                 <h3>Abonnement mensuel</h3>
-
                 <p class="subscription-price">
                     {{ price_monthly }} € <span>/ mois</span>
                 </p>
-
-                <p class="subscription-description">
-                    Un seul abonnement pour toute la famille :
-                    partagez votre espace avec vos proches.
-                </p>
-
                 <a href="{{ stripe_link_monthly }}" class="subscription-button">
                     Choisir le mensuel
                 </a>
@@ -45,16 +45,9 @@
 
             <div class="subscription-card">
                 <h3>Abonnement annuel</h3>
-
                 <p class="subscription-price">
                     {{ price_yearly }} € <span>/ an</span>
                 </p>
-
-                <p class="subscription-description">
-                    Un seul abonnement pour toute la famille :
-                    profitez de votre espace familial toute l'année.
-                </p>
-
                 <a href="{{ stripe_link_yearly }}" class="subscription-button">
                     Choisir l'annuel
                 </a>
@@ -62,8 +55,8 @@
 
         </div>
     </section>
-
-    
+    {% endif %}
+  
 
 </div>
 {% endblock %}
