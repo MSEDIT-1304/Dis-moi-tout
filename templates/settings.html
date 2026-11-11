@@ -1,1 +1,147 @@
 
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="settings-page">
+
+    <header class="settings-header">
+        <h1>Paramètres</h1>
+        <p>Retrouvez les différentes options de votre espace familial.</p>
+    </header>
+
+    <section class="settings-card">
+        <h2>Mon compte</h2>
+        <p>Consultez les informations de votre profil.</p>
+        <a href="{{ url_for('profile') }}" class="settings-button">
+            Accéder à mon profil
+        </a>
+    </section>
+
+    <section class="settings-card">
+        <h2>Calendrier</h2>
+        <p>Accédez à votre calendrier et à ses options d'importation.</p>
+
+        <div class="settings-actions">
+            <a href="{{ url_for('calendar') }}" class="settings-button">
+                Voir le calendrier
+            </a>
+
+            <a href="{{ url_for('calendar_import') }}" class="settings-button">
+                Importer un calendrier
+            </a>
+        </div>
+    </section>
+
+    <section class="settings-card">
+        <h2>Gestion familiale</h2>
+        <p>Consultez les membres de votre famille.</p>
+        <a href="{{ url_for('members') }}" class="settings-button">
+            Gérer les membres
+        </a>
+    </section>
+
+    <section class="settings-card settings-logout">
+        <h2>Déconnexion</h2>
+        <p>Quittez votre espace Dis-moi tout.</p>
+        <a href="{{ url_for('logout') }}" class="settings-button settings-button-danger">
+            Se déconnecter
+        </a>
+    </section>
+
+    <div class="settings-back">
+        <a href="{{ url_for('dashboard') }}">Retour au tableau de bord</a>
+    </div>
+
+</div>
+
+<style>
+.settings-page {
+    max-width: 850px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.settings-header {
+    margin-bottom: 25px;
+}
+
+.settings-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.settings-card h2,
+.settings-card p {
+    color: white;
+}
+
+.settings-card h2 {
+    margin-top: 0;
+}
+
+.settings-button {
+    display: inline-block;
+    background: #c5a15b;
+    color: #172b40;
+    padding: 12px 20px;
+    margin-top: 10px;
+    border-radius: 7px;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.settings-button:hover {
+    background: #dfbd78;
+}
+
+.settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.settings-button-danger {
+    background: #a94442;
+    color: white;
+}
+
+.settings-button-danger:hover {
+    background: #c45a57;
+}
+
+.settings-back {
+    text-align: center;
+    margin-top: 25px;
+}
+
+.settings-back a {
+    color: #b18b45;
+    font-weight: bold;
+}
+
+@media (max-width: 600px) {
+    .settings-page {
+        padding: 15px 10px;
+    }
+
+    .settings-card {
+        padding: 20px;
+    }
+
+    .settings-button {
+        display: block;
+        text-align: center;
+    }
+
+    .settings-actions {
+        display: block;
+    }
+}
+</style>
+
+{% endblock %}
+
