@@ -253,3 +253,81 @@ tr:nth-child(even) {
 .calendar-messages p {
     color: #245b2a;
 }
+
+/* =================================
+   REDUCTION DES TAILLES DES TEXTES
+   PC ET MOBILE
+   ================================= */
+
+body {
+    font-size: 14px;
+}
+
+h1 {
+    font-size: 26px;
+}
+
+h2 {
+    font-size: 21px;
+}
+
+h3 {
+    font-size: 18px;
+}
+
+p, label, li {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+button,
+.btn,
+.navigation a {
+    font-size: 13px;
+    padding: 9px 15px;
+}
+
+input,
+select,
+textarea {
+    font-size: 14px;
+    padding: 9px;
+}
+
+.site-footer {
+    font-size: 13px;
+    padding: 16px;
+}
+
+/* ADAPTATION MOBILE */
+
+@media (max-width: 768px) {
+
+    h1 {
+        font-size: 23px;
+    }
+
+    h2 {
+        font-size: 19px;
+    }
+
+    h3 {
+        font-size: 17px;
+    }
+
+    p, label, li {
+        font-size: 13px;
+    }
+
+    button,
+    .btn,
+    .navigation a {
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+
+    .page-content {
+        padding: 12px;
+        margin: 10px auto;
+    }
+}
