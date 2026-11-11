@@ -2599,7 +2599,7 @@ def calendar_import():
 
         return redirect(url_for("calendar_import"))
 
-    return render_template("calendar_import.html")
+    return redirect(url_for("calendar"))
 
 
 # ==========================================================
