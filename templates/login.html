@@ -53,6 +53,10 @@
                     placeholder="Votre mot de passe"
                     required
                 >
+<div class="show-password">
+    <input type="checkbox" onclick="document.getElementById('admin-password').type = this.checked ? 'text' : 'password'">
+    <label>Afficher le mot de passe</label>
+</div>
 
                 <button type="submit" class="login-button">
                     Se connecter
@@ -84,7 +88,10 @@
                     placeholder="Votre mot de passe"
                     required
                 >
-
+<div class="show-password">
+    <input type="checkbox" onclick="document.getElementById('member-password').type = this.checked ? 'text' : 'password'">
+    <label>Afficher le mot de passe</label>
+</div>
                 <button type="submit" class="login-button">
                     Se connecter
                 </button>
