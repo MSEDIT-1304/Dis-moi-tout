@@ -4,12 +4,13 @@
 
 from datetime import datetime
 import sqlite3
+
+from config import DATABASE
+
+
 # ==========================================================
 # CONNEXION SQLITE
 # ==========================================================
-
-DATABASE = "database/dismoitout.db"
-
 
 def get_connection():
 
@@ -60,34 +61,6 @@ def save_imported_event(
     conn.commit()
     conn.close()
 
-# ==========================================================
-# IMPORTER UNE LISTE D'ÉVÉNEMENTS
-# ==========================================================
-
-def import_events(
-    events,
-    famille_id,
-    membre_id,
-    calendrier
-):
-    """
-    Importe une liste d'événements provenant
-    d'un agenda externe.
-    """
-
-    for event in events:
-
-        save_imported_event(
-            famille_id=famille_id,
-            membre_id=membre_id,
-            titre=event["titre"],
-            description=event["description"],
-            date=event["date"],
-            heure=event["heure"],
-            calendrier=calendrier
-        )
-
-    return True
 
 # ==========================================================
 # VÉRIFIER SI L'ÉVÉNEMENT EXISTE DÉJÀ
