@@ -32,6 +32,7 @@ from google_calendar import (
     get_google_token,
     get_google_calendars,
     get_google_profile,
+    refresh_google_token,
     sync_google_calendar_by_id
 )
 
@@ -2471,18 +2472,132 @@ def google_callback():
 # IMPORT CALENDRIER EXTERNE
 # ==========================================================
 
-@app.route("/calendar/import")
+@app.route("/calendar/import", methods=["GET", "POST"])
 def calendar_import():
 
     if not calendar_access_required():
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
+    if request.method == "POST":
+        famille_id = session.get("famille_id")
+        membre_id = session.get("membre_id")
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT google_email, access_token, refresh_token, expires_at
+            FROM google_connections
+            WHERE famille_id = ?
+            """,
+            (famille_id,)
         )
+        connection = cursor.fetchone()
+        conn.close()
 
-    return render_template(
-        "calendar_import.html"
-    )
+        if not connection:
+            flash("Connectez d'abord votre compte Google.")
+            return redirect(url_for("calendar_import"))
+
+        access_token = connection["access_token"]
+        refresh_token = connection["refresh_token"]
+
+        # Renouveler le token lorsqu'il expire dans moins de 2 minutes.
+        try:
+            expiration = datetime.fromisoformat(connection["expires_at"])
+        except (TypeError, ValueError):
+            expiration = datetime.min
+
+        if expiration.timestamp() <= datetime.now().timestamp() + 120:
+            if not refresh_token:
+                flash("La connexion Google doit être renouvelée. Reconnectez votre compte.")
+                return redirect(url_for("google_connect"))
+
+            refreshed = refresh_google_token(
+                GOOGLE_CLIENT_ID,
+                GOOGLE_CLIENT_SECRET,
+                refresh_token
+            )
+            if not refreshed or not refreshed.get("access_token"):
+                flash("Impossible de renouveler la connexion Google. Reconnectez votre compte.")
+                return redirect(url_for("google_connect"))
+
+            access_token = refreshed["access_token"]
+            new_expiry = datetime.now().timestamp() + int(
+                refreshed.get("expires_in", 3600)
+            )
+
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE google_connections
+                SET access_token = ?, expires_at = ?
+                WHERE famille_id = ?
+                """,
+                (
+                    access_token,
+                    datetime.fromtimestamp(new_expiry).isoformat(),
+                    famille_id
+                )
+            )
+            conn.commit()
+            conn.close()
+
+        try:
+            calendars = get_google_calendars(access_token)
+        except Exception as exc:
+            flash(f"Impossible de récupérer les agendas Google : {exc}")
+            return redirect(url_for("calendar_import"))
+
+        if not calendars:
+            flash("Aucun agenda Google accessible n'a été trouvé.")
+            return redirect(url_for("calendar_import"))
+
+        total_imported = 0
+        total_skipped = 0
+        errors = []
+
+        for calendar in calendars:
+            calendar_id = calendar.get("id")
+            calendar_name = calendar.get("nom") or "Agenda Google"
+            if not calendar_id:
+                continue
+
+            # Le suffixe d'identifiant évite les collisions entre agendas
+            # qui portent le même nom dans Google.
+            source_name = f"Google | {calendar_name} [{calendar_id}]"
+
+            try:
+                result = sync_google_calendar_by_id(
+                    access_token=access_token,
+                    calendar_id=calendar_id,
+                    famille_id=famille_id,
+                    membre_id=membre_id,
+                    calendar_name=source_name
+                )
+                if result.get("error"):
+                    errors.append(f"{calendar_name}: {result['error']}")
+                else:
+                    total_imported += result.get("imported", 0)
+                    total_skipped += result.get("skipped", 0)
+            except Exception as exc:
+                errors.append(f"{calendar_name}: {exc}")
+
+        if errors:
+            flash(
+                f"Import partiel : {total_imported} événement(s) ajouté(s), "
+                f"{total_skipped} déjà présent(s). Erreurs : {' | '.join(errors)}"
+            )
+        else:
+            flash(
+                f"Import Google terminé : {total_imported} événement(s) ajouté(s), "
+                f"{total_skipped} déjà présent(s), sur {len(calendars)} agenda(s)."
+            )
+
+        return redirect(url_for("calendar_import"))
+
+    return render_template("calendar_import.html")
 
 # ==========================================================
 # REDIRECTION ADMIN APRÈS CONNEXION
