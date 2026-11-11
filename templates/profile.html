@@ -1,0 +1,176 @@
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="profile-page">
+
+    <header class="profile-header">
+        <h1>Mon profil</h1>
+        <p>Consultez les informations de votre compte.</p>
+    </header>
+
+    <section class="profile-card">
+
+        {% if admin %}
+
+            <div class="profile-avatar">
+                {{ admin['prenom'][0] }}{{ admin['nom'][0] }}
+            </div>
+
+            <h2>{{ admin['prenom'] }} {{ admin['nom'] }}</h2>
+
+            <div class="profile-information">
+                <div>
+                    <span>Prénom</span>
+                    <strong>{{ admin['prenom'] }}</strong>
+                </div>
+
+                <div>
+                    <span>Nom</span>
+                    <strong>{{ admin['nom'] }}</strong>
+                </div>
+
+                <div>
+                    <span>Adresse e-mail</span>
+                    <strong>{{ admin['email'] }}</strong>
+                </div>
+
+                <div>
+                    <span>Conjoint</span>
+                    <strong>{{ 'Oui' if admin['conjoint'] else 'Non' }}</strong>
+                </div>
+
+                <div>
+                    <span>Garde partagée</span>
+                    <strong>{{ 'Oui' if admin['garde_partagee'] else 'Non' }}</strong>
+                </div>
+
+                {% if admin['garde_partagee'] %}
+                    <div>
+                        <span>Fréquence de garde</span>
+                        <strong>{{ admin['frequence_garde'] or 'Non renseignée' }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Prochaine date de garde</span>
+                        <strong>{{ admin['prochaine_date_garde'] or 'Non renseignée' }}</strong>
+                    </div>
+                {% endif %}
+
+                <div>
+                    <span>Compte créé le</span>
+                    <strong>{{ admin['created_at'] }}</strong>
+                </div>
+            </div>
+
+        {% else %}
+
+            <h2>Profil administrateur indisponible</h2>
+            <p>Les informations de ce profil ne sont pas disponibles.</p>
+
+        {% endif %}
+
+    </section>
+
+    <div class="profile-actions">
+        <a href="{{ url_for('dashboard') }}" class="profile-button">
+            Retour au tableau de bord
+        </a>
+    </div>
+
+</div>
+
+<style>
+.profile-page {
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.profile-header {
+    margin-bottom: 25px;
+}
+
+.profile-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.profile-card h2,
+.profile-card p {
+    color: white;
+}
+
+.profile-avatar {
+    width: 75px;
+    height: 75px;
+    margin: 0 auto 15px;
+    border-radius: 50%;
+    background: #c5a15b;
+    color: #172b40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 25px;
+    font-weight: bold;
+}
+
+.profile-information {
+    margin-top: 25px;
+    text-align: left;
+}
+
+.profile-information div {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.profile-information span {
+    color: #dfbd78;
+}
+
+.profile-information strong {
+    color: white;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.profile-actions {
+    text-align: center;
+    margin-top: 25px;
+}
+
+.profile-button {
+    display: inline-block;
+    background: #c5a15b;
+    color: #172b40;
+    padding: 12px 20px;
+    border-radius: 7px;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+@media (max-width: 600px) {
+    .profile-card {
+        padding: 20px;
+    }
+
+    .profile-information div {
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .profile-information strong {
+        text-align: left;
+    }
+}
+</style>
+
+{% endblock %}
