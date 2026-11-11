@@ -253,43 +253,62 @@ def get_google_calendar_info(access_token):
 # RÉCUPÉRER LA LISTE DES CALENDRIERS GOOGLE
 # ==========================================================
 
+
 def get_google_calendars(access_token):
     """
-    Retourne la liste des calendriers
-    disponibles dans le compte Google.
+    Retourne tous les calendriers disponibles
+    dans le compte Google, avec pagination.
     """
 
     headers = {
         "Authorization": f"Bearer {access_token}"
     }
 
-    response = requests.get(
-        f"{GOOGLE_API_URL}/users/me/calendarList",
-        headers=headers
-    )
-
-    if response.status_code != 200:
-        return []
-
-    data = response.json()
-
     calendars = []
+    page_token = None
 
-    for item in data.get("items", []):
+    while True:
 
-        calendars.append({
-            "id": item.get("id"),
-            "nom": item.get("summary"),
-            "description": item.get("description", ""),
-            "principal": item.get("primary", False),
-            "couleur": item.get("backgroundColor", "#4285F4")
-        })
+        params = {
+            "maxResults": 250
+        }
+
+        if page_token:
+            params["pageToken"] = page_token
+
+        response = requests.get(
+            f"{GOOGLE_API_URL}/users/me/calendarList",
+            headers=headers,
+            params=params
+        )
+
+        if response.status_code != 200:
+            return calendars
+
+        data = response.json()
+
+        for item in data.get("items", []):
+
+            calendars.append({
+                "id": item.get("id"),
+                "nom": item.get("summary"),
+                "description": item.get("description", ""),
+                "principal": item.get("primary", False),
+                "couleur": item.get("backgroundColor", "#4285F4")
+            })
+
+        page_token = data.get("nextPageToken")
+
+        if not page_token:
+            break
 
     return calendars
+
 
 # ==========================================================
 # IMPORTER UN CALENDRIER GOOGLE SPÉCIFIQUE
 # ==========================================================
+
 
 def sync_google_calendar_by_id(
     access_token,
@@ -299,54 +318,72 @@ def sync_google_calendar_by_id(
     calendar_name="Google Agenda"
 ):
     """
-    Importe les événements d'un calendrier Google
-    spécifique.
+    Importe les événements d'un calendrier Google spécifique,
+    avec pagination et développement des événements récurrents.
     """
 
     headers = {
         "Authorization": f"Bearer {access_token}"
     }
 
-    response = requests.get(
-        f"{GOOGLE_API_URL}/calendars/{calendar_id}/events",
-        headers=headers
-    )
+    events = []
+    page_token = None
 
-    if response.status_code != 200:
-        return {
-            "imported": 0,
-            "skipped": 0
+    while True:
+
+        params = {
+            "maxResults": 2500,
+            "singleEvents": True,
+            "orderBy": "startTime"
         }
 
-    data = response.json()
+        if page_token:
+            params["pageToken"] = page_token
 
-    events = []
-
-    for item in data.get("items", []):
-
-        start = item.get("start", {})
-
-        datetime_value = (
-            start.get("dateTime")
-            or start.get("date")
+        response = requests.get(
+            f"{GOOGLE_API_URL}/calendars/{calendar_id}/events",
+            headers=headers,
+            params=params
         )
 
-        if not datetime_value:
-            continue
+        if response.status_code != 200:
+            return {
+                "imported": 0,
+                "skipped": 0,
+                "error": response.text
+            }
 
-        date = datetime_value[:10]
+        data = response.json()
 
-        heure = ""
+        for item in data.get("items", []):
 
-        if "T" in datetime_value:
-            heure = datetime_value[11:16]
+            start = item.get("start", {})
 
-        events.append({
-            "titre": item.get("summary", "Sans titre"),
-            "description": item.get("description", ""),
-            "date": date,
-            "heure": heure
-        })
+            datetime_value = (
+                start.get("dateTime")
+                or start.get("date")
+            )
+
+            if not datetime_value:
+                continue
+
+            date = datetime_value[:10]
+            heure = ""
+
+            if "T" in datetime_value:
+                heure = datetime_value[11:16]
+
+            events.append({
+                "titre": item.get("summary", "Sans titre"),
+                "description": item.get("description", ""),
+                "date": date,
+                "heure": heure
+            })
+
+        page_token = data.get("nextPageToken")
+
+        if not page_token:
+            break
 
     return import_events(
         events=events,
@@ -354,6 +391,7 @@ def sync_google_calendar_by_id(
         membre_id=membre_id,
         calendrier=calendar_name
     )
+
 
 # ==========================================================
 # RÉVOQUER L'ACCÈS AU COMPTE GOOGLE
