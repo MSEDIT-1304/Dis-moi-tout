@@ -241,3 +241,15 @@ tr:nth-child(even) {
 .user-image.cover {
     object-fit: cover;
 }
+/* Messages de confirmation des imports Google et Apple */
+.calendar-messages {
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    background: #e8f3e8;
+    color: #245b2a;
+    border-radius: 8px;
+}
+
+.calendar-messages p {
+    color: #245b2a;
+}
