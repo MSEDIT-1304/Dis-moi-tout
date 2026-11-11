@@ -8,6 +8,10 @@
     <title>{% block title %}Dis-moi tout{% endblock %}</title>
 
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Dis-moi tout">
 </head>
 
 <body>
@@ -49,7 +53,16 @@
 
 </footer>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+        navigator.serviceWorker.register(
+            "{{ url_for('static', filename='service-worker.js') }}"
+        );
+    });
+}
+</script>
 
 </body>
 </html>
