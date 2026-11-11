@@ -1,1 +1,247 @@
 
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="members-dashboard">
+
+    <header class="members-header">
+        <h1>Gestion des membres</h1>
+        <p>Ajoutez, consultez et gérez les membres de votre famille.</p>
+        <a href="{{ url_for('dashboard') }}" class="members-button">
+            Retour au tableau de bord
+        </a>
+    </header>
+
+    <section class="members-card">
+        <h2>Ajouter un membre</h2>
+
+        <form method="POST" action="{{ url_for('add_member') }}">
+
+            <div class="members-form-grid">
+                <div>
+                    <label for="prenom">Prénom</label>
+                    <input type="text" id="prenom" name="prenom" required>
+                </div>
+
+                <div>
+                    <label for="nom">Nom</label>
+                    <input type="text" id="nom" name="nom" required>
+                </div>
+
+                <div>
+                    <label for="email">Adresse e-mail (facultatif)</label>
+                    <input type="email" id="email" name="email">
+                </div>
+
+                <div>
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+            </div>
+
+            <label class="members-checkbox">
+                <input type="checkbox" name="peut_modifier" value="oui">
+                Autoriser ce membre à modifier les informations
+            </label>
+
+            <button type="submit" class="members-button">
+                Ajouter le membre
+            </button>
+
+        </form>
+    </section>
+
+    <section class="members-card">
+        <h2>Les membres de la famille</h2>
+
+        {% if membres %}
+
+            <div class="members-list">
+                {% for membre in membres %}
+
+                    <div class="member-item">
+
+                        <div class="member-info">
+                            <h3>{{ membre['prenom'] }} {{ membre['nom'] }}</h3>
+
+                            {% if membre['email'] %}
+                                <p>{{ membre['email'] }}</p>
+                            {% else %}
+                                <p>Aucune adresse e-mail renseignée</p>
+                            {% endif %}
+
+                            <span class="member-permission">
+                                {% if membre['peut_modifier'] %}
+                                    Peut modifier les informations
+                                {% else %}
+                                    Consultation uniquement
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <form
+                            method="POST"
+                            action="{{ url_for('delete_member_route', membre_id=membre['id']) }}"
+                            onsubmit="return confirm('Voulez-vous vraiment supprimer ce membre ?');"
+                        >
+                            <button type="submit" class="members-delete">
+                                Supprimer
+                            </button>
+                        </form>
+
+                    </div>
+
+                {% endfor %}
+            </div>
+
+        {% else %}
+
+            <p class="members-empty">
+                Aucun membre n'a encore été ajouté.
+            </p>
+
+        {% endif %}
+    </section>
+
+</div>
+
+<style>
+.members-dashboard {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.members-header {
+    margin-bottom: 25px;
+}
+
+.members-header h1 {
+    margin-bottom: 8px;
+}
+
+.members-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 22px;
+}
+
+.members-card h2,
+.members-card h3,
+.members-card p,
+.members-card label {
+    color: white;
+}
+
+.members-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    margin: 20px 0;
+}
+
+.members-form-grid label {
+    display: block;
+    margin-bottom: 7px;
+}
+
+.members-form-grid input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.members-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 15px 0 20px;
+}
+
+.members-checkbox input {
+    width: auto;
+}
+
+.members-button {
+    display: inline-block;
+    background: #c5a15b;
+    color: #172b40;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 7px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.members-button:hover {
+    background: #dfbd78;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 18px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.member-item:last-child {
+    border-bottom: none;
+}
+
+.member-info h3 {
+    margin: 0 0 6px;
+}
+
+.member-info p {
+    margin: 4px 0;
+}
+
+.member-permission {
+    display: inline-block;
+    font-size: 13px;
+    color: #dfbd78;
+}
+
+.members-delete {
+    background: #a94442;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+.members-empty {
+    padding: 15px 0;
+}
+
+@media (max-width: 600px) {
+    .members-dashboard {
+        padding: 15px 10px;
+    }
+
+    .members-card {
+        padding: 18px;
+    }
+
+    .members-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .member-item {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+</style>
+
+{% endblock %}
+
