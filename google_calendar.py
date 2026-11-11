@@ -3,6 +3,7 @@
 # ==========================================================
 
 from datetime import datetime
+from urllib.parse import urlencode, quote
 
 import json
 import requests
@@ -48,12 +49,7 @@ def get_google_auth_url(
         "state": state
     }
 
-    query = "&".join(
-        f"{key}={value}"
-        for key, value in params.items()
-    )
-
-    return f"{GOOGLE_AUTH_URL}?{query}"
+    return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
 # ==========================================================
 # RÉCUPÉRER LE TOKEN D'ACCÈS GOOGLE
@@ -80,7 +76,8 @@ def get_google_token(
 
     response = requests.post(
         GOOGLE_TOKEN_URL,
-        data=data
+        data=data,
+        timeout=30
     )
 
     if response.status_code == 200:
@@ -104,7 +101,8 @@ def get_google_events(access_token):
 
     response = requests.get(
         f"{GOOGLE_API_URL}/calendars/primary/events",
-        headers=headers
+        headers=headers,
+        timeout=30
     )
 
     if response.status_code != 200:
@@ -188,7 +186,8 @@ def refresh_google_token(
 
     response = requests.post(
         GOOGLE_TOKEN_URL,
-        data=data
+        data=data,
+        timeout=30
     )
 
     if response.status_code == 200:
@@ -234,7 +233,8 @@ def get_google_calendar_info(access_token):
 
     response = requests.get(
         f"{GOOGLE_API_URL}/calendars/primary",
-        headers=headers
+        headers=headers,
+        timeout=30
     )
 
     if response.status_code != 200:
@@ -279,11 +279,14 @@ def get_google_calendars(access_token):
         response = requests.get(
             f"{GOOGLE_API_URL}/users/me/calendarList",
             headers=headers,
-            params=params
+            params=params,
+            timeout=30
         )
 
         if response.status_code != 200:
-            return calendars
+            raise RuntimeError(
+                f"Google Calendar API ({response.status_code}): {response.text}"
+            )
 
         data = response.json()
 
@@ -319,73 +322,60 @@ def sync_google_calendar_by_id(
     calendar_name="Google Agenda"
 ):
     """
-    Importe tous les événements passés et futurs
-    jusqu'au 31 décembre 2050 inclus.
-    Les événements récurrents sont développés
-    en occurrences individuelles.
+    Importe les événements passés et futurs jusqu'au 31/12/2050.
+    Google développe les événements récurrents en occurrences.
     """
-
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
+    headers = {"Authorization": f"Bearer {access_token}"}
     events = []
     page_token = None
 
     while True:
-
         params = {
             "maxResults": 2500,
             "singleEvents": True,
             "orderBy": "startTime",
-            "timeMax": "2051-01-01T00:00:00Z"
+            "timeMax": "2051-01-01T00:00:00Z",
+            "showDeleted": False
         }
-
         if page_token:
             params["pageToken"] = page_token
 
         response = requests.get(
-            f"{GOOGLE_API_URL}/calendars/{calendar_id}/events",
+            f"{GOOGLE_API_URL}/calendars/{quote(str(calendar_id), safe='')}/events",
             headers=headers,
-            params=params
+            params=params,
+            timeout=30
         )
 
         if response.status_code != 200:
             return {
                 "imported": 0,
                 "skipped": 0,
-                "error": response.text
+                "error": response.text,
+                "http_status": response.status_code
             }
 
         data = response.json()
-
         for item in data.get("items", []):
-
-            start = item.get("start", {})
-
-            datetime_value = (
-                start.get("dateTime")
-                or start.get("date")
-            )
-
-            if not datetime_value:
+            # Les événements annulés ou sans date exploitable sont ignorés.
+            if item.get("status") == "cancelled":
                 continue
 
-            date = datetime_value[:10]
-            heure = ""
+            start = item.get("start") or {}
+            value = start.get("dateTime") or start.get("date")
+            if not value:
+                continue
 
-            if "T" in datetime_value:
-                heure = datetime_value[11:16]
-
+            date = value[:10]
+            heure = value[11:16] if "T" in value else ""
             events.append({
-                "titre": item.get("summary", "Sans titre"),
-                "description": item.get("description", ""),
+                "titre": item.get("summary") or "Sans titre",
+                "description": item.get("description") or "",
                 "date": date,
                 "heure": heure
             })
 
         page_token = data.get("nextPageToken")
-
         if not page_token:
             break
 
@@ -411,7 +401,8 @@ def revoke_google_access(access_token):
         "https://oauth2.googleapis.com/revoke",
         params={
             "token": access_token
-        }
+        },
+        timeout=30
     )
 
     return response.status_code == 200
@@ -432,7 +423,8 @@ def test_google_connection(access_token):
 
     response = requests.get(
         f"{GOOGLE_API_URL}/users/me/calendarList",
-        headers=headers
+        headers=headers,
+        timeout=30
     )
 
     if response.status_code == 200:
@@ -466,7 +458,7 @@ def get_google_events_between(
     }
 
     response = requests.get(
-        f"{GOOGLE_API_URL}/calendars/{calendar_id}/events",
+        f"{GOOGLE_API_URL}/calendars/{quote(str(calendar_id), safe='')}/events",
         headers=headers,
         params={
             "timeMin": time_min,
@@ -557,7 +549,8 @@ def get_google_profile(access_token):
 
     response = requests.get(
         "https://www.googleapis.com/oauth2/v2/userinfo",
-        headers=headers
+        headers=headers,
+        timeout=30
     )
 
     if response.status_code != 200:
@@ -651,7 +644,8 @@ def get_google_timezone(access_token):
 
     response = requests.get(
         f"{GOOGLE_API_URL}/calendars/primary",
-        headers=headers
+        headers=headers,
+        timeout=30
     )
 
     if response.status_code != 200:
@@ -677,7 +671,8 @@ def get_last_google_sync(access_token):
 
     response = requests.get(
         f"{GOOGLE_API_URL}/users/me/calendarList",
-        headers=headers
+        headers=headers,
+        timeout=30
     )
 
     if response.status_code != 200:
