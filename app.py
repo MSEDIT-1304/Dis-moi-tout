@@ -17,12 +17,22 @@ import sqlite3
 import pandas as pd
 import requests
 import bcrypt
+import secrets
 
 from datetime import datetime
+from urllib.parse import urlencode
 
 from config import (
     DATABASE,
     SECRET_KEY
+)
+
+from google_calendar import (
+    get_google_auth_url,
+    get_google_token,
+    get_google_calendars,
+    get_google_profile,
+    sync_google_calendar_by_id
 )
 
 
@@ -31,6 +41,19 @@ from config import (
 # ==========================================================
 
 SHEET_ID = "1JWwwLP3IKaG-ELsC3li84eouOFVFnv_C5MxBDQSfz3M"
+
+# ==========================================================
+# CONFIGURATION GOOGLE CALENDAR
+# ==========================================================
+
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+
+GOOGLE_REDIRECT_URI = os.environ.get(
+    "GOOGLE_REDIRECT_URI",
+    "http://127.0.0.1:5000/google/callback"
+)
 
 
 # ==========================================================
@@ -975,6 +998,25 @@ def init_database():
         """
     )
 
+    # ======================================================
+    # CONNEXION GOOGLE CALENDAR
+    # ======================================================
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS google_connections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL UNIQUE,
+            google_email TEXT,
+            access_token TEXT,
+            refresh_token TEXT,
+            expires_at TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(famille_id)
+                REFERENCES famille(id)
+        )
+        """
+    )
     # ======================================================
     # COMPATIBILITÉ AVEC UNE BASE EXISTANTE
     # ======================================================
@@ -2299,6 +2341,132 @@ def calendar_access_required():
         and session.get("famille_id") is not None
     )
 
+# ==========================================================
+# CONNEXION GOOGLE CALENDAR
+# ==========================================================
+
+@app.route("/google/connect")
+def google_connect():
+
+    if not calendar_access_required():
+        return redirect(url_for("home"))
+
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        flash("La connexion Google n'est pas encore configurée.")
+        return redirect(url_for("calendar_import"))
+
+    state = secrets.token_urlsafe(32)
+
+    session["google_oauth_state"] = state
+
+    auth_url = get_google_auth_url(
+        GOOGLE_CLIENT_ID,
+        GOOGLE_REDIRECT_URI,
+        state
+    )
+
+    return redirect(auth_url)
+
+# ==========================================================
+# RETOUR APRÈS AUTORISATION GOOGLE
+# ==========================================================
+
+@app.route("/google/callback")
+def google_callback():
+
+    if not calendar_access_required():
+        return redirect(url_for("home"))
+
+    state = request.args.get("state", "")
+    saved_state = session.pop("google_oauth_state", "")
+
+    if not state or not saved_state:
+        flash("Connexion Google invalide. Veuillez recommencer.")
+        return redirect(url_for("calendar_import"))
+
+    if not secrets.compare_digest(state, saved_state):
+        flash("Vérification de sécurité Google échouée.")
+        return redirect(url_for("calendar_import"))
+
+    code = request.args.get("code")
+
+    if not code:
+        flash("L'autorisation Google a été annulée ou refusée.")
+        return redirect(url_for("calendar_import"))
+
+    token_data = get_google_token(
+        GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET,
+        GOOGLE_REDIRECT_URI,
+        code
+    )
+
+    if not token_data or not token_data.get("access_token"):
+        flash("Impossible de récupérer la connexion Google.")
+        return redirect(url_for("calendar_import"))
+
+    access_token = token_data["access_token"]
+    refresh_token = token_data.get("refresh_token")
+
+    profil = get_google_profile(access_token)
+
+    google_email = profil.get("email", "") if profil else ""
+
+    expires_at = datetime.now().timestamp() + int(
+        token_data.get("expires_in", 3600)
+    )
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT refresh_token
+        FROM google_connections
+        WHERE famille_id = ?
+        """,
+        (session["famille_id"],)
+    )
+
+    ancienne_connexion = cursor.fetchone()
+
+    if not refresh_token and ancienne_connexion:
+        refresh_token = ancienne_connexion["refresh_token"]
+
+    cursor.execute(
+        """
+        INSERT INTO google_connections
+        (
+            famille_id,
+            google_email,
+            access_token,
+            refresh_token,
+            expires_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(famille_id)
+        DO UPDATE SET
+            google_email = excluded.google_email,
+            access_token = excluded.access_token,
+            refresh_token = excluded.refresh_token,
+            expires_at = excluded.expires_at
+        """,
+        (
+            session["famille_id"],
+            google_email,
+            access_token,
+            refresh_token,
+            datetime.fromtimestamp(expires_at).isoformat()
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+    flash("Compte Google connecté avec succès.")
+
+    return redirect(url_for("calendar_import"))
+    
 # ==========================================================
 # IMPORT CALENDRIER EXTERNE
 # ==========================================================
