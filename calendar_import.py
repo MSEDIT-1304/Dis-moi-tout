@@ -66,12 +66,14 @@ def save_imported_event(
 # VÉRIFIER SI L'ÉVÉNEMENT EXISTE DÉJÀ
 # ==========================================================
 
+
 def event_exists(
     famille_id,
     membre_id,
     titre,
     date,
-    heure
+    heure,
+    calendrier
 ):
     conn = get_connection()
     cursor = conn.cursor()
@@ -80,16 +82,18 @@ def event_exists(
         SELECT id
         FROM evenements
         WHERE famille_id = ?
-        AND membre_id = ?
+        AND membre_id IS ?
         AND titre = ?
         AND date = ?
         AND heure = ?
+        AND calendrier = ?
     """, (
         famille_id,
         membre_id,
         titre,
         date,
-        heure
+        heure,
+        calendrier
     ))
 
     result = cursor.fetchone()
