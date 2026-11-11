@@ -22,7 +22,7 @@
             </p>
         </section>
     {% endif %}
-
+    {% if request.args.get('abonnement') != 'expire' %}
     <header class="login-header">
         <h1>Connexion</h1>
         <p>Bienvenue sur Dis-moi tout !</p>
@@ -93,6 +93,7 @@
         </section>
 
     </div>
+{% endif %}
 
     <p class="login-back">
         <a href="{{ url_for('home') }}">Retour à l'accueil</a>
