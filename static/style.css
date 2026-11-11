@@ -331,3 +331,15 @@ textarea {
         margin: 10px auto;
     }
 }
+/* LOGO PLUS PETIT SUR MOBILE UNIQUEMENT */
+@media (max-width: 768px) {
+    .logo img {
+        width: 110px;
+        height: 110px;
+        object-fit: contain;
+    }
+
+    .site-header {
+        gap: 8px;
+    }
+}
