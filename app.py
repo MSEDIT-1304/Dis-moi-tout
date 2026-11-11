@@ -36,6 +36,8 @@ from google_calendar import (
     sync_google_calendar_by_id
 )
 
+from apple_calendar import sync_apple_calendar
+
 
 # ==========================================================
 # CONFIGURATION GOOGLE SHEETS
@@ -2598,6 +2600,41 @@ def calendar_import():
         return redirect(url_for("calendar_import"))
 
     return render_template("calendar_import.html")
+
+
+# ==========================================================
+# IMPORT APPLE CALENDAR (CALDAV ICLOUD)
+# ==========================================================
+
+@app.route("/apple/import", methods=["POST"])
+def apple_import():
+
+    if not calendar_access_required():
+        return redirect(url_for("home"))
+
+    apple_id = request.form.get("apple_id", "").strip()
+    app_password = request.form.get("apple_app_password", "").strip()
+
+    if not apple_id or not app_password:
+        flash("Saisissez votre identifiant Apple et votre mot de passe spécifique d’application.")
+        return redirect(url_for("calendar_import"))
+
+    try:
+        result = sync_apple_calendar(
+            username=apple_id,
+            password=app_password,
+            famille_id=session.get("famille_id"),
+            membre_id=session.get("membre_id"),
+            calendar_name="Apple Calendar"
+        )
+        flash(
+            f"Import Apple terminé : {result.get('imported', 0)} événement(s) ajouté(s), "
+            f"{result.get('skipped', 0)} déjà présent(s)."
+        )
+    except Exception as exc:
+        flash(f"Import Apple impossible : {exc}")
+
+    return redirect(url_for("calendar_import"))
 
 # ==========================================================
 # REDIRECTION ADMIN APRÈS CONNEXION
