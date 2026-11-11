@@ -21,7 +21,7 @@ body {
     padding: 0;
     font-family: Arial, sans-serif;
     background: var(--bleu-fond);
-    color: var(--blanc);
+    color: var(--bleu-fonce);
     min-height: 100vh;
 }
 
@@ -93,6 +93,14 @@ body {
 /* Titres et textes */
 
 h1, h2, h3, p, label {
+    color: var(--bleu-fonce);
+}
+
+/* Textes blancs dans les blocs bleu foncé */
+.card h1, .card h2, .card h3, .card p, .card label,
+.content-card h1, .content-card h2, .content-card h3,
+.content-card p, .content-card label,
+.panel h1, .panel h2, .panel h3, .panel p, .panel label {
     color: var(--blanc);
 }
 
