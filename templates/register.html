@@ -1,1 +1,247 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="register-page">
+
+    <header class="register-header">
+        <h1>Créer mon compte</h1>
+        <p>Inscrivez-vous pour commencer à utiliser Dis-moi tout.</p>
+        <p class="register-trial">15 jours d'essai gratuit</p>
+    </header>
+
+    <section class="register-card">
+
+        <form method="POST" action="{{ url_for('register') }}">
+
+            <h2>Mes informations</h2>
+
+            <div class="register-grid">
+
+                <div>
+                    <label for="prenom">Prénom</label>
+                    <input type="text" id="prenom" name="prenom" required>
+                </div>
+
+                <div>
+                    <label for="nom">Nom</label>
+                    <input type="text" id="nom" name="nom" required>
+                </div>
+
+                <div class="full-width">
+                    <label for="email">Adresse e-mail</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+
+                <div>
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+
+                <div>
+                    <label for="password2">Confirmer le mot de passe</label>
+                    <input type="password" id="password2" name="password2" required>
+                </div>
+
+            </div>
+
+            <hr>
+
+            <h2>Ma situation familiale</h2>
+
+            <div class="register-field">
+                <label for="conjoint">Avez-vous un conjoint ?</label>
+                <select id="conjoint" name="conjoint">
+                    <option value="non">Non</option>
+                    <option value="oui">Oui</option>
+                </select>
+            </div>
+
+            <div class="register-field">
+                <label for="garde_partagee">Êtes-vous concerné par une garde partagée ?</label>
+                <select id="garde_partagee" name="garde_partagee">
+                    <option value="non">Non</option>
+                    <option value="oui">Oui</option>
+                </select>
+            </div>
+
+            <div id="garde-options" style="display:none;">
+
+                <div class="register-field">
+                    <label for="frequence_garde">Fréquence de la garde</label>
+                    <select id="frequence_garde" name="frequence_garde">
+                        <option value="">Choisir une fréquence</option>
+                        <option value="1 semaine sur deux">1 semaine sur deux</option>
+                        <option value="Tous les quinze jours">Tous les quinze jours</option>
+                        <option value="Tous les mois">Tous les mois</option>
+                    </select>
+                </div>
+
+                <div class="register-field">
+                    <label for="prochaine_date_garde">Prochaine date de garde</label>
+                    <input type="date" id="prochaine_date_garde" name="prochaine_date_garde">
+                </div>
+
+            </div>
+
+            <button type="submit" class="register-button">
+                Créer mon compte
+            </button>
+
+            <p class="register-terms">
+                En créant votre compte, vous pourrez bénéficier de 15 jours d'essai gratuit.
+            </p>
+
+        </form>
+
+    </section>
+
+    <p class="register-back">
+        Déjà inscrit ?
+        <a href="{{ url_for('login') }}">Se connecter</a>
+    </p>
+
+</div>
+
+<style>
+.register-page {
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.register-header {
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.register-trial {
+    color: #b18b45;
+    font-weight: bold;
+}
+
+.register-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+}
+
+.register-card h2,
+.register-card label {
+    color: white;
+}
+
+.register-card h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.register-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+
+.register-grid label,
+.register-field label {
+    display: block;
+    margin-bottom: 7px;
+}
+
+.register-grid input,
+.register-field input,
+.register-field select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.full-width {
+    grid-column: 1 / -1;
+}
+
+.register-field {
+    margin-bottom: 18px;
+}
+
+.register-card hr {
+    border: 0;
+    border-top: 1px solid rgba(255,255,255,0.25);
+    margin: 28px 0;
+}
+
+.register-button {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    margin-top: 25px;
+    background: #c5a15b;
+    color: #172b40;
+    border: none;
+    border-radius: 7px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.register-button:hover {
+    background: #dfbd78;
+}
+
+.register-terms,
+.register-back {
+    text-align: center;
+    font-size: 14px;
+}
+
+.register-back {
+    margin-top: 22px;
+}
+
+.register-back a {
+    color: #b18b45;
+    font-weight: bold;
+}
+
+@media (max-width: 600px) {
+    .register-card {
+        padding: 20px;
+    }
+
+    .register-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .full-width {
+        grid-column: auto;
+    }
+}
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const gardeSelect = document.getElementById("garde_partagee");
+    const gardeOptions = document.getElementById("garde-options");
+    const frequence = document.getElementById("frequence_garde");
+    const prochaineDate = document.getElementById("prochaine_date_garde");
+
+    function afficherOptionsGarde() {
+        const active = gardeSelect.value === "oui";
+
+        gardeOptions.style.display = active ? "block" : "none";
+        frequence.required = active;
+        prochaineDate.required = active;
+    }
+
+    gardeSelect.addEventListener("change", afficherOptionsGarde);
+
+    afficherOptionsGarde();
+});
+</script>
+
+{% endblock %}
 
