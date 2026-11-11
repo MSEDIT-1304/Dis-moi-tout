@@ -1,1 +1,159 @@
 
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="admin-dashboard">
+
+    <div class="dashboard-header">
+        <div>
+            <h1>Tableau de bord administrateur</h1>
+            <p>Bienvenue dans votre espace de gestion familiale.</p>
+        </div>
+    </div>
+
+    {% if famille %}
+
+        <section class="dashboard-card">
+            <h2>{{ famille.nom_famille }}</h2>
+            <p>Votre espace familial est actif.</p>
+        </section>
+
+        <div class="dashboard-stats">
+            <div class="dashboard-card">
+                <h3>Membres</h3>
+                <p class="dashboard-number">{{ total_membres }}</p>
+            </div>
+        </div>
+
+        <section class="dashboard-card">
+            <h2>Gestion de la famille</h2>
+            <p>Consultez et gérez les membres de votre famille.</p>
+            <a class="dashboard-button" href="{{ url_for('members') }}">
+                Gérer les membres
+            </a>
+        </section>
+
+        <section class="dashboard-card">
+            <h2>Organisation</h2>
+            <div class="dashboard-links">
+                <a class="dashboard-button" href="{{ url_for('calendar') }}">
+                    Calendrier
+                </a>
+                <a class="dashboard-button" href="{{ url_for('profile') }}">
+                    Mon profil
+                </a>
+                <a class="dashboard-button" href="{{ url_for('settings') }}">
+                    Paramètres
+                </a>
+            </div>
+        </section>
+
+    {% else %}
+
+        <section class="dashboard-card">
+            <h2>Créer votre espace familial</h2>
+            <p>Commencez par donner un nom à votre famille.</p>
+
+            <form method="POST" action="{{ url_for('create_family') }}">
+                <label for="nom_famille">Nom de la famille</label>
+                <input
+                    type="text"
+                    id="nom_famille"
+                    name="nom_famille"
+                    placeholder="Exemple : Famille Martin"
+                    required
+                >
+                <button type="submit" class="dashboard-button">
+                    Créer ma famille
+                </button>
+            </form>
+        </section>
+
+    {% endif %}
+
+</div>
+
+<style>
+.admin-dashboard {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.dashboard-header {
+    margin-bottom: 25px;
+}
+
+.dashboard-header h1 {
+    margin-bottom: 8px;
+}
+
+.dashboard-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.dashboard-card h2,
+.dashboard-card h3,
+.dashboard-card p,
+.dashboard-card label {
+    color: white;
+}
+
+.dashboard-number {
+    font-size: 32px;
+    font-weight: bold;
+    margin: 10px 0 0;
+}
+
+.dashboard-card input {
+    display: block;
+    width: 100%;
+    max-width: 400px;
+    box-sizing: border-box;
+    padding: 12px;
+    margin: 10px 0 18px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+}
+
+.dashboard-button {
+    display: inline-block;
+    background: #c5a15b;
+    color: #172b40;
+    padding: 12px 20px;
+    margin: 8px 8px 0 0;
+    border: none;
+    border-radius: 7px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.dashboard-button:hover {
+    background: #dfbd78;
+}
+
+@media (max-width: 600px) {
+    .admin-dashboard {
+        padding: 15px 10px;
+    }
+
+    .dashboard-card {
+        padding: 18px;
+    }
+
+    .dashboard-button {
+        display: block;
+        text-align: center;
+        margin-right: 0;
+    }
+}
+</style>
+
+{% endblock %}
+
