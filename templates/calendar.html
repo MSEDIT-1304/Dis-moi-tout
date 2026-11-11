@@ -1,1 +1,333 @@
 
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="calendar-page">
+
+    <header class="calendar-header">
+        <h1>Calendrier familial</h1>
+        <p>Retrouvez les événements et organisez votre quotidien.</p>
+        <a href="{{ url_for('dashboard') }}" class="calendar-button">
+            Retour au tableau de bord
+        </a>
+    </header>
+
+    <section class="calendar-card">
+        <h2>Ajouter un événement</h2>
+
+        <form method="POST" action="{{ url_for('add_event') }}">
+
+            <div class="calendar-form-grid">
+
+                <div>
+                    <label for="titre">Titre</label>
+                    <input type="text" id="titre" name="titre" required>
+                </div>
+
+                <div>
+                    <label for="membre_id">Concerne</label>
+                    <select id="membre_id" name="membre_id">
+                        <option value="">Toute la famille</option>
+                        {% for membre in membres %}
+                            <option value="{{ membre['id'] }}">
+                                {{ membre['prenom'] }} {{ membre['nom'] }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="date">Date</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+
+                <div>
+                    <label for="heure">Heure</label>
+                    <input type="time" id="heure" name="heure">
+                </div>
+
+                <div>
+                    <label for="calendrier">Calendrier</label>
+                    <select id="calendrier" name="calendrier">
+                        <option value="Famille">Famille</option>
+                        <option value="Personnel">Personnel</option>
+                        <option value="Scolaire">Scolaire</option>
+                        <option value="Travail">Travail</option>
+                    </select>
+                </div>
+
+            </div>
+
+            <div class="calendar-description">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="3"></textarea>
+            </div>
+
+            <label class="calendar-checkbox">
+                <input type="checkbox" name="rappel" value="oui">
+                Activer un rappel
+            </label>
+
+            <button type="submit" class="calendar-button">
+                Ajouter l'événement
+            </button>
+
+        </form>
+    </section>
+
+    <section class="calendar-card">
+        <h2>Événements à venir et passés</h2>
+
+        {% if evenements %}
+
+            <div class="events-list">
+
+                {% for evenement in evenements %}
+
+                    <article class="event-item">
+
+                        <div class="event-details">
+
+                            <h3>{{ evenement['titre'] }}</h3>
+
+                            <p>
+                                <strong>Date :</strong>
+                                {{ evenement['date'] }}
+                                {% if evenement['heure'] %}
+                                    à {{ evenement['heure'] }}
+                                {% endif %}
+                            </p>
+
+                            {% if evenement['prenom'] %}
+                                <p>
+                                    <strong>Membre :</strong>
+                                    {{ evenement['prenom'] }}
+                                    {{ evenement['nom'] }}
+                                </p>
+                            {% endif %}
+
+                            {% if evenement['calendrier'] %}
+                                <p>
+                                    <strong>Catégorie :</strong>
+                                    {{ evenement['calendrier'] }}
+                                </p>
+                            {% endif %}
+
+                            {% if evenement['description'] %}
+                                <p>{{ evenement['description'] }}</p>
+                            {% endif %}
+
+                            {% if evenement['type_evenement'] == 'garde_partagee' %}
+                                <span class="event-tag">Garde partagée automatique</span>
+                            {% endif %}
+
+                        </div>
+
+                        {% if evenement['type_evenement'] != 'garde_partagee' %}
+
+                            <div class="event-actions">
+
+                                <details>
+                                    <summary>Modifier</summary>
+
+                                    <form method="POST"
+                                          action="{{ url_for('edit_event', event_id=evenement['id']) }}">
+
+                                        <label>Titre</label>
+                                        <input type="text" name="titre"
+                                               value="{{ evenement['titre'] }}" required>
+
+                                        <label>Description</label>
+                                        <textarea name="description" rows="2">{{ evenement['description'] or '' }}</textarea>
+
+                                        <label>Date</label>
+                                        <input type="date" name="date"
+                                               value="{{ evenement['date'] }}" required>
+
+                                        <label>Heure</label>
+                                        <input type="time" name="heure"
+                                               value="{{ evenement['heure'] or '' }}">
+
+                                        <button type="submit" class="calendar-button">
+                                            Enregistrer
+                                        </button>
+                                    </form>
+                                </details>
+
+                                <form method="POST"
+                                      action="{{ url_for('delete_event', event_id=evenement['id']) }}"
+                                      onsubmit="return confirm('Supprimer cet événement ?');">
+
+                                    <button type="submit" class="calendar-delete">
+                                        Supprimer
+                                    </button>
+                                </form>
+
+                            </div>
+
+                        {% endif %}
+
+                    </article>
+
+                {% endfor %}
+
+            </div>
+
+        {% else %}
+
+            <p>Aucun événement pour le moment.</p>
+
+        {% endif %}
+    </section>
+
+</div>
+
+<style>
+.calendar-page {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.calendar-header {
+    margin-bottom: 25px;
+}
+
+.calendar-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 22px;
+}
+
+.calendar-card h2,
+.calendar-card h3,
+.calendar-card p,
+.calendar-card label {
+    color: white;
+}
+
+.calendar-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+}
+
+.calendar-form-grid label,
+.calendar-description label {
+    display: block;
+    margin-bottom: 7px;
+}
+
+.calendar-form-grid input,
+.calendar-form-grid select,
+.calendar-description textarea,
+.event-actions input,
+.event-actions textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+.calendar-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.calendar-checkbox input {
+    width: auto;
+}
+
+.calendar-button {
+    display: inline-block;
+    background: #c5a15b;
+    color: #172b40;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 7px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.calendar-button:hover {
+    background: #dfbd78;
+}
+
+.event-item {
+    padding: 18px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.event-item:last-child {
+    border-bottom: none;
+}
+
+.event-item h3 {
+    margin-top: 0;
+}
+
+.event-tag {
+    display: inline-block;
+    color: #dfbd78;
+    font-size: 13px;
+    margin-top: 5px;
+}
+
+.event-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 15px;
+    margin-top: 12px;
+}
+
+.event-actions details {
+    flex: 1;
+    min-width: 200px;
+}
+
+.event-actions summary {
+    cursor: pointer;
+    color: #dfbd78;
+    margin-bottom: 12px;
+}
+
+.event-actions form {
+    margin-top: 10px;
+}
+
+.calendar-delete {
+    background: #a94442;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 15px;
+    cursor: pointer;
+}
+
+@media (max-width: 600px) {
+    .calendar-page {
+        padding: 15px 10px;
+    }
+
+    .calendar-card {
+        padding: 18px;
+    }
+
+    .calendar-form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+{% endblock %}
+
