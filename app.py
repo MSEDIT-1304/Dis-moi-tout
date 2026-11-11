@@ -278,16 +278,14 @@ def login():
 
         flash("Compte introuvable.")
 
-        return redirect(url_for("home"))
-
+        return redirect(url_for("login", abonnement="expire"))
     if result == "trial_expired":
 
         flash(
             "Votre essai gratuit est terminé. Choisissez votre abonnement pour continuer."
         )
 
-        return redirect(url_for("home"))
-
+        return redirect(url_for("login", abonnement="expire"))
     if result == "subscription_expired":
 
         flash(
@@ -1720,11 +1718,32 @@ def delete_member_route(membre_id):
 # TABLEAU DE BORD ADMINISTRATEUR
 # ==========================================================
 
+
 @app.route("/dashboard")
 def dashboard():
 
     if not session.get("logged"):
         return redirect(url_for("home"))
+
+    admin_id = session.get("admin_id")
+
+    conn = get_connection()
+    admin = conn.execute(
+        "SELECT email FROM admin WHERE id = ?",
+        (admin_id,)
+    ).fetchone()
+    conn.close()
+
+    if not admin:
+        session.clear()
+        return redirect(url_for("login"))
+
+    result = check_login(admin["email"])
+
+    if result != "ok":
+        session.clear()
+        return redirect(url_for("login", abonnement="expire"))
+
 
     result = check_login(session.get("email", ""))
 
