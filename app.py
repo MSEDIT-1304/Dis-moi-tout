@@ -334,8 +334,6 @@ def login():
 
     session["admin_id"] = admin["id"]
 
-    session["email"] = email
-
     session["user_name"] = (
         f"{admin['prenom']} {admin['nom']}"
     )
@@ -1725,23 +1723,11 @@ def delete_member_route(membre_id):
 def dashboard():
 
     if not session.get("logged"):
-        return redirect(url_for("home"))
 
-    result = check_login(session.get("email", ""))
+        return redirect(
+            url_for("home")
+        )
 
-    if result != "ok":
-        session.clear()
-
-        if result == "trial_expired":
-            flash(
-                "Votre essai gratuit est terminé. Choisissez votre abonnement pour continuer."
-            )
-        else:
-            flash(
-                "Votre abonnement est expiré. Choisissez votre formule pour renouveler votre accès."
-            )
-
-        return redirect(url_for("home"))
     admin_id = session.get(
         "admin_id"
     )
