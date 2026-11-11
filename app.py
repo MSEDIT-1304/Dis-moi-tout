@@ -260,7 +260,13 @@ def home():
 def login():
 
     if request.method == "GET":
-        return render_template("login.html")
+        return render_template(
+            "login.html",
+            stripe_link_monthly=STRIPE_LINK_MONTHLY,
+            price_monthly=PRICE_MONTHLY,
+            stripe_link_yearly=STRIPE_LINK_YEARLY,
+            price_yearly=PRICE_YEARLY
+        )
 
     email = request.form.get(
         "email",
@@ -292,7 +298,7 @@ def login():
             "Votre abonnement est expiré. Choisissez votre formule pour renouveler votre accès."
         )
 
-        return redirect(url_for("home"))
+       return redirect(url_for("login", abonnement="expire"))
         
     conn = get_connection()
 
