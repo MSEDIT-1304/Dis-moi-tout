@@ -12,6 +12,15 @@
             Retour au tableau de bord
         </a>
     </header>
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="calendar-messages" role="status">
+            {% for message in messages %}
+                <p>{{ message }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
 <section class="calendar-card calendar-import-card">
     <h2>Importer mes calendriers externes</h2>
     <p>Importez vos événements Google ou iCloud dans le calendrier familial.</p>
