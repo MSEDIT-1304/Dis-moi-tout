@@ -363,3 +363,68 @@ textarea {
     }
 
 }
+
+/* =====================================
+   PAGE CONNEXION — ABONNEMENTS ET BANDEAU
+   ===================================== */
+
+/* Réduire le bandeau rose sur PC */
+@media (min-width: 769px) {
+    .site-header {
+        padding: 10px 24px;
+    }
+
+    .site-header .logo img {
+        width: 125px;
+        height: 125px;
+    }
+}
+
+/* Abonnements expirés : côte à côte sur PC */
+@media (min-width: 769px) {
+    html body .login-page > section.login-card:first-of-type {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+    }
+
+    html body .login-page > section.login-card:first-of-type h2,
+    html body .login-page > section.login-card:first-of-type p:first-of-type {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+
+    html body .login-page > section.login-card:first-of-type p:not(:first-of-type) {
+        margin: 0;
+    }
+}
+
+/* Mobile : liens l'un sous l'autre, bien espacés */
+@media (max-width: 768px) {
+    .site-header {
+        padding: 8px 12px;
+    }
+
+    .site-header .logo img {
+        width: 85px;
+        height: 85px;
+    }
+
+    html body .login-page > section.login-card:first-of-type {
+        display: block;
+    }
+
+    html body .login-page > section.login-card:first-of-type p {
+        margin: 12px 0;
+        width: 100%;
+    }
+
+    html body .login-page > section.login-card:first-of-type a.login-button {
+        display: block;
+        width: 100%;
+        text-align: center;
+        white-space: normal;
+        padding: 12px 10px;
+    }
+}
+
