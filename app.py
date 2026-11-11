@@ -1803,48 +1803,47 @@ def dashboard():
 # CONNEXION MEMBRE
 # ==========================================================
 
-@app.route(
-    "/member_login",
-    methods=["POST"]
-)
+@app.route("/member_login", methods=["POST"])
 def member_login():
 
-    email = request.form.get(
-        "email",
-        ""
-    ).strip().lower()
+    identifiant = request.form.get(
+        "identifiant", ""
+    ).strip()
 
     password = request.form.get(
-        "password",
-        ""
+        "password", ""
     )
 
-    membre = get_member_by_email(
-        email
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Recherche par e-mail ou par prénom + nom
+    cursor.execute(
+        """
+        SELECT *
+        FROM membres
+        WHERE LOWER(email) = LOWER(?)
+        OR LOWER(TRIM(prenom || ' ' || nom)) = LOWER(?)
+        """,
+        (identifiant, identifiant)
     )
+
+    candidats = cursor.fetchall()
+    conn.close()
+
+    membre = None
+
+    for candidat in candidats:
+        if verify_password(
+            password,
+            candidat["password"]
+        ):
+            membre = candidat
+            break
 
     if membre is None:
-
-        flash(
-            "Identifiants incorrects."
-        )
-
-        return redirect(
-            url_for("home")
-        )
-
-    if not verify_password(
-        password,
-        membre["password"]
-    ):
-
-        flash(
-            "Identifiants incorrects."
-        )
-
-        return redirect(
-            url_for("home")
-        )
+        flash("Identifiants incorrects.")
+        return redirect(url_for("login"))
 
     session.clear()
 
