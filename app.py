@@ -363,7 +363,7 @@ def members():
     conn.close()
 
     return render_template(
-        "members.html",
+        "dashboard_members.html",
         membres=membres
     )
 
@@ -1709,12 +1709,11 @@ def dashboard():
         total_membres = 0
 
     return render_template(
-        "dashboard.html",
+        "dashboard_admin.html",
         famille=famille,
         membres=membres,
         total_membres=total_membres
     )
-
 # ==========================================================
 # CONNEXION MEMBRE
 # ==========================================================
