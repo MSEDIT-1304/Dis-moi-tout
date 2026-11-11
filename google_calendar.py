@@ -310,6 +310,7 @@ def get_google_calendars(access_token):
 # ==========================================================
 
 
+
 def sync_google_calendar_by_id(
     access_token,
     calendar_id,
@@ -318,8 +319,10 @@ def sync_google_calendar_by_id(
     calendar_name="Google Agenda"
 ):
     """
-    Importe les événements d'un calendrier Google spécifique,
-    avec pagination et développement des événements récurrents.
+    Importe tous les événements passés et futurs
+    jusqu'au 31 décembre 2050 inclus.
+    Les événements récurrents sont développés
+    en occurrences individuelles.
     """
 
     headers = {
@@ -334,7 +337,8 @@ def sync_google_calendar_by_id(
         params = {
             "maxResults": 2500,
             "singleEvents": True,
-            "orderBy": "startTime"
+            "orderBy": "startTime",
+            "timeMax": "2051-01-01T00:00:00Z"
         }
 
         if page_token:
