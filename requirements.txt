@@ -10,3 +10,4 @@ icalendar
 python-dateutil
 pandas
 recurring-ical-events
+gunicorn
