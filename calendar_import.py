@@ -113,44 +113,41 @@ def import_events(
     calendrier
 ):
     """
-    Importe une liste d'événements provenant
-    d'un agenda externe sans créer de doublons.
+    Importe une liste d'événements sans doublons visibles
+    selon famille, membre, titre, date, heure et agenda.
     """
-
     imported = 0
     skipped = 0
 
     for event in events:
+        titre = event.get("titre") or "Sans titre"
+        description = event.get("description") or ""
+        date = event.get("date")
+        heure = event.get("heure") or ""
 
-        if not event_exists(
-            famille_id,
-            membre_id,
-            event["titre"],
-            event["date"],
-            event["heure"],
-            calendrier
-        ):
-
-            save_imported_event(
-                famille_id=famille_id,
-                membre_id=membre_id,
-                titre=event["titre"],
-                description=event["description"],
-                date=event["date"],
-                heure=event["heure"],
-                calendrier=calendrier
-            )
-
-            imported += 1
-
-        else:
-
+        if not date:
             skipped += 1
+            continue
 
-    return {
-        "imported": imported,
-        "skipped": skipped
-    }
+        if event_exists(
+            famille_id, membre_id, titre, date, heure, calendrier
+        ):
+            skipped += 1
+            continue
+
+        save_imported_event(
+            famille_id=famille_id,
+            membre_id=membre_id,
+            titre=titre,
+            description=description,
+            date=date,
+            heure=heure,
+            calendrier=calendrier
+        )
+        imported += 1
+
+    return {"imported": imported, "skipped": skipped}
+
 
 # ==========================================================
 # SUPPRIMER LES ÉVÉNEMENTS D'UN AGENDA IMPORTÉ
@@ -172,7 +169,7 @@ def delete_imported_events(
     cursor.execute("""
         DELETE FROM evenements
         WHERE famille_id = ?
-        AND membre_id = ?
+        AND membre_id IS ?
         AND calendrier = ?
     """, (
         famille_id,
@@ -207,7 +204,7 @@ def get_imported_calendars(
         SELECT DISTINCT calendrier
         FROM evenements
         WHERE famille_id = ?
-        AND membre_id = ?
+        AND membre_id IS ?
         ORDER BY calendrier
     """, (
         famille_id,
@@ -244,7 +241,7 @@ def count_imported_events(
         SELECT COUNT(*) AS total
         FROM evenements
         WHERE famille_id = ?
-        AND membre_id = ?
+        AND membre_id IS ?
         AND calendrier = ?
     """, (
         famille_id,
@@ -306,7 +303,7 @@ def get_import_statistics(
             COUNT(*) AS total
         FROM evenements
         WHERE famille_id = ?
-        AND membre_id = ?
+        AND membre_id IS ?
         GROUP BY calendrier
         ORDER BY calendrier
     """, (
@@ -348,7 +345,7 @@ def is_calendar_connected(
         SELECT COUNT(*) AS total
         FROM evenements
         WHERE famille_id = ?
-        AND membre_id = ?
+        AND membre_id IS ?
         AND calendrier = ?
     """, (
         famille_id,
