@@ -648,6 +648,7 @@ def get_family_id(admin_id):
         return famille[0]
 
     return None
+    
 
 # ==========================================================
 # RÉCUPÉRER L'ADMINISTRATEUR D'UNE FAMILLE
