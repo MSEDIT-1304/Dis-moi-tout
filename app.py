@@ -559,19 +559,17 @@ def admin_required():
 # CRÉATION D'UN MEMBRE
 # ==========================================================
 
+
 def create_member(
     famille_id,
     prenom,
     nom,
     email,
-    password,
-    peut_modifier=True
+    peut_modifier=True,
+    role="enfant"
 ):
 
-    hashed = hash_password(password)
-
     conn = get_connection()
-
     cursor = conn.cursor()
 
     cursor.execute(
@@ -586,24 +584,23 @@ def create_member(
             role,
             peut_modifier
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, NULL, ?, ?)
         """,
         (
             famille_id,
             prenom,
             nom,
             email,
-            hashed,
-            "membre",
+            role,
             1 if peut_modifier else 0
         )
     )
 
     conn.commit()
-
     conn.close()
 
     return True
+
 
 # ==========================================================
 # VÉRIFICATION E-MAIL MEMBRE
@@ -1616,6 +1613,7 @@ def create_family():
 # CRÉATION D'UN MEMBRE
 # ==========================================================
 
+
 @app.route(
     "/add_member",
     methods=["POST"]
@@ -1623,115 +1621,56 @@ def create_family():
 def add_member():
 
     if not admin_required():
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    famille_id = get_family_id(
-        session["admin_id"]
-    )
+    famille_id = get_family_id(session["admin_id"])
 
     if famille_id is None:
-
-        flash(
-            "Veuillez d'abord créer votre famille."
-        )
-
-        return redirect(
-            url_for("dashboard")
-        )
+        flash("Veuillez d'abord créer votre famille.")
+        return redirect(url_for("dashboard"))
 
     if count_members(famille_id) >= 6:
+        flash("Votre famille contient déjà 6 membres.")
+        return redirect(url_for("members"))
 
-        flash(
-            "Votre famille contient déjà 6 membres."
-        )
+    prenom = request.form.get("prenom", "").strip()
+    nom = request.form.get("nom", "").strip()
+    email = request.form.get("email", "").strip().lower()
 
-        return redirect(
-            url_for("members")
-        )
+    peut_modifier = request.form.get("peut_modifier") == "oui"
 
-    prenom = request.form.get(
-        "prenom",
-        ""
-    ).strip()
+    role = request.form.get("role", "enfant").strip().lower()
 
-    nom = request.form.get(
-        "nom",
-        ""
-    ).strip()
+    roles_autorises = ["enfant", "conjoint", "ex-conjoint"]
 
-    email = request.form.get(
-        "email",
-        ""
-    ).strip().lower()
-
-    password = request.form.get(
-        "password",
-        ""
-    )
-
-    peut_modifier = request.form.get(
-        "peut_modifier"
-    ) == "oui"
+    if role not in roles_autorises:
+        role = "enfant"
 
     if not prenom:
-
-        flash(
-            "Veuillez saisir le prénom."
-        )
-
-        return redirect(
-            url_for("members")
-        )
+        flash("Veuillez saisir le prénom.")
+        return redirect(url_for("members"))
 
     if not nom:
-
-        flash(
-            "Veuillez saisir le nom."
-        )
-
-        return redirect(
-            url_for("members")
-        )
-
-    if not password:
-
-        flash(
-            "Veuillez saisir un mot de passe."
-        )
-
-        return redirect(
-            url_for("members")
-        )
+        flash("Veuillez saisir le nom.")
+        return redirect(url_for("members"))
 
     if email and member_email_exists(email):
-
-        flash(
-            "Cette adresse e-mail est déjà utilisée."
-        )
-
-        return redirect(
-            url_for("members")
-        )
+        flash("Cette adresse e-mail est déjà utilisée.")
+        return redirect(url_for("members"))
 
     create_member(
         famille_id,
         prenom,
         nom,
         email,
-        password,
-        peut_modifier
+        peut_modifier,
+        role
     )
 
-    flash(
-        "Membre ajouté avec succès."
-    )
+    flash("Membre ajouté avec succès. Il pourra choisir son mot de passe lors de sa première connexion.")
 
-    return redirect(
-        url_for("members")
-    )
+    return redirect(url_for("members"))
+
 
 # ==========================================================
 # SUPPRIMER UN MEMBRE
