@@ -13,7 +13,6 @@ from flask import (
     jsonify
 )
     
-    
 
 import os
 import sqlite3
