@@ -1147,7 +1147,89 @@ def init_database():
             ADD COLUMN type_evenement TEXT
             """
         )
+    # ======================================================
+    # DROITS ET CONFIDENTIALITÉ DES ÉVÉNEMENTS
+    # ======================================================
 
+    cursor.execute(
+        "PRAGMA table_info(famille)"
+    )
+
+    colonnes_famille = {
+        ligne[1]
+        for ligne in cursor.fetchall()
+    }
+
+    if "mode_confidentialite" not in colonnes_famille:
+
+        cursor.execute(
+            """
+            ALTER TABLE famille
+            ADD COLUMN mode_confidentialite TEXT
+            DEFAULT 'private'
+            """
+        )
+
+    cursor.execute(
+        "PRAGMA table_info(evenements)"
+    )
+
+    colonnes_evenements = {
+        ligne[1]
+        for ligne in cursor.fetchall()
+    }
+
+        colonnes_evenements_a_ajouter = {
+        "created_by_admin_id": "INTEGER",
+        "created_by_membre_id": "INTEGER",
+        "membre_peut_modifier": "INTEGER DEFAULT 0",
+        "membre_peut_supprimer": "INTEGER DEFAULT 0",
+        "statut_validation": "TEXT DEFAULT 'accepte'",
+        "valide_par_admin_id": "INTEGER",
+        "valide_par_membre_id": "INTEGER",
+        "concerne_admin": "INTEGER DEFAULT 0"
+    }
+
+    for colonne, definition in colonnes_evenements_a_ajouter.items():
+
+        if colonne not in colonnes_evenements:
+
+            cursor.execute(
+                f"""
+                ALTER TABLE evenements
+                ADD COLUMN {colonne} {definition}
+                """
+            )
+    # Autorisation spécifique d'accès à l'agenda administrateur
+
+    cursor.execute(
+        "PRAGMA table_info(membres)"
+    )
+
+    colonnes_membres = {
+        ligne[1]
+        for ligne in cursor.fetchall()
+    }
+
+    if "acces_agenda_admin" not in colonnes_membres:
+
+        cursor.execute(
+            """
+            ALTER TABLE membres
+            ADD COLUMN acces_agenda_admin INTEGER DEFAULT 0
+            """
+        )
+    # Les anciens rendez-vous attribués à un membre
+    # sont considérés comme créés par ce membre.
+
+    cursor.execute(
+        """
+        UPDATE evenements
+        SET created_by_membre_id = membre_id
+        WHERE membre_id IS NOT NULL
+        AND created_by_membre_id IS NULL
+        """
+    )
     conn.commit()
 
     conn.close()
@@ -1531,8 +1613,10 @@ def create_shared_custody_events(
 )
 def create_family():
 
-    if not session.get("logged"):
-
+    if not admin_required():
+    
+        flash("Seul l'administrateur peut créer une famille.")
+    
         return redirect(
             url_for("home")
         )
@@ -2027,72 +2111,136 @@ def family():
 def add_event():
 
     if not session.get("logged"):
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    famille_id = session.get(
-        "famille_id"
-    )
+    famille_id = session.get("famille_id")
 
     if famille_id is None:
+        flash("Famille introuvable.")
+        return redirect(url_for("dashboard"))
 
-        flash(
-            "Famille introuvable."
-        )
+    titre = request.form.get("titre", "").strip()
+    description = request.form.get("description", "").strip()
+    date = request.form.get("date", "").strip()
+    heure = request.form.get("heure", "").strip()
+    calendrier = request.form.get("calendrier", "Famille").strip()
 
-        return redirect(
-            url_for("dashboard")
-        )
-
-    membre_id = request.form.get(
-        "membre_id"
-    )
-
-    titre = request.form.get(
-        "titre",
-        ""
-    ).strip()
-
-    description = request.form.get(
-        "description",
-        ""
-    ).strip()
-
-    date = request.form.get(
-        "date",
-        ""
-    ).strip()
-
-    heure = request.form.get(
-        "heure",
-        ""
-    ).strip()
-
-    calendrier = request.form.get(
-        "calendrier",
-        "Famille"
-    ).strip()
+    if not titre or not date:
+        flash("Veuillez saisir un titre et une date.")
+        return redirect(url_for("calendar"))
 
     rappel = (
-        1
-        if request.form.get("rappel") == "oui"
-        else 0
+        1 if request.form.get("rappel") == "oui" else 0
     )
 
-    if not titre:
+    admin_logged = bool(session.get("admin_logged"))
+    admin_id = session.get("admin_id")
+    auteur_membre_id = session.get("membre_id")
 
-        flash(
-            "Veuillez saisir un titre."
-        )
-
-        return redirect(
-            url_for("calendar")
-        )
+    membre_id_form = request.form.get("membre_id", "").strip()
+    concerne_admin = request.form.get("concerne_admin") == "oui"
 
     conn = get_connection()
     cursor = conn.cursor()
+
+    role_auteur = None
+
+    if not admin_logged:
+
+        cursor.execute(
+            """
+            SELECT id, famille_id, role
+            FROM membres
+            WHERE id = ?
+            AND famille_id = ?
+            """,
+            (auteur_membre_id, famille_id)
+        )
+
+        auteur = cursor.fetchone()
+
+        if auteur is None:
+            conn.close()
+            session.clear()
+            return redirect(url_for("home"))
+
+        role_auteur = (auteur["role"] or "enfant").lower()
+
+    # ------------------------------------------------------
+    # DÉTERMINER LE DESTINATAIRE
+    # ------------------------------------------------------
+
+    destinataire_id = None
+
+    if membre_id_form:
+
+        try:
+            destinataire_id = int(membre_id_form)
+        except ValueError:
+            conn.close()
+            flash("Membre destinataire invalide.")
+            return redirect(url_for("calendar"))
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM membres
+            WHERE id = ?
+            AND famille_id = ?
+            """,
+            (destinataire_id, famille_id)
+        )
+
+        if cursor.fetchone() is None:
+            conn.close()
+            flash("Ce membre n'appartient pas à votre famille.")
+            return redirect(url_for("calendar"))
+
+    # ------------------------------------------------------
+    # IDENTIFIER LE CRÉATEUR ET LE STATUT
+    # ------------------------------------------------------
+
+    created_by_admin_id = admin_id if admin_logged else None
+    created_by_membre_id = None if admin_logged else auteur_membre_id
+
+    statut_validation = "accepte"
+    valide_par_admin_id = None
+    valide_par_membre_id = None
+
+    # Un administrateur valide directement ses propres créations.
+    if admin_logged:
+        statut_validation = "accepte"
+        valide_par_admin_id = admin_id
+
+    # Un membre crée son propre rendez-vous.
+    elif destinataire_id == auteur_membre_id and not concerne_admin:
+        statut_validation = "accepte"
+        valide_par_membre_id = auteur_membre_id
+
+    # Toute proposition destinée à une autre personne
+    # reste en attente de validation.
+    else:
+        statut_validation = "en_attente"
+
+    # ------------------------------------------------------
+    # RENDEZ-VOUS DESTINÉ À L'ADMINISTRATEUR
+    # ------------------------------------------------------
+
+    if concerne_admin:
+
+        if admin_logged:
+            conn.close()
+            flash("Vous ne pouvez pas créer une proposition destinée à votre propre agenda.")
+            return redirect(url_for("calendar"))
+
+        # L'accès à l'agenda administrateur ne donne pas
+        # automatiquement le droit d'y ajouter un rendez-vous.
+        statut_validation = "en_attente"
+        destinataire_id = None
+
+    # ------------------------------------------------------
+    # ENREGISTREMENT
+    # ------------------------------------------------------
 
     cursor.execute(
         """
@@ -2106,35 +2254,45 @@ def add_event():
             heure,
             calendrier,
             rappel,
-            type_evenement
+            type_evenement,
+            created_by_admin_id,
+            created_by_membre_id,
+            statut_validation,
+            valide_par_admin_id,
+            valide_par_membre_id,
+            concerne_admin
         )
-        VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             famille_id,
-            membre_id or None,
+            destinataire_id,
             titre,
             description,
             date,
             heure,
             calendrier,
             rappel,
-            "normal"
+            "normal",
+            created_by_admin_id,
+            created_by_membre_id,
+            statut_validation,
+            valide_par_admin_id,
+            valide_par_membre_id,
+            1 if concerne_admin else 0
         )
     )
 
     conn.commit()
     conn.close()
 
-    flash(
-        "Événement ajouté."
-    )
+    if statut_validation == "en_attente":
+        flash("Votre proposition de rendez-vous a été envoyée pour validation.")
+    else:
+        flash("Événement ajouté.")
 
-    return redirect(
-        url_for("calendar")
-    )
-
+    return redirect(url_for("calendar"))
+    
 # ==========================================================
 # MODIFICATION D'UN ÉVÉNEMENT
 # ==========================================================
@@ -2146,14 +2304,11 @@ def add_event():
 def edit_event(event_id):
 
     if not session.get("logged"):
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    famille_id = session.get(
-        "famille_id"
-    )
+    famille_id = session.get("famille_id")
+    admin_logged = session.get("admin_logged") is True
+    membre_id = session.get("membre_id")
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -2165,61 +2320,74 @@ def edit_event(event_id):
         WHERE id = ?
         AND famille_id = ?
         """,
-        (
-            event_id,
-            famille_id
-        )
+        (event_id, famille_id)
     )
 
     evenement = cursor.fetchone()
 
     if evenement is None:
-
         conn.close()
-
-        flash(
-            "Événement introuvable."
-        )
-
-        return redirect(
-            url_for("calendar")
-        )
-
-    # Une garde partagée générée
-    # automatiquement ne peut pas être
-    # modifiée comme un événement normal.
+        flash("Événement introuvable.")
+        return redirect(url_for("calendar"))
 
     if evenement["type_evenement"] == "garde_partagee":
-
         conn.close()
+        flash("Les gardes partagées sont générées automatiquement.")
+        return redirect(url_for("calendar"))
 
-        flash(
-            "Les gardes partagées sont générées automatiquement."
+    autorise = False
+
+    if admin_logged:
+        autorise = True
+
+    else:
+        cursor.execute(
+            """
+            SELECT role
+            FROM membres
+            WHERE id = ?
+            AND famille_id = ?
+            """,
+            (membre_id, famille_id)
         )
 
-        return redirect(
-            url_for("calendar")
-        )
+        membre = cursor.fetchone()
 
-    titre = request.form.get(
-        "titre",
-        ""
-    ).strip()
+        if membre is None:
+            conn.close()
+            return redirect(url_for("home"))
 
-    description = request.form.get(
-        "description",
-        ""
-    ).strip()
+        role = (membre["role"] or "enfant").lower()
 
-    date = request.form.get(
-        "date",
-        ""
-    ).strip()
+        # Un membre peut modifier son propre rendez-vous.
+        if (
+            evenement["membre_id"] == membre_id
+            and evenement["created_by_membre_id"] == membre_id
+        ):
+            autorise = True
 
-    heure = request.form.get(
-        "heure",
-        ""
-    ).strip()
+        # Seul le conjoint actuel peut déplacer
+        # un rendez-vous créé par l'administrateur.
+        elif (
+            role == "conjoint"
+            and evenement["created_by_admin_id"] is not None
+        ):
+            autorise = True
+
+    if not autorise:
+        conn.close()
+        flash("Vous n'avez pas l'autorisation de modifier ce rendez-vous.")
+        return redirect(url_for("calendar"))
+
+    titre = request.form.get("titre", "").strip()
+    description = request.form.get("description", "").strip()
+    date = request.form.get("date", "").strip()
+    heure = request.form.get("heure", "").strip()
+
+    if not titre or not date:
+        conn.close()
+        flash("Veuillez saisir un titre et une date.")
+        return redirect(url_for("calendar"))
 
     cursor.execute(
         """
@@ -2245,14 +2413,9 @@ def edit_event(event_id):
     conn.commit()
     conn.close()
 
-    flash(
-        "Événement modifié."
-    )
-
-    return redirect(
-        url_for("calendar")
-    )
-
+    flash("Événement modifié.")
+    return redirect(url_for("calendar"))
+    
 # ==========================================================
 # SUPPRESSION D'UN ÉVÉNEMENT
 # ==========================================================
@@ -2264,56 +2427,69 @@ def edit_event(event_id):
 def delete_event(event_id):
 
     if not session.get("logged"):
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    famille_id = session.get(
-        "famille_id"
-    )
+    famille_id = session.get("famille_id")
+    admin_logged = session.get("admin_logged") is True
+    membre_id = session.get("membre_id")
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
         """
-        SELECT type_evenement
+        SELECT *
         FROM evenements
         WHERE id = ?
         AND famille_id = ?
         """,
-        (
-            event_id,
-            famille_id
-        )
+        (event_id, famille_id)
     )
 
     evenement = cursor.fetchone()
 
     if evenement is None:
-
         conn.close()
-
-        flash(
-            "Événement introuvable."
-        )
-
-        return redirect(
-            url_for("calendar")
-        )
+        flash("Événement introuvable.")
+        return redirect(url_for("calendar"))
 
     if evenement["type_evenement"] == "garde_partagee":
-
         conn.close()
+        flash("Les gardes partagées automatiques ne peuvent pas être supprimées ici.")
+        return redirect(url_for("calendar"))
 
-        flash(
-            "Les gardes partagées sont générées automatiquement."
+    autorise = False
+
+    # L'administrateur peut supprimer les événements de sa famille.
+    if admin_logged:
+        autorise = True
+
+    else:
+        cursor.execute(
+            """
+            SELECT id, role
+            FROM membres
+            WHERE id = ?
+            AND famille_id = ?
+            """,
+            (membre_id, famille_id)
         )
 
-        return redirect(
-            url_for("calendar")
-        )
+        membre = cursor.fetchone()
+
+        if membre is None:
+            conn.close()
+            return redirect(url_for("home"))
+
+        # Un membre peut supprimer uniquement un rendez-vous
+        # qu'il a lui-même créé.
+        if evenement["created_by_membre_id"] == membre_id:
+            autorise = True
+
+    if not autorise:
+        conn.close()
+        flash("Vous ne pouvez pas supprimer ce rendez-vous.")
+        return redirect(url_for("calendar"))
 
     cursor.execute(
         """
@@ -2321,23 +2497,158 @@ def delete_event(event_id):
         WHERE id = ?
         AND famille_id = ?
         """,
-        (
-            event_id,
-            famille_id
-        )
+        (event_id, famille_id)
     )
 
     conn.commit()
     conn.close()
 
-    flash(
-        "Événement supprimé."
+    flash("Événement supprimé.")
+    return redirect(url_for("calendar"))
+
+# ==========================================================
+# VALIDATION DES RENDEZ-VOUS PROPOSÉS
+# ==========================================================
+
+@app.route(
+    "/validate_event/<int:event_id>",
+    methods=["POST"]
+)
+def validate_event(event_id):
+
+    if not session.get("logged"):
+        return redirect(url_for("home"))
+
+    famille_id = session.get("famille_id")
+    admin_logged = session.get("admin_logged") is True
+    membre_id = session.get("membre_id")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM evenements
+        WHERE id = ?
+        AND famille_id = ?
+        AND statut_validation = 'en_attente'
+        """,
+        (event_id, famille_id)
     )
 
-    return redirect(
-        url_for("calendar")
+    evenement = cursor.fetchone()
+
+    if evenement is None:
+        conn.close()
+        flash("Cette proposition est introuvable ou déjà traitée.")
+        return redirect(url_for("calendar"))
+
+    autorise = False
+
+    if admin_logged:
+        autorise = True
+
+    elif evenement["concerne_admin"] == 0:
+        if evenement["membre_id"] == membre_id:
+            autorise = True
+
+    if not autorise:
+        conn.close()
+        flash("Vous n'êtes pas autorisé à valider cette proposition.")
+        return redirect(url_for("calendar"))
+
+    if admin_logged:
+        cursor.execute(
+            """
+            UPDATE evenements
+            SET statut_validation = 'accepte',
+                valide_par_admin_id = ?
+            WHERE id = ?
+            """,
+            (session.get("admin_id"), event_id)
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE evenements
+            SET statut_validation = 'accepte',
+                valide_par_membre_id = ?
+            WHERE id = ?
+            """,
+            (membre_id, event_id)
+        )
+
+    conn.commit()
+    conn.close()
+
+    flash("Rendez-vous accepté.")
+    return redirect(url_for("calendar"))
+
+
+@app.route(
+    "/refuse_event/<int:event_id>",
+    methods=["POST"]
+)
+def refuse_event(event_id):
+
+    if not session.get("logged"):
+        return redirect(url_for("home"))
+
+    famille_id = session.get("famille_id")
+    admin_logged = session.get("admin_logged") is True
+    membre_id = session.get("membre_id")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM evenements
+        WHERE id = ?
+        AND famille_id = ?
+        AND statut_validation = 'en_attente'
+        """,
+        (event_id, famille_id)
     )
 
+    evenement = cursor.fetchone()
+
+    if evenement is None:
+        conn.close()
+        flash("Cette proposition est introuvable ou déjà traitée.")
+        return redirect(url_for("calendar"))
+
+    autorise = False
+
+    if admin_logged:
+        autorise = True
+
+    elif evenement["concerne_admin"] == 0:
+        if evenement["membre_id"] == membre_id:
+            autorise = True
+
+    if not autorise:
+        conn.close()
+        flash("Vous n'êtes pas autorisé à refuser cette proposition.")
+        return redirect(url_for("calendar"))
+
+    cursor.execute(
+        """
+        UPDATE evenements
+        SET statut_validation = 'refuse'
+        WHERE id = ?
+        """,
+        (event_id,)
+    )
+
+    conn.commit()
+    conn.close()
+
+    flash("Proposition refusée.")
+    return redirect(url_for("calendar"))
+    
 # ==========================================================
 # CALENDRIER
 # ==========================================================
