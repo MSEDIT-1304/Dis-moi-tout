@@ -428,3 +428,102 @@ textarea {
     }
 }
 
+
+
+/* ======================================================
+   NOUVELLE PALETTE — DIS-MOI TOUT
+   Couleurs uniquement : aucune taille de texte modifiée
+   ====================================================== */
+
+:root {
+    --fuchsia-profond: #A52D68;
+    --bleu-bouton: #A9CBEA;
+    --bleu-bouton-hover: #8FB8DE;
+}
+
+/* Boutons : remplacement des anciens tons bruns/roses */
+button,
+.btn,
+.login-button,
+.members-button,
+.member-button,
+.navigation a {
+    background-color: var(--bleu-bouton) !important;
+    color: #244967 !important;
+    border-color: transparent;
+}
+
+button:hover,
+.btn:hover,
+.login-button:hover,
+.members-button:hover,
+.member-button:hover,
+.navigation a:hover {
+    background-color: var(--bleu-bouton-hover) !important;
+    color: #1D3D58 !important;
+}
+
+/* Cadres de connexion : fuchsia et hauteur réduite
+   Les tailles de police restent celles déjà définies. */
+html body .login-page > section.login-card {
+    background-color: var(--fuchsia-profond) !important;
+    color: #FFFFFF !important;
+    padding: 16px 20px !important;
+}
+
+html body .login-page > section.login-card h2,
+html body .login-page > section.login-card p,
+html body .login-page > section.login-card label {
+    color: #FFFFFF !important;
+}
+
+html body .login-page > section.login-card label {
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+/* Case afficher le mot de passe : icône œil fuchsia
+   Le fonctionnement de la case à cocher est conservé. */
+.show-password {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.show-password input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: 0 0 22px;
+    width: 22px !important;
+    height: 22px;
+    padding: 0 !important;
+    margin: 4px 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background-color: transparent !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23A52D68' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E") !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-size: contain !important;
+    cursor: pointer;
+}
+
+.show-password input[type="checkbox"]:checked {
+    background-color: rgba(255, 255, 255, 0.22) !important;
+    outline: 2px solid #FFFFFF;
+    outline-offset: 2px;
+    border-radius: 4px !important;
+}
+
+.show-password label {
+    display: inline-block !important;
+    margin: 4px 0 !important;
+    cursor: pointer;
+}
+
+/* Sur mobile : cadres plus compacts, sans agrandir les textes. */
+@media (max-width: 768px) {
+    html body .login-page > section.login-card {
+        padding: 13px 15px !important;
+    }
+}
