@@ -9,8 +9,11 @@ from flask import (
     redirect,
     url_for,
     session,
-    flash
+    flash,
+    jsonify
 )
+    
+    
 
 import os
 import sqlite3
@@ -18,6 +21,8 @@ import pandas as pd
 import requests
 import bcrypt
 import secrets
+import base64
+import tempfile
 
 from datetime import datetime
 from urllib.parse import urlencode
@@ -110,6 +115,66 @@ def get_connection():
 
     return conn
 
+
+# ==========================================================
+# SAUVEGARDE SQLITE VERS GOOGLE DRIVE
+# ==========================================================
+
+@app.route("/internal/database-backup", methods=["POST"])
+def database_backup():
+
+    backup_secret = os.environ.get("BACKUP_SECRET_KEY", "")
+    received_secret = request.headers.get("X-Backup-Key", "")
+
+    if not backup_secret or not secrets.compare_digest(
+        received_secret, backup_secret
+    ):
+        return jsonify({"success": False, "error": "Accès refusé"}), 403
+
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as temp_file:
+            temp_path = temp_file.name
+
+        source = sqlite3.connect(DATABASE)
+        destination = sqlite3.connect(temp_path)
+
+        try:
+            source.backup(destination)
+        finally:
+            destination.close()
+            source.close()
+
+        with open(temp_path, "rb") as backup_file:
+            encoded_file = base64.b64encode(
+                backup_file.read()
+            ).decode("ascii")
+
+        filename = (
+            "dismoitout_"
+            + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            + ".db"
+        )
+
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "file": encoded_file
+        })
+
+    except Exception:
+        app.logger.exception("Erreur sauvegarde SQLite")
+        return jsonify({
+            "success": False,
+            "error": "Échec de la sauvegarde"
+        }), 500
+
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 # ==========================================================
 # GOOGLE SHEETS
