@@ -1818,10 +1818,13 @@ def member_login():
         "password", ""
     )
 
+    if not identifiant or not password:
+        flash("Veuillez saisir vos identifiants.")
+        return redirect(url_for("login"))
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Recherche par e-mail ou par prénom + nom
     cursor.execute(
         """
         SELECT *
@@ -1833,21 +1836,49 @@ def member_login():
     )
 
     candidats = cursor.fetchall()
-    conn.close()
 
-    membre = None
-
-    for candidat in candidats:
-        if verify_password(
-            password,
-            candidat["password"]
-        ):
-            membre = candidat
-            break
-
-    if membre is None:
-        flash("Identifiants incorrects.")
+    if len(candidats) != 1:
+        conn.close()
+        flash("Membre introuvable ou identifiant non unique.")
         return redirect(url_for("login"))
+
+    membre = candidats[0]
+
+    # Première connexion : le membre choisit son mot de passe
+    if not membre["password"]:
+
+        if len(password) < 8:
+            conn.close()
+            flash("Le mot de passe doit contenir au moins 8 caractères.")
+            return redirect(url_for("login"))
+
+        hashed_password = hash_password(password)
+
+        cursor.execute(
+            """
+            UPDATE membres
+            SET password = ?
+            WHERE id = ?
+            AND password IS NULL
+            """,
+            (hashed_password, membre["id"])
+        )
+
+        if cursor.rowcount != 1:
+            conn.close()
+            flash("Impossible de créer le mot de passe. Réessayez.")
+            return redirect(url_for("login"))
+
+        conn.commit()
+
+    # Connexions suivantes : vérification du mot de passe
+    elif not verify_password(password, membre["password"]):
+
+        conn.close()
+        flash("Mot de passe incorrect.")
+        return redirect(url_for("login"))
+
+    conn.close()
 
     session.clear()
 
@@ -1859,10 +1890,7 @@ def member_login():
         f"{membre['prenom']} {membre['nom']}"
     )
 
-    return redirect(
-        url_for("member_dashboard")
-    )
-
+    return redirect(url_for("member_dashboard"))
 # ==========================================================
 # TABLEAU DE BORD MEMBRE
 # ==========================================================
