@@ -1,1 +1,293 @@
 
+{% extends "base.html" %}
+
+{% block title %}Ma famille - Dis-moi tout{% endblock %}
+
+{% block content %}
+
+<div class="family-page">
+
+    <header class="family-header">
+        <div>
+            <h1>Ma famille</h1>
+            <p>Retrouvez les personnes qui partagent votre espace familial.</p>
+        </div>
+        <a href="{{ url_for('dashboard') if est_admin else url_for('member_dashboard') }}"
+           class="family-button family-button-secondary">
+            Retour
+        </a>
+    </header>
+
+    {% if famille %}
+
+    <section class="family-card family-name-card">
+        <div class="family-icon">⌂</div>
+        <div>
+            <span class="family-label">ESPACE FAMILIAL</span>
+            <h2>{{ famille.nom_famille }}</h2>
+            <p>Votre espace de vie partagé</p>
+        </div>
+    </section>
+
+    <section class="family-card">
+        <div class="family-section-header">
+            <div>
+                <h2>Les membres de la famille</h2>
+                <p>Les personnes enregistrées dans votre espace.</p>
+            </div>
+            <span class="family-counter">{{ total_membres }} / 6</span>
+        </div>
+
+        <div class="family-member-list">
+
+            <article class="family-member">
+                <div class="family-avatar">A</div>
+                <div class="family-member-info">
+                    <h3>{{ admin.prenom }} {{ admin.nom }}</h3>
+                    <p>Administrateur</p>
+                </div>
+                <span class="family-role">Administrateur</span>
+            </article>
+
+            {% for membre in membres %}
+            <article class="family-member">
+                <div class="family-avatar">
+                    {{ membre.prenom[0]|upper if membre.prenom else '?' }}
+                </div>
+
+                <div class="family-member-info">
+                    <h3>{{ membre.prenom }} {{ membre.nom }}</h3>
+
+                    {% if membre.email %}
+                        <p>{{ membre.email }}</p>
+                    {% else %}
+                        <p>Aucune adresse e-mail renseignée</p>
+                    {% endif %}
+                </div>
+
+                <span class="family-role">
+                    {% if membre.peut_modifier %}
+                        Modification autorisée
+                    {% else %}
+                        Consultation uniquement
+                    {% endif %}
+                </span>
+            </article>
+            {% else %}
+            <p class="family-empty">
+                Aucun autre membre n'a encore été ajouté.
+            </p>
+            {% endfor %}
+
+        </div>
+
+        {% if est_admin %}
+        <a href="{{ url_for('members') }}" class="family-button">
+            Gérer les membres
+        </a>
+        {% endif %}
+    </section>
+
+    {% else %}
+
+    <section class="family-card">
+        <h2>Aucun espace familial</h2>
+        <p>Votre espace familial n'est pas encore configuré.</p>
+    </section>
+
+    {% endif %}
+
+</div>
+
+<style>
+.family-page {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.family-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.family-header h1 {
+    margin-bottom: 7px;
+}
+
+.family-header p,
+.family-section-header p {
+    margin-top: 5px;
+}
+
+.family-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 22px;
+}
+
+.family-card h2,
+.family-card h3,
+.family-card p {
+    color: white;
+}
+
+.family-name-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.family-icon {
+    width: 65px;
+    height: 65px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(197,161,91,0.2);
+    color: #dfbd78;
+    font-size: 36px;
+}
+
+.family-label {
+    color: #dfbd78;
+    font-size: 12px;
+    letter-spacing: 1.5px;
+}
+
+.family-name-card h2 {
+    margin: 7px 0;
+}
+
+.family-name-card p {
+    margin: 0;
+    opacity: 0.8;
+}
+
+.family-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.family-counter {
+    background: rgba(197,161,91,0.2);
+    color: #dfbd78;
+    padding: 9px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.family-member {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 17px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.18);
+}
+
+.family-avatar {
+    flex-shrink: 0;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #c5a15b;
+    color: #17324d;
+    font-weight: bold;
+    font-size: 19px;
+}
+
+.family-member-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.family-member-info h3 {
+    margin: 0 0 5px;
+}
+
+.family-member-info p {
+    margin: 0;
+    opacity: 0.75;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+}
+
+.family-role {
+    color: #dfbd78;
+    font-size: 13px;
+    text-align: right;
+}
+
+.family-button {
+    display: inline-block;
+    background: #c5a15b;
+    color: #172b40;
+    padding: 12px 20px;
+    margin-top: 18px;
+    border: none;
+    border-radius: 7px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.family-button:hover {
+    background: #dfbd78;
+}
+
+.family-button-secondary {
+    margin-top: 0;
+    background: transparent;
+    border: 1px solid #c5a15b;
+    color: #c5a15b;
+}
+
+.family-empty {
+    padding: 15px 0;
+    opacity: 0.8;
+}
+
+@media (max-width: 600px) {
+    .family-page {
+        padding: 15px 10px;
+    }
+
+    .family-card {
+        padding: 18px;
+    }
+
+    .family-header {
+        align-items: flex-start;
+    }
+
+    .family-member {
+        flex-wrap: wrap;
+    }
+
+    .family-role {
+        width: 100%;
+        text-align: left;
+        padding-left: 60px;
+    }
+
+    .family-section-header {
+        align-items: flex-start;
+    }
+}
+</style>
+
+{% endblock %}
+
