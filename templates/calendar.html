@@ -64,7 +64,17 @@
 </section>
     <section class="calendar-card">
         <h2>Ajouter un événement</h2>
-
+        <div class="voice-command">
+        <h3>🎙️ Ajouter par commande vocale</h3>
+        <p>Exemple : « Rendez-vous chez le dentiste demain à 14 heures »</p>
+    
+        <button type="button" id="voice-button" class="calendar-button">
+            🎙️ Parler
+        </button>
+    
+        <p id="voice-status" role="status"></p>
+        <p id="voice-transcript"></p>
+    </div>
         <form method="POST" action="{{ url_for('add_event') }}">
 
             <div class="calendar-form-grid">
@@ -377,6 +387,110 @@
     }
 }
 </style>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const button = document.getElementById("voice-button");
+    const status = document.getElementById("voice-status");
+    const transcript = document.getElementById("voice-transcript");
+
+    const titre = document.getElementById("titre");
+    const date = document.getElementById("date");
+    const heure = document.getElementById("heure");
+
+    const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!button || !status || !transcript) return;
+
+    if (!SpeechRecognition) {
+        button.disabled = true;
+        status.textContent = "La reconnaissance vocale nécessite Chrome ou Edge à jour.";
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "fr-FR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    button.addEventListener("click", function () {
+        transcript.textContent = "";
+        status.textContent = "Je vous écoute...";
+        recognition.start();
+    });
+
+    recognition.onresult = function (event) {
+        const phrase = event.results[0][0].transcript.trim();
+        transcript.textContent = "Vous avez dit : " + phrase;
+
+        let texte = phrase.toLowerCase();
+        const maintenant = new Date();
+
+        let dateTrouvee = null;
+
+        if (texte.includes("après-demain") || texte.includes("apres-demain")) {
+            maintenant.setDate(maintenant.getDate() + 2);
+            dateTrouvee = true;
+            texte = texte.replace(/après-demain|apres-demain/, "");
+        } else if (texte.includes("demain")) {
+            maintenant.setDate(maintenant.getDate() + 1);
+            dateTrouvee = true;
+            texte = texte.replace("demain", "");
+        } else if (texte.includes("aujourd'hui") || texte.includes("aujourd’hui")) {
+            dateTrouvee = true;
+            texte = texte.replace(/aujourd'hui|aujourd’hui/, "");
+        }
+
+        const dateNumerique = texte.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/);
+
+        if (dateNumerique) {
+            const jour = dateNumerique[1].padStart(2, "0");
+            const mois = dateNumerique[2].padStart(2, "0");
+            const annee = dateNumerique[3] || maintenant.getFullYear();
+            date.value = `${annee}-${mois}-${jour}`;
+            texte = texte.replace(dateNumerique[0], "");
+        } else if (dateTrouvee) {
+            date.value = maintenant.toISOString().slice(0, 10);
+        }
+
+        const heureTrouvee = texte.match(/\b(\d{1,2})\s*(?:h|heures?)(?:\s*(\d{1,2}))?\b|\b(\d{1,2}):(\d{2})\b/);
+
+        if (heureTrouvee) {
+            const h = heureTrouvee[1] || heureTrouvee[3];
+            const m = heureTrouvee[2] || heureTrouvee[4] || "00";
+            heure.value = `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
+            texte = texte.replace(heureTrouvee[0], "");
+        }
+
+        texte = texte.replace(
+            /\b(rendez-vous|rdv|prévois|prevois|planifie|ajoute|ajouter|crée|cree|un|une|le|la|pour)\b/gi,
+            ""
+        ).replace(/\s+/g, " ").trim();
+
+        if (texte && titre) {
+            titre.value = texte.charAt(0).toUpperCase() + texte.slice(1);
+        }
+
+        status.textContent = "Champs remplis. Vérifiez les informations avant d'ajouter l'événement.";
+    };
+
+    recognition.onerror = function (event) {
+        status.textContent = event.error === "not-allowed"
+            ? "Autorisez l'accès au microphone dans votre navigateur."
+            : "Je n'ai pas réussi à comprendre. Vous pouvez réessayer.";
+    };
+
+    recognition.onend = function () {
+        button.disabled = false;
+    };
+
+    button.addEventListener("click", function () {
+        button.disabled = true;
+    });
+});
+</script>
 
 {% endblock %}
 
