@@ -430,15 +430,23 @@ def logout():
 # LISTE MEMBRES
 # ==========================================================
 
+# ==========================================================
+# LISTE MEMBRES — ADMINISTRATEUR UNIQUEMENT
+# ==========================================================
+
 @app.route("/members")
 def members():
 
-    if not session.get("logged"):
-
+    if not admin_required():
         return redirect(url_for("home"))
 
-    conn = get_connection()
+    famille_id = get_family_id(session.get("admin_id"))
 
+    if famille_id is None:
+        flash("Veuillez d'abord créer votre famille.")
+        return redirect(url_for("dashboard"))
+
+    conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute(
@@ -448,20 +456,16 @@ def members():
         WHERE famille_id = ?
         ORDER BY prenom
         """,
-        (
-            session.get("famille_id"),
-        )
+        (famille_id,)
     )
 
     membres = cursor.fetchall()
-
     conn.close()
 
     return render_template(
         "dashboard_member.html",
         membres=membres
     )
-
 
 
 
@@ -1727,11 +1731,14 @@ def delete_member_route(membre_id):
 # TABLEAU DE BORD ADMINISTRATEUR
 # ==========================================================
 
-
 @app.route("/dashboard")
 def dashboard():
 
-    if not session.get("logged"):
+    if not admin_required():
+
+        if session.get("logged") and session.get("membre_id"):
+            return redirect(url_for("member_dashboard"))
+
         return redirect(url_for("home"))
 
     admin_id = session.get("admin_id")
@@ -1894,40 +1901,32 @@ def member_login():
 # TABLEAU DE BORD MEMBRE
 # ==========================================================
 
+# ==========================================================
+# TABLEAU DE BORD MEMBRE
+# ==========================================================
+
 @app.route("/member_dashboard")
 def member_dashboard():
 
-    if not session.get("logged"):
+    if not session.get("logged") or session.get("admin_logged"):
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    membre_id = session.get(
-        "membre_id"
-    )
+    membre_id = session.get("membre_id")
 
     if membre_id is None:
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    membre = get_member_by_id(
-        membre_id
-    )
+    membre = get_member_by_id(membre_id)
 
     if membre is None:
-
         session.clear()
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
+    if membre["famille_id"] != session.get("famille_id"):
+        session.clear()
+        return redirect(url_for("home"))
 
-    famille = get_member_family(
-        membre_id
-    )
+    famille = get_member_family(membre_id)
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1937,15 +1936,19 @@ def member_dashboard():
         SELECT *
         FROM evenements
         WHERE famille_id = ?
+        AND (
+            membre_id = ?
+            OR calendrier = 'Famille'
+        )
         ORDER BY date, heure
         """,
         (
             membre["famille_id"],
+            membre_id
         )
     )
 
     evenements = cursor.fetchall()
-
     conn.close()
 
     return render_template(
@@ -1954,7 +1957,6 @@ def member_dashboard():
         famille=famille,
         evenements=evenements
     )
-
 # ==========================================================
 # ESPACE FAMILLE
 # ==========================================================
