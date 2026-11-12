@@ -382,19 +382,19 @@ textarea {
 
 /* Abonnements expirés : côte à côte sur PC */
 @media (min-width: 769px) {
-    html body .login-page > section.login-card:first-of-type {
+    html body .login-page .login-card:first-of-type {
         display: flex;
         flex-wrap: wrap;
         gap: 10px 16px;
     }
 
-    html body .login-page > section.login-card:first-of-type h2,
-    html body .login-page > section.login-card:first-of-type p:first-of-type {
+    html body .login-page .login-card:first-of-type h2,
+    html body .login-page .login-card:first-of-type p:first-of-type {
         width: 100%;
         margin-bottom: 5px;
     }
 
-    html body .login-page > section.login-card:first-of-type p:not(:first-of-type) {
+    html body .login-page .login-card:first-of-type p:not(:first-of-type) {
         margin: 0;
     }
 }
@@ -410,16 +410,16 @@ textarea {
         height: 85px;
     }
 
-    html body .login-page > section.login-card:first-of-type {
+    html body .login-page .login-card:first-of-type {
         display: block;
     }
 
-    html body .login-page > section.login-card:first-of-type p {
+    html body .login-page .login-card:first-of-type p {
         margin: 12px 0;
         width: 100%;
     }
 
-    html body .login-page > section.login-card:first-of-type a.login-button {
+    html body .login-page .login-card:first-of-type a.login-button {
         display: block;
         width: 100%;
         text-align: center;
@@ -465,19 +465,19 @@ button:hover,
 
 /* Cadres de connexion : fuchsia et hauteur réduite
    Les tailles de police restent celles déjà définies. */
-html body .login-page > section.login-card {
+html body .login-page .login-card {
     background-color: var(--fuchsia-profond) !important;
     color: #FFFFFF !important;
     padding: 16px 20px !important;
 }
 
-html body .login-page > section.login-card h2,
-html body .login-page > section.login-card p,
-html body .login-page > section.login-card label {
+html body .login-page .login-card h2,
+html body .login-page .login-card p,
+html body .login-page .login-card label {
     color: #FFFFFF !important;
 }
 
-html body .login-page > section.login-card label {
+html body .login-page .login-card label {
     margin-top: 10px;
     margin-bottom: 5px;
 }
@@ -523,7 +523,32 @@ html body .login-page > section.login-card label {
 
 /* Sur mobile : cadres plus compacts, sans agrandir les textes. */
 @media (max-width: 768px) {
-    html body .login-page > section.login-card {
+    html body .login-page .login-card {
         padding: 13px 15px !important;
+    }
+}
+
+
+/* CORRECTION : cibler les cartes de connexion même si elles sont imbriquées */
+html body .login-page .login-card {
+    background-color: #A52D68 !important;
+    color: #FFFFFF !important;
+    padding: 16px 20px !important;
+}
+
+html body .login-page .login-card form {
+    padding: 12px !important;
+}
+
+html body .login-page .login-card input:not([type="checkbox"]) {
+    margin-bottom: 10px;
+}
+
+@media (max-width: 768px) {
+    html body .login-page .login-card {
+        padding: 13px 15px !important;
+    }
+    html body .login-page .login-card form {
+        padding: 10px !important;
     }
 }
