@@ -1990,6 +1990,65 @@ def member_dashboard():
     )
 
 # ==========================================================
+# ESPACE FAMILLE
+# ==========================================================
+
+@app.route("/family")
+def family():
+
+    if not session.get("logged"):
+        return redirect(url_for("home"))
+
+    est_admin = session.get("admin_logged") is True
+
+    if est_admin:
+        admin_id = session.get("admin_id")
+    else:
+        membre_id = session.get("membre_id")
+
+        if membre_id is None:
+            return redirect(url_for("home"))
+
+        membre_connecte = get_member_family(membre_id)
+
+        if membre_connecte is None:
+            return redirect(url_for("home"))
+
+        admin_id = membre_connecte["admin_id"]
+
+    famille = get_family(admin_id)
+
+    admin = None
+    membres = []
+    total_membres = 0
+
+    conn = get_connection()
+
+    admin = conn.execute(
+        """
+        SELECT prenom, nom
+        FROM admin
+        WHERE id = ?
+        """,
+        (admin_id,)
+    ).fetchone()
+
+    conn.close()
+
+    if famille:
+        membres = get_members(famille["id"])
+        total_membres = count_members(famille["id"])
+
+    return render_template(
+        "family.html",
+        famille=famille,
+        admin=admin,
+        membres=membres,
+        total_membres=total_membres,
+        est_admin=est_admin
+    )
+
+# ==========================================================
 # AJOUT D'UN ÉVÉNEMENT
 # ==========================================================
 
