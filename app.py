@@ -1700,64 +1700,49 @@ def create_family():
 # CRÉATION D'UN MEMBRE
 # ==========================================================
 
+def create_member(
+    famille_id,
+    prenom,
+    nom,
+    email,
+    peut_modifier=True,
+    role="enfant",
+    acces_agenda_admin=False
+):
 
-@app.route(
-    "/add_member",
-    methods=["POST"]
-)
-def add_member():
+    conn = get_connection()
+    cursor = conn.cursor()
 
-    if not admin_required():
-        return redirect(url_for("home"))
-
-    famille_id = get_family_id(session["admin_id"])
-
-    if famille_id is None:
-        flash("Veuillez d'abord créer votre famille.")
-        return redirect(url_for("dashboard"))
-
-    if count_members(famille_id) >= 6:
-        flash("Votre famille contient déjà 6 membres.")
-        return redirect(url_for("members"))
-
-    prenom = request.form.get("prenom", "").strip()
-    nom = request.form.get("nom", "").strip()
-    email = request.form.get("email", "").strip().lower()
-
-    peut_modifier = request.form.get("peut_modifier") == "oui"
-
-    role = request.form.get("role", "enfant").strip().lower()
-
-    roles_autorises = ["enfant", "conjoint", "ex-conjoint"]
-
-    if role not in roles_autorises:
-        role = "enfant"
-
-    if not prenom:
-        flash("Veuillez saisir le prénom.")
-        return redirect(url_for("members"))
-
-    if not nom:
-        flash("Veuillez saisir le nom.")
-        return redirect(url_for("members"))
-
-    if email and member_email_exists(email):
-        flash("Cette adresse e-mail est déjà utilisée.")
-        return redirect(url_for("members"))
-
-    create_member(
-        famille_id,
-        prenom,
-        nom,
-        email,
-        peut_modifier,
-        role
+    cursor.execute(
+        """
+        INSERT INTO membres
+        (
+            famille_id,
+            prenom,
+            nom,
+            email,
+            password,
+            role,
+            peut_modifier,
+            acces_agenda_admin
+        )
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
+        """,
+        (
+            famille_id,
+            prenom,
+            nom,
+            email,
+            role,
+            1 if peut_modifier else 0,
+            1 if acces_agenda_admin and role == "conjoint" else 0
+        )
     )
 
-    flash("Membre ajouté avec succès. Il pourra choisir son mot de passe lors de sa première connexion.")
+    conn.commit()
+    conn.close()
 
-    return redirect(url_for("members"))
-
+    return True
 
 # ==========================================================
 # SUPPRIMER UN MEMBRE
@@ -1770,47 +1755,45 @@ def add_member():
 def delete_member_route(membre_id):
 
     if not admin_required():
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    famille_id = get_family_id(
-        session["admin_id"]
-    )
+    famille_id = get_family_id(session["admin_id"])
 
     if famille_id is None:
+        return redirect(url_for("dashboard"))
 
-        return redirect(
-            url_for("dashboard")
-        )
+    if not member_belongs_to_family(membre_id, famille_id):
+        flash("Membre introuvable.")
+        return redirect(url_for("members"))
 
-    if not member_belongs_to_family(
-        membre_id,
-        famille_id
-    ):
+    conn = get_connection()
+    cursor = conn.cursor()
 
-        flash(
-            "Membre introuvable."
-        )
-
-        return redirect(
-            url_for("members")
-        )
-
-    delete_member(
-        membre_id,
-        famille_id
+    # Supprimer les propositions et rendez-vous associés au membre
+    cursor.execute(
+        """
+        DELETE FROM evenements
+        WHERE famille_id = ?
+        AND membre_id = ?
+        """,
+        (famille_id, membre_id)
     )
 
-    flash(
-        "Membre supprimé."
+    cursor.execute(
+        """
+        DELETE FROM membres
+        WHERE id = ?
+        AND famille_id = ?
+        """,
+        (membre_id, famille_id)
     )
 
-    return redirect(
-        url_for("members")
-    )
+    conn.commit()
+    conn.close()
 
+    flash("Membre et rendez-vous associés supprimés.")
+    return redirect(url_for("members"))
+    
 # ==========================================================
 # TABLEAU DE BORD ADMINISTRATEUR
 # ==========================================================
@@ -1981,9 +1964,7 @@ def member_login():
     )
 
     return redirect(url_for("member_dashboard"))
-# ==========================================================
-# TABLEAU DE BORD MEMBRE
-# ==========================================================
+
 
 # ==========================================================
 # TABLEAU DE BORD MEMBRE
@@ -2017,22 +1998,65 @@ def member_dashboard():
 
     cursor.execute(
         """
+        SELECT mode_confidentialite
+        FROM famille
+        WHERE id = ?
+        """,
+        (membre["famille_id"],)
+    )
+
+    famille_confidentialite = cursor.fetchone()
+
+    mode_confidentialite = (
+        famille_confidentialite["mode_confidentialite"]
+        if famille_confidentialite
+        and famille_confidentialite["mode_confidentialite"]
+        else "private"
+    )
+
+    acces_agenda_admin = (
+        membre["role"] == "conjoint"
+        and membre["acces_agenda_admin"] == 1
+    )
+
+    cursor.execute(
+        """
         SELECT *
         FROM evenements
         WHERE famille_id = ?
-        AND (
-            membre_id = ?
-            OR calendrier = 'Famille'
-        )
+        AND statut_validation = 'accepte'
         ORDER BY date, heure
         """,
-        (
-            membre["famille_id"],
-            membre_id
-        )
+        (membre["famille_id"],)
     )
 
-    evenements = cursor.fetchall()
+    tous_evenements = cursor.fetchall()
+    evenements = []
+
+    for evenement in tous_evenements:
+
+        # Agenda personnel de l'administrateur
+        if evenement["concerne_admin"] == 1:
+
+            if acces_agenda_admin:
+                evenements.append(evenement)
+
+            continue
+
+        # Rendez-vous personnels du membre connecté
+        if evenement["membre_id"] == membre_id:
+            evenements.append(evenement)
+            continue
+
+        # Rendez-vous familiaux
+        if evenement["calendrier"] == "Famille":
+            evenements.append(evenement)
+            continue
+
+        # Mode ouvert : visibilité des rendez-vous des autres membres
+        if mode_confidentialite == "open":
+            evenements.append(evenement)
+
     conn.close()
 
     return render_template(
@@ -2657,24 +2681,65 @@ def refuse_event(event_id):
 def calendar():
 
     if not session.get("logged"):
+        return redirect(url_for("home"))
 
-        return redirect(
-            url_for("home")
-        )
-
-    famille_id = session.get(
-        "famille_id"
-    )
+    famille_id = session.get("famille_id")
 
     if famille_id is None:
+        return redirect(url_for("dashboard"))
 
-        return redirect(
-            url_for("dashboard")
-        )
+    admin_logged = session.get("admin_logged") is True
+    membre_id = session.get("membre_id")
 
     conn = get_connection()
     cursor = conn.cursor()
 
+    # Récupération du mode de confidentialité
+    cursor.execute(
+        """
+        SELECT mode_confidentialite
+        FROM famille
+        WHERE id = ?
+        """,
+        (famille_id,)
+    )
+
+    famille = cursor.fetchone()
+    mode_confidentialite = (
+        famille["mode_confidentialite"]
+        if famille and famille["mode_confidentialite"]
+        else "private"
+    )
+
+    # Informations du membre connecté
+    membre = None
+    acces_agenda_admin = False
+
+    if not admin_logged and membre_id is not None:
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM membres
+            WHERE id = ?
+            AND famille_id = ?
+            """,
+            (membre_id, famille_id)
+        )
+
+        membre = cursor.fetchone()
+
+        if membre is None:
+            conn.close()
+            session.clear()
+            return redirect(url_for("home"))
+
+        acces_agenda_admin = (
+            membre["role"] == "conjoint"
+            and membre["acces_agenda_admin"] == 1
+        )
+
+    # Récupération des rendez-vous acceptés uniquement
     cursor.execute(
         """
         SELECT
@@ -2685,15 +2750,95 @@ def calendar():
         LEFT JOIN membres m
             ON e.membre_id = m.id
         WHERE e.famille_id = ?
+        AND e.statut_validation = 'accepte'
         ORDER BY e.date, e.heure
         """,
-        (
-            famille_id,
-        )
+        (famille_id,)
     )
 
-    evenements = cursor.fetchall()
+    tous_evenements = cursor.fetchall()
+    evenements = []
 
+    for evenement in tous_evenements:
+
+        evenement_admin = evenement["concerne_admin"] == 1
+
+        # L'agenda de l'administrateur reste privé
+        if evenement_admin:
+
+            if admin_logged or acces_agenda_admin:
+                evenements.append(evenement)
+
+            continue
+
+        # L'administrateur consulte les agendas de la famille
+        if admin_logged:
+
+            if (
+                mode_confidentialite == "open"
+                or evenement["calendrier"] == "Famille"
+                or evenement["created_by_admin_id"] == session.get("admin_id")
+            ):
+                evenements.append(evenement)
+
+            continue
+
+        # Un membre voit ses propres rendez-vous
+        if evenement["membre_id"] == membre_id:
+            evenements.append(evenement)
+            continue
+
+        # Les rendez-vous familiaux sont visibles par tous
+        if evenement["calendrier"] == "Famille":
+            evenements.append(evenement)
+            continue
+
+        # En mode ouvert, les rendez-vous des autres membres sont visibles
+        if mode_confidentialite == "open":
+            evenements.append(evenement)
+
+    # Récupération des propositions en attente
+    if admin_logged:
+
+        cursor.execute(
+            """
+            SELECT
+                e.*,
+                m.prenom,
+                m.nom
+            FROM evenements e
+            LEFT JOIN membres m
+                ON e.membre_id = m.id
+            WHERE e.famille_id = ?
+            AND e.statut_validation = 'en_attente'
+            ORDER BY e.date, e.heure
+            """,
+            (famille_id,)
+        )
+
+    else:
+
+        cursor.execute(
+            """
+            SELECT
+                e.*,
+                m.prenom,
+                m.nom
+            FROM evenements e
+            LEFT JOIN membres m
+                ON e.membre_id = m.id
+            WHERE e.famille_id = ?
+            AND e.statut_validation = 'en_attente'
+            AND e.membre_id = ?
+            AND e.concerne_admin = 0
+            ORDER BY e.date, e.heure
+            """,
+            (famille_id, membre_id)
+        )
+
+    propositions = cursor.fetchall()
+
+    # Liste des membres de la famille
     cursor.execute(
         """
         SELECT id, prenom, nom
@@ -2701,9 +2846,7 @@ def calendar():
         WHERE famille_id = ?
         ORDER BY prenom, nom
         """,
-        (
-            famille_id,
-        )
+        (famille_id,)
     )
 
     membres = cursor.fetchall()
@@ -2713,7 +2856,8 @@ def calendar():
     return render_template(
         "calendar.html",
         evenements=evenements,
-        membres=membres
+        membres=membres,
+        propositions=propositions
     )
 
 # ==========================================================
