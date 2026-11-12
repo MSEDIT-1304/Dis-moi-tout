@@ -562,3 +562,16 @@ html body .login-page .login-card input:not([type="checkbox"]) {
         box-sizing: border-box !important;
     }
 }
+/* PC — ESPACE ADMINISTRATEUR ET MEMBRE L'UN SOUS L'AUTRE */
+@media (min-width: 769px) {
+    html body .login-page {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    html body .login-page .login-card {
+        width: 100% !important;
+        max-width: 900px !important;
+    }
+}
