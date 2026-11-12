@@ -1744,6 +1744,71 @@ def create_member(
     return True
 
 # ==========================================================
+# ROUTE AJOUT D'UN MEMBRE
+# ==========================================================
+
+@app.route("/add_member", methods=["POST"])
+def add_member():
+
+    if not admin_required():
+        return redirect(url_for("home"))
+
+    famille_id = get_family_id(session.get("admin_id"))
+
+    if famille_id is None:
+        flash("Veuillez d'abord créer votre famille.")
+        return redirect(url_for("dashboard"))
+
+    if count_members(famille_id) >= 6:
+        flash("Votre famille contient déjà 6 membres.")
+        return redirect(url_for("members"))
+
+    prenom = request.form.get("prenom", "").strip()
+    nom = request.form.get("nom", "").strip()
+    email = request.form.get("email", "").strip().lower()
+    role = request.form.get("role", "enfant").strip().lower()
+
+    peut_modifier = request.form.get("peut_modifier") == "oui"
+
+    roles_autorises = ["enfant", "conjoint", "ex-conjoint"]
+
+    if role not in roles_autorises:
+        flash("Catégorie de membre invalide.")
+        return redirect(url_for("members"))
+
+    if not prenom or not nom:
+        flash("Veuillez renseigner le prénom et le nom.")
+        return redirect(url_for("members"))
+
+    if email and member_email_exists(email):
+        flash("Cette adresse e-mail est déjà utilisée.")
+        return redirect(url_for("members"))
+
+    # Accès à l'agenda administrateur désactivé par défaut.
+    # Il sera accordé uniquement par une autorisation explicite.
+    acces_agenda_admin = (
+        request.form.get("acces_agenda_admin") == "oui"
+        and role == "conjoint"
+    )
+
+    create_member(
+        famille_id=famille_id,
+        prenom=prenom,
+        nom=nom,
+        email=email,
+        peut_modifier=peut_modifier,
+        role=role,
+        acces_agenda_admin=acces_agenda_admin
+    )
+
+    flash(
+        "Membre ajouté avec succès. "
+        "Il pourra choisir son mot de passe lors de sa première connexion."
+    )
+
+    return redirect(url_for("members"))
+
+# ==========================================================
 # SUPPRIMER UN MEMBRE
 # ==========================================================
 
