@@ -1,0 +1,277 @@
+
+{% extends "base.html" %}
+
+{% block title %}Mon espace personnel — Dis-moi tout{% endblock %}
+
+{% block content %}
+
+<div class="member-dashboard">
+
+    <header class="member-header">
+        <div>
+            <h1>Bonjour {{ membre['prenom'] }} !</h1>
+            <p>Bienvenue dans votre espace personnel.</p>
+        </div>
+
+        <a href="{{ url_for('logout') }}" class="member-button member-button-secondary">
+            Déconnexion
+        </a>
+    </header>
+
+    <nav class="member-navigation" aria-label="Navigation personnelle">
+        <a href="{{ url_for('member_dashboard') }}" class="member-button">
+            Mon tableau de bord
+        </a>
+
+        <a href="{{ url_for('calendar') }}" class="member-button">
+            Calendrier
+        </a>
+
+        <a href="{{ url_for('family') }}" class="member-button">
+            Ma famille
+        </a>
+    </nav>
+
+    <section class="member-card">
+
+        <h2>Mon agenda</h2>
+
+        <p>
+            Retrouvez vos rendez-vous personnels et les rendez-vous familiaux auxquels vous avez accès.
+        </p>
+
+        {% set ns = namespace(found=false) %}
+
+        {% for evenement in evenements %}
+            {% if evenement['membre_id'] == membre['id'] or evenement['calendrier'] == 'Famille' %}
+                {% set ns.found = true %}
+            {% endif %}
+        {% endfor %}
+
+        {% if ns.found %}
+
+            <div class="member-events">
+
+                {% for evenement in evenements %}
+
+                    {% if evenement['membre_id'] == membre['id'] or evenement['calendrier'] == 'Famille' %}
+
+                        <article class="member-event">
+
+                            <div class="member-event-date">
+                                <strong>
+                                    {{ evenement['date'] or 'Date à définir' }}
+                                </strong>
+
+                                {% if evenement['heure'] %}
+                                    <span>{{ evenement['heure'] }}</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="member-event-details">
+
+                                <h3>{{ evenement['titre'] }}</h3>
+
+                                {% if evenement['description'] %}
+                                    <p>{{ evenement['description'] }}</p>
+                                {% endif %}
+
+                                <span class="member-event-category">
+
+                                    {% if evenement['membre_id'] == membre['id'] %}
+                                        Mon rendez-vous
+                                    {% else %}
+                                        Rendez-vous familial
+                                    {% endif %}
+
+                                </span>
+
+                            </div>
+
+                        </article>
+
+                    {% endif %}
+
+                {% endfor %}
+
+            </div>
+
+        {% else %}
+
+            <p class="member-empty">
+                Aucun rendez-vous personnel ou familial à afficher pour le moment.
+            </p>
+
+        {% endif %}
+
+        <a href="{{ url_for('calendar') }}" class="member-button">
+            Consulter le calendrier
+        </a>
+
+    </section>
+
+    <section class="member-card">
+
+        <h2>Ma famille</h2>
+
+        {% if famille %}
+            <p>Vous êtes membre de l'espace familial.</p>
+        {% else %}
+            <p>Les informations de votre espace familial ne sont pas disponibles.</p>
+        {% endif %}
+
+        <a href="{{ url_for('family') }}" class="member-button">
+            Voir l'espace famille
+        </a>
+
+    </section>
+
+</div>
+
+<style>
+
+.member-dashboard {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.member-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 22px;
+}
+
+.member-header h1 {
+    margin: 0 0 8px;
+}
+
+.member-header p {
+    margin: 0;
+}
+
+.member-navigation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 22px;
+}
+
+.member-card {
+    background: var(--bleu-fonce, #17324d);
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 22px;
+}
+
+.member-card h2,
+.member-card h3,
+.member-card p {
+    color: white;
+}
+
+.member-events {
+    margin: 20px 0;
+}
+
+.member-event {
+    display: flex;
+    gap: 20px;
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.member-event:last-child {
+    border-bottom: none;
+}
+
+.member-event-date {
+    display: flex;
+    flex-direction: column;
+    min-width: 125px;
+    color: #dfbd78;
+    gap: 5px;
+}
+
+.member-event-details h3 {
+    margin: 0 0 6px;
+}
+
+.member-event-details p {
+    margin: 5px 0;
+}
+
+.member-event-category {
+    display: inline-block;
+    margin-top: 6px;
+    color: #dfbd78;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.member-empty {
+    padding: 15px 0;
+}
+
+.member-button {
+    display: inline-block;
+    background: #c5a15b;
+    color: #172b40 !important;
+    padding: 11px 18px;
+    border: none;
+    border-radius: 7px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.member-button:hover {
+    background: #dfbd78;
+}
+
+.member-button-secondary {
+    background: transparent;
+    color: #c5a15b !important;
+    border: 1px solid #c5a15b;
+}
+
+.member-button-secondary:hover {
+    background: rgba(197,161,91,0.12);
+}
+
+@media (max-width: 600px) {
+
+    .member-dashboard {
+        padding: 15px 10px;
+    }
+
+    .member-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .member-navigation {
+        flex-direction: column;
+    }
+
+    .member-navigation .member-button {
+        text-align: center;
+    }
+
+    .member-card {
+        padding: 18px;
+    }
+
+    .member-event {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+}
+
+</style>
+
+{% endblock %}
