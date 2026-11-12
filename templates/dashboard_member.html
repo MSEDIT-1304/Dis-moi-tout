@@ -35,8 +35,12 @@
                 </div>
 
                 <div>
-                    <label for="password">Mot de passe</label>
-                    <input type="password" id="password" name="password" required>
+                    <label for="role">Catégorie</label>
+                    <select id="role" name="role" required>
+                        <option value="enfant">Enfant</option>
+                        <option value="conjoint">Conjoint</option>
+                        <option value="ex-conjoint">Ex-conjoint</option>
+                    </select>
                 </div>
             </div>
 
@@ -64,7 +68,9 @@
 
                         <div class="member-info">
                             <h3>{{ membre['prenom'] }} {{ membre['nom'] }}</h3>
-
+                            <p class="member-category">
+                                {{ membre['role']|replace('-', ' ')|title }}
+                            </p>
                             {% if membre['email'] %}
                                 <p>{{ membre['email'] }}</p>
                             {% else %}
@@ -153,7 +159,8 @@
     margin-bottom: 7px;
 }
 
-.members-form-grid input {
+.members-form-grid input,
+.members-form-grid select {
     width: 100%;
     box-sizing: border-box;
     padding: 12px;
