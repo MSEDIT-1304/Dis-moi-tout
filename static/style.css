@@ -994,3 +994,25 @@ html body .register-terms {
         max-width: 100% !important;
     }
 }
+
+/* INSCRIPTION — REMONTER ET RESSERRER L'EN-TÊTE */
+
+html body .register-header {
+    margin-top: -12px !important;
+    margin-bottom: 5px !important;
+}
+
+html body .register-header h1 {
+    margin-bottom: 2px !important;
+}
+
+html body .register-header p {
+    margin: 2px 0 !important;
+    line-height: 1.2 !important;
+}
+
+html body .register-header .register-trial {
+    margin-top: 1px !important;
+    margin-bottom: 2px !important;
+}
+
