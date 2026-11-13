@@ -888,37 +888,39 @@ html body .profile-button:hover {
     background: #8FB8DE !important;
 }
 
+
 /* =====================================
-   INSCRIPTION — CADRE RECTANGULAIRE
+   INSCRIPTION — CADRE RECTANGULAIRE HARMONIEUX
    ===================================== */
 
 html body .register-page {
     width: 100% !important;
-    max-width: 900px !important;
+    max-width: 1050px !important;
     margin: 0 auto !important;
-    padding: 5px 10px !important;
+    padding: 3px 10px !important;
 }
 
 html body .register-header {
-    margin: 0 0 10px !important;
+    margin: 0 0 8px !important;
 }
 
 html body .register-header h1 {
-    font-size: 22px !important;
-    margin: 0 0 5px !important;
+    font-size: 21px !important;
+    margin: 0 0 3px !important;
 }
 
 html body .register-trial {
     color: #A52D68 !important;
     font-weight: bold !important;
+    margin: 3px 0 !important;
 }
 
 html body .register-card {
     width: 100% !important;
-    max-width: 900px !important;
+    max-width: 1050px !important;
     box-sizing: border-box !important;
     background: #A52D68 !important;
-    padding: 7px !important;
+    padding: 6px !important;
     margin: 0 auto !important;
     border-radius: 3px !important;
 }
@@ -926,47 +928,62 @@ html body .register-card {
 html body .register-card form {
     width: 100% !important;
     box-sizing: border-box !important;
-    padding: 14px !important;
+    padding: 10px 14px !important;
     margin: 0 !important;
     background: #FFFFFF !important;
     border-radius: 2px !important;
 }
 
 html body .register-card h2 {
-    font-size: 18px !important;
-    margin: 0 0 8px !important;
+    font-size: 17px !important;
+    margin: 0 0 5px !important;
+}
+
+html body .register-card label {
+    font-size: 13px !important;
+    margin-bottom: 3px !important;
 }
 
 html body .register-grid {
-    gap: 8px !important;
-}
-
-html body .register-field {
-    margin-bottom: 8px !important;
+    gap: 5px 8px !important;
 }
 
 html body .register-grid input,
 html body .register-field input,
 html body .register-field select {
-    padding: 7px !important;
-    min-height: 34px !important;
+    font-size: 13px !important;
+    padding: 6px 8px !important;
+    min-height: 31px !important;
+    margin: 3px 0 6px !important;
+}
+
+html body .register-field {
+    margin-bottom: 5px !important;
 }
 
 html body .register-card .password-wrapper button {
     background: #A52D68 !important;
     color: #FFFFFF !important;
+    padding: 6px 10px !important;
+    min-height: 30px !important;
 }
 
 html body .register-card hr {
-    margin: 10px 0 !important;
+    margin: 7px 0 !important;
 }
 
 html body .register-button {
-    margin-top: 10px !important;
-    padding: 9px !important;
+    font-size: 13px !important;
+    margin-top: 7px !important;
+    padding: 8px !important;
 }
 
-/* MOBILE : CONSERVATION DU FORMAT ADAPTÉ */
+html body .register-terms {
+    font-size: 12px !important;
+    margin: 5px 0 0 !important;
+}
+
+/* MOBILE */
 
 @media (max-width: 600px) {
     html body .register-page {
