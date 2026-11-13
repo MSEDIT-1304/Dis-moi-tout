@@ -1016,3 +1016,33 @@ html body .register-header .register-trial {
     margin-bottom: 2px !important;
 }
 
+/* =====================================
+   PAGE MA FAMILLE — CADRES FUCHSIA
+   ===================================== */
+
+html body .family-page .family-card {
+    background: #A52D68 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 16px !important;
+}
+
+html body .family-page .family-card h2,
+html body .family-page .family-card h3,
+html body .family-page .family-card p {
+    color: #FFFFFF !important;
+}
+
+/* Conservation des détails dorés */
+html body .family-page .family-label,
+html body .family-page .family-role,
+html body .family-page .family-counter {
+    color: #FFD58A !important;
+}
+
+/* Séparation des membres */
+html body .family-page .family-member {
+    border-bottom-color: rgba(255,255,255,0.25) !important;
+}
+
+
