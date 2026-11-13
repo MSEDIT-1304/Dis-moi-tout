@@ -111,58 +111,69 @@
 
 <style>
 .register-page {
-    max-width: 680px;
+    width: 100%;
+    max-width: 500px;
     margin: 0 auto;
-    padding: 5px 15px 25px;
+    padding: 5px 10px 15px;
+    box-sizing: border-box;
 }
+
 .register-header {
     text-align: center;
-    margin-top: 0;
-    margin-bottom: 15px;
+    margin: 0 0 12px;
 }
 
 .register-header h1 {
-    font-size: 25px;
-    margin-top: 0;
-    margin-bottom: 8px;
+    font-size: 22px;
+    margin: 0 0 5px;
+}
+
+.register-header p {
+    margin: 5px 0;
 }
 
 .register-trial {
     color: #A52D68 !important;
     font-weight: bold;
-    margin-top: 12px;
 }
 
 .register-card {
-    box-sizing: border-box;
     width: 100%;
+    max-width: 500px;
+    box-sizing: border-box;
     background: #A52D68 !important;
-    color: white;
-    padding: 20px;
-    border-radius: 12px;
+    padding: 7px;
+    border-radius: 3px;
+    margin: 0 auto;
+}
+
+.register-card form {
+    background: #FFFFFF;
+    padding: 14px;
+    border-radius: 2px;
+}
+
+.register-card h2 {
+    margin: 0 0 10px;
+    font-size: 19px;
 }
 
 .register-card h2,
 .register-card label {
-    color: #243b53 !important;
+    color: #243B53 !important;
     font-weight: 600;
-}
-
-.register-card h2 {
-    margin-top: 0;
-    margin-bottom: 20px;
 }
 
 .register-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
+    gap: 10px;
 }
 
 .register-grid label,
 .register-field label {
     display: block;
-    margin-bottom: 7px;
+    margin-bottom: 5px;
 }
 
 .register-grid input,
@@ -170,8 +181,15 @@
 .register-field select {
     width: 100%;
     box-sizing: border-box;
-    padding: 12px;
+    padding: 9px;
     border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.password-wrapper button {
+    background: #A52D68 !important;
+    color: white !important;
+    border: none;
     border-radius: 6px;
 }
 
@@ -180,51 +198,51 @@
 }
 
 .register-field {
-    margin-bottom: 18px;
+    margin-bottom: 10px;
 }
 
 .register-card hr {
     border: 0;
-    border-top: 1px solid rgba(255,255,255,0.25);
-    margin: 28px 0;
+    border-top: 1px solid #ddd;
+    margin: 14px 0;
 }
 
 .register-button {
     display: block;
     width: 100%;
-    padding: 14px;
-    margin-top: 25px;
-    background: #c5a15b;
-    color: #172b40;
+    padding: 11px;
+    margin-top: 14px;
+    background: #A9CBEA;
+    color: #244967;
     border: none;
-    border-radius: 7px;
-    font-size: 16px;
+    border-radius: 6px;
+    font-size: 15px;
     font-weight: bold;
     cursor: pointer;
 }
 
 .register-button:hover {
-    background: #dfbd78;
+    background: #8FB8DE;
 }
 
 .register-terms,
 .register-back {
     text-align: center;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .register-back {
-    margin-top: 22px;
+    margin-top: 12px;
 }
 
 .register-back a {
-    color: #b18b45;
+    color: #A52D68;
     font-weight: bold;
 }
 
 @media (max-width: 600px) {
-    .register-card {
-        padding: 20px;
+    .register-page {
+        max-width: 100%;
     }
 
     .register-grid {
@@ -235,98 +253,8 @@
         grid-column: auto;
     }
 }
-/* CORRECTIONS VISUELLES — INSCRIPTION */
-
-html body .register-page {
-    max-width: 580px !important;
-    margin: -35px auto 0 !important;
-    padding: 5px 12px 20px !important;
-}
-
-html body .register-header {
-    margin-top: 0 !important;
-    margin-bottom: 12px !important;
-}
-
-html body .register-header h1 {
-    font-size: 22px !important;
-    margin-top: 0 !important;
-    margin-bottom: 6px !important;
-}
-
-html body .register-trial {
-    color: #A52D68 !important;
-    font-weight: bold !important;
-}
-
-html body .register-card {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    padding: 16px !important;
-    background: #A52D68 !important;
-}
-
-html body .register-card .password-wrapper button {
-    background: #A52D68 !important;
-    color: #FFFFFF !important;
-    border: none !important;
-    border-radius: 8px !important;
-    cursor: pointer !important;
-}
-
-@media (max-width: 600px) {
-    html body .register-page {
-        max-width: 100% !important;
-        margin-top: -20px !important;
-    }
-}
-/* CADRE INSCRIPTION — FORMAT COMPACT ET RECTANGULAIRE */
-
-html body .register-page {
-    width: 100% !important;
-    max-width: 520px !important;
-    margin: 0 auto !important;
-    padding: 5px 10px !important;
-}
-
-html body .register-card {
-    width: 100% !important;
-    max-width: 520px !important;
-    box-sizing: border-box !important;
-    padding: 10px !important;
-    border-radius: 4px !important;
-    margin: 0 auto !important;
-}
-
-html body .register-card form {
-    background: #FFFFFF !important;
-    padding: 12px !important;
-    border-radius: 2px !important;
-}
-
-html body .register-card h2 {
-    margin-top: 0 !important;
-    margin-bottom: 10px !important;
-}
-
-html body .register-grid {
-    gap: 10px !important;
-}
-
-html body .register-field {
-    margin-bottom: 10px !important;
-}
-
-html body .register-card hr {
-    margin: 14px 0 !important;
-}
-
-html body .register-button {
-    margin-top: 12px !important;
-    padding: 11px !important;
-}
 </style>
+
 <script>
 function togglePassword(id, button) {
     const input = document.getElementById(id);
