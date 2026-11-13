@@ -1045,4 +1045,15 @@ html body .family-page .family-member {
     border-bottom-color: rgba(255,255,255,0.25) !important;
 }
 
+/* TABLEAU DE BORD — CHIFFRE MEMBRES PLUS COMPACT */
+
+html body .dashboard-card h2 + p,
+html body .dashboard-card h2 + .dashboard-number {
+    display: inline-block !important;
+    width: auto !important;
+    min-width: 45px !important;
+    padding: 2px 8px !important;
+    margin-top: 3px !important;
+}
+
 
