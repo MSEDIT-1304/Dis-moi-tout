@@ -852,3 +852,38 @@ html body .login-page .login-card .login-button {
         margin-top: 6px !important;
     }
 }
+/* PROFIL — MÊME DESIGN QUE LES AUTRES PAGES */
+html body .profile-card {
+    background: #A52D68 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 14px !important;
+}
+
+html body .profile-card h2,
+html body .profile-card p {
+    color: #FFFFFF !important;
+}
+
+html body .profile-card .profile-avatar {
+    background: #A9CBEA !important;
+    color: #244967 !important;
+}
+
+html body .profile-card .profile-information span {
+    color: #A9CBEA !important;
+}
+
+html body .profile-card .profile-information strong {
+    color: #FFFFFF !important;
+}
+
+html body .profile-button {
+    background: #A9CBEA !important;
+    color: #244967 !important;
+    border-radius: 10px !important;
+}
+
+html body .profile-button:hover {
+    background: #8FB8DE !important;
+}
