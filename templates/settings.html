@@ -55,81 +55,101 @@
 
 </div>
 
+
 <style>
+/* PARAMÈTRES — NOUVELLE IDENTITÉ VISUELLE */
+
 .settings-page {
-    max-width: 850px;
+    width: 100%;
+    max-width: 720px;
     margin: 0 auto;
-    padding: 25px 15px;
+    padding: 18px 12px;
 }
 
 .settings-header {
-    margin-bottom: 25px;
+    margin-bottom: 18px;
 }
 
 .settings-card {
-    background: var(--bleu-fonce, #17324d);
-    color: white;
-    padding: 25px;
-    border-radius: 12px;
-    margin-bottom: 20px;
+    box-sizing: border-box;
+    width: 100%;
+    background: #A52D68;
+    color: #FFFFFF;
+    padding: 17px 20px;
+    border: none;
+    border-radius: 14px;
+    margin: 0 0 15px 0;
+    box-shadow: 0 4px 12px rgba(69, 100, 127, 0.12);
 }
 
 .settings-card h2,
 .settings-card p {
-    color: white;
+    color: #FFFFFF !important;
 }
 
 .settings-card h2 {
     margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 19px;
+}
+
+.settings-card p {
+    margin: 6px 0 10px;
 }
 
 .settings-button {
     display: inline-block;
-    background: #c5a15b;
-    color: #172b40;
-    padding: 12px 20px;
-    margin-top: 10px;
-    border-radius: 7px;
+    background: #A9CBEA;
+    color: #244967 !important;
+    padding: 9px 16px;
+    margin-top: 5px;
+    border: none;
+    border-radius: 9px;
     text-decoration: none;
     font-weight: bold;
+    font-size: 13px;
 }
 
 .settings-button:hover {
-    background: #dfbd78;
+    background: #8FB8DE;
+    color: #1D3D58 !important;
 }
 
 .settings-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
+    margin-top: 8px;
 }
 
 .settings-button-danger {
-    background: #a94442;
-    color: white;
+    background: #A9CBEA;
+    color: #244967 !important;
 }
 
 .settings-button-danger:hover {
-    background: #c45a57;
+    background: #8FB8DE;
 }
 
 .settings-back {
     text-align: center;
-    margin-top: 25px;
+    margin-top: 18px;
 }
 
 .settings-back a {
-    color: #b18b45;
+    color: #A52D68;
     font-weight: bold;
 }
 
 @media (max-width: 600px) {
     .settings-page {
+        max-width: 100%;
         padding: 15px 10px;
     }
 
     .settings-card {
-        padding: 20px;
+        padding: 16px;
+        margin-bottom: 14px;
     }
 
     .settings-button {
