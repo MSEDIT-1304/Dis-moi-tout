@@ -575,3 +575,135 @@ html body .login-page .login-card input:not([type="checkbox"]) {
         max-width: 900px !important;
     }
 }
+/* ==========================================
+   DIS-MOI TOUT — HARMONISATION DE TOUTES LES PAGES
+   Palette identique à la page de connexion
+   ========================================== */
+
+/* CARTES ET CADRES FUCHSIA */
+html body .calendar-card,
+html body .members-card,
+html body .dashboard-card,
+html body .member-card,
+html body .card,
+html body .content-card,
+html body .panel {
+    background: #A52D68 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 14px rgba(69, 100, 127, 0.12);
+}
+
+/* TEXTES DANS LES CARTES */
+html body .calendar-card h2,
+html body .calendar-card h3,
+html body .calendar-card p,
+html body .calendar-card label,
+html body .members-card h2,
+html body .members-card h3,
+html body .members-card p,
+html body .dashboard-card h2,
+html body .dashboard-card h3,
+html body .dashboard-card p,
+html body .dashboard-card label,
+html body .member-card h2,
+html body .member-card h3,
+html body .member-card p {
+    color: #FFFFFF !important;
+}
+
+/* FORMULAIRES BLANCS DANS LES CARTES */
+html body .calendar-card form,
+html body .members-card form,
+html body .dashboard-card form,
+html body .member-card form {
+    background: #FFFFFF !important;
+    color: #45647F !important;
+    border-radius: 12px !important;
+}
+
+/* INTITULÉS DES CHAMPS */
+html body .calendar-card form label,
+html body .members-card form label,
+html body .dashboard-card form label,
+html body .member-card form label {
+    color: #45647F !important;
+    font-weight: bold;
+}
+
+/* CHAMPS DE SAISIE */
+html body .calendar-card input:not([type="checkbox"]),
+html body .calendar-card select,
+html body .calendar-card textarea,
+html body .members-card input:not([type="checkbox"]),
+html body .members-card select,
+html body .dashboard-card input:not([type="checkbox"]),
+html body .dashboard-card select,
+html body .member-card input:not([type="checkbox"]),
+html body .member-card select {
+    background: #FFFFFF !important;
+    color: #45647F !important;
+    border: 1px solid #A9CBEA !important;
+    border-radius: 9px !important;
+}
+
+/* TOUS LES BOUTONS DES PAGES */
+html body .calendar-button,
+html body .members-button,
+html body .member-button,
+html body .dashboard-button,
+html body .calendar-card button,
+html body .members-card button,
+html body .dashboard-card button,
+html body .member-card button {
+    background: #A9CBEA !important;
+    color: #244967 !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: bold;
+}
+
+/* SURVOL DES BOUTONS */
+html body .calendar-button:hover,
+html body .members-button:hover,
+html body .member-button:hover,
+html body .dashboard-button:hover,
+html body .calendar-card button:hover,
+html body .members-card button:hover,
+html body .dashboard-card button:hover,
+html body .member-card button:hover {
+    background: #8FB8DE !important;
+    color: #1D3D58 !important;
+}
+
+/* LIENS DE NAVIGATION */
+html body .member-navigation a,
+html body .dashboard-links a {
+    background: #A9CBEA !important;
+    color: #244967 !important;
+}
+
+/* BLOC COMMANDE VOCALE */
+html body .voice-command {
+    background: #F3E4ED !important;
+    border: 1px solid #A52D68 !important;
+    border-radius: 12px !important;
+    padding: 15px !important;
+}
+
+html body .voice-command h3,
+html body .voice-command p {
+    color: #45647F !important;
+}
+
+/* ADAPTATION MOBILE */
+@media (max-width: 768px) {
+    html body .calendar-card,
+    html body .members-card,
+    html body .dashboard-card,
+    html body .member-card {
+        padding: 18px !important;
+        border-radius: 14px !important;
+    }
+}
