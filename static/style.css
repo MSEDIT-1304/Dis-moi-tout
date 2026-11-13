@@ -887,3 +887,86 @@ html body .profile-button {
 html body .profile-button:hover {
     background: #8FB8DE !important;
 }
+/* =====================================
+   INSCRIPTION — CADRE FUCHSIA COMPACT
+   ===================================== */
+
+html body .register-page {
+    width: 100% !important;
+    max-width: 460px !important;
+    margin: 0 auto !important;
+    padding: 5px 10px !important;
+}
+
+html body .register-header {
+    margin: 0 0 10px !important;
+}
+
+html body .register-header h1 {
+    font-size: 22px !important;
+    margin: 0 0 5px !important;
+}
+
+html body .register-trial {
+    color: #A52D68 !important;
+    font-weight: bold !important;
+}
+
+html body .register-card {
+    width: 100% !important;
+    max-width: 460px !important;
+    box-sizing: border-box !important;
+    background: #A52D68 !important;
+    padding: 5px !important;
+    margin: 0 auto !important;
+    border-radius: 3px !important;
+}
+
+html body .register-card form {
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    background: #FFFFFF !important;
+    border-radius: 2px !important;
+}
+
+html body .register-card h2 {
+    font-size: 18px !important;
+    margin: 0 0 8px !important;
+}
+
+html body .register-grid {
+    gap: 8px !important;
+}
+
+html body .register-field {
+    margin-bottom: 8px !important;
+}
+
+html body .register-grid input,
+html body .register-field input,
+html body .register-field select {
+    padding: 7px !important;
+    min-height: 34px !important;
+}
+
+html body .register-card .password-wrapper button {
+    background: #A52D68 !important;
+    color: #FFFFFF !important;
+}
+
+html body .register-card hr {
+    margin: 10px 0 !important;
+}
+
+html body .register-button {
+    margin-top: 10px !important;
+    padding: 9px !important;
+}
+
+@media (max-width: 600px) {
+    html body .register-page {
+        max-width: 100% !important;
+    }
+}
