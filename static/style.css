@@ -707,3 +707,67 @@ html body .voice-command p {
         border-radius: 14px !important;
     }
 }
+
+/* ==========================================
+   HARMONISATION — DIMENSIONS ET ESPACEMENTS PC
+   ========================================== */
+
+@media (min-width: 769px) {
+
+    /* Largeur générale des pages */
+    html body .page-content {
+        max-width: 1050px !important;
+        padding: 20px !important;
+        margin: 24px auto !important;
+    }
+
+    /* Cadres : dimensions plus compactes et espacés */
+    html body .page-content .card:not(.login-card),
+    html body .page-content .content-card,
+    html body .page-content .panel,
+    html body .page-content [class$="-card"]:not(.login-card) {
+        box-sizing: border-box !important;
+        padding: 18px !important;
+        margin: 0 auto 20px auto !important;
+        max-width: 100% !important;
+        border-radius: 14px !important;
+    }
+
+    /* Formulaires : moins hauts et moins encombrants */
+    html body .page-content form {
+        box-sizing: border-box !important;
+        padding: 14px !important;
+        margin: 12px 0 18px !important;
+        border-radius: 12px !important;
+    }
+
+    /* Champs de saisie */
+    html body .page-content input:not([type="checkbox"]),
+    html body .page-content select,
+    html body .page-content textarea {
+        box-sizing: border-box !important;
+        padding: 8px 10px !important;
+        margin: 5px 0 10px !important;
+        min-height: 36px;
+        font-size: 14px !important;
+    }
+
+    /* Espacement des titres */
+    html body .page-content h2 {
+        margin-top: 0;
+        margin-bottom: 12px;
+    }
+
+    /* Espacement des éléments dans les cadres */
+    html body .page-content .card > *,
+    html body .page-content .content-card > *,
+    html body .page-content .panel > * {
+        max-width: 100%;
+    }
+
+    /* Espacement des boutons */
+    html body .page-content button,
+    html body .page-content .btn {
+        margin: 5px 5px 5px 0;
+    }
+}
