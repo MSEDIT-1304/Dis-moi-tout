@@ -771,3 +771,84 @@ html body .voice-command p {
         margin: 5px 5px 5px 0;
     }
 }
+/* CONNEXION — FORMAT COMPACT */
+html body .login-page {
+    display: block !important;
+    width: 100% !important;
+    max-width: 780px !important;
+    margin: 0 auto !important;
+    padding: 12px 15px !important;
+}
+
+html body .login-page .login-header {
+    margin-bottom: 18px !important;
+}
+
+html body .login-page .login-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+    width: 100% !important;
+}
+
+html body .login-page .login-card {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    padding: 16px !important;
+    margin: 0 !important;
+    background: #A52D68 !important;
+    border-radius: 14px !important;
+}
+
+html body .login-page .login-card form {
+    display: block !important;
+    width: 100% !important;
+    padding: 14px !important;
+    margin: 10px 0 0 !important;
+    background: #FFFFFF !important;
+    border-radius: 11px !important;
+}
+
+html body .login-page .login-card form label {
+    display: block !important;
+    margin: 8px 0 4px !important;
+    color: #45647F !important;
+}
+
+html body .login-page .login-card form input:not([type="checkbox"]) {
+    width: 100% !important;
+    margin: 4px 0 10px !important;
+    padding: 9px !important;
+}
+
+html body .login-page .login-card .login-button {
+    width: 100% !important;
+    margin-top: 10px !important;
+    padding: 10px !important;
+}
+
+@media (max-width: 650px) {
+    html body .login-page .login-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+/* CONNEXION — CADRE ESPACE MEMBRE PLUS COMPACT */
+@media (min-width: 651px) {
+    html body .login-page .login-grid > .login-card:nth-child(2) {
+        padding: 12px !important;
+    }
+
+    html body .login-page .login-grid > .login-card:nth-child(2) h2 {
+        margin: 4px 0 8px !important;
+    }
+
+    html body .login-page .login-grid > .login-card:nth-child(2) p {
+        margin: 5px 0 !important;
+    }
+
+    html body .login-page .login-grid > .login-card:nth-child(2) form {
+        padding: 10px !important;
+        margin-top: 6px !important;
+    }
+}
