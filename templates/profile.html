@@ -9,6 +9,14 @@
         <h1>Mon profil</h1>
         <p>Consultez les informations de votre compte.</p>
     
+        {% if admin %}
+            <a href="{{ url_for('edit_profile') }}" class="profile-button">
+                ✏️ Modifier
+            </a>
+        {% endif %}
+    </header>
+
+    
         <a href="{{ url_for('logout') }}" class="profile-button">
             Déconnexion
         </a>
