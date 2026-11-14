@@ -4,14 +4,24 @@
 {% block content %}
 
 <div class="calendar-page">
-
+    
     <header class="calendar-header">
-        <h1>Calendrier familial</h1>
-        <p>Retrouvez les événements et organisez votre quotidien.</p>
-        <a href="{{ url_for('dashboard') }}" class="calendar-button">
-            Retour au tableau de bord
-        </a>
+        <div>
+            <h1>Calendrier familial</h1>
+            <p>Retrouvez les événements et organisez votre quotidien.</p>
+        </div>
+    
+        <div class="calendar-header-actions">
+            <a href="{{ url_for('dashboard') }}" class="calendar-button">
+                Retour au tableau de bord
+            </a>
+    
+            <a href="{{ url_for('logout') }}" class="member-button">
+                Déconnexion
+            </a>
+        </div>
     </header>
+
 {% with messages = get_flashed_messages() %}
     {% if messages %}
         <div class="calendar-messages" role="status">
