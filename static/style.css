@@ -1381,4 +1381,17 @@ html body .profile-header-actions .profile-button {
         line-height: 1.2 !important;
     }
 }
+/* PC — LOGO JUSTE AVANT LE TITRE */
+@media (min-width: 801px) {
+    html body .site-header .logo {
+        position: absolute !important;
+        left: calc(50% - 180px) !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+    }
 
+    html body .site-header .logo img {
+        width: 85px !important;
+        height: 85px !important;
+    }
+}
