@@ -1256,5 +1256,33 @@ html body .profile-header-actions .profile-button {
     display: inline-block !important;
     margin: 0 !important;
 }
+/* MOBILE — ESPACEMENT DES BOUTONS GESTION DES MEMBRES */
+@media (max-width: 600px) {
+    html body .members-header .members-button {
+        display: inline-block !important;
+        margin: 12px 0 12px !important;
+    }
+
+    html body .members-header {
+        margin-bottom: 25px !important;
+    }
+}
+/* MOBILE — ESPACEMENT DES BOUTONS GOOGLE */
+@media (max-width: 600px) {
+    html body .calendar-import-provider > a.calendar-button {
+        display: block !important;
+        width: fit-content !important;
+        margin: 12px 0 !important;
+    }
+
+    html body .calendar-import-provider form {
+        margin-top: 12px !important;
+    }
+
+    html body .calendar-import-provider form button.calendar-button {
+        display: block !important;
+        margin: 0 !important;
+    }
+}
 
 
