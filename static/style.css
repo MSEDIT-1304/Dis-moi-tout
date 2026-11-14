@@ -1470,3 +1470,7 @@ html body .profile-header-actions .profile-button {
         font-weight: normal !important;
     }
 }
+/* POLICE GÉNÉRALE DU SITE — PC ET MOBILE */
+html body *:not(.site-name):not(i):not(svg):not(path):not([class*="icon"]):not(.material-icons):not(.fa) {
+    font-family: Georgia, serif !important;
+}
