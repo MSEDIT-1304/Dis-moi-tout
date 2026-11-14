@@ -355,7 +355,7 @@ textarea {
     color: #244967;
 }
 
-/* CENTRAGE SUR PC */
+/* CENTRAGE ET TITRE PLUS GRAND SUR PC */
 @media (min-width: 801px) {
     .site-header {
         position: relative;
@@ -367,6 +367,7 @@ textarea {
         position: absolute;
         left: 50%;
         transform: translateX(-50%);
+        font-size: 36px !important;
     }
 }
 
@@ -384,12 +385,12 @@ textarea {
 /* Réduire le bandeau rose sur PC */
 @media (min-width: 769px) {
     .site-header {
-        padding: 10px 24px;
+        padding: 6px 24px !important;
     }
 
     .site-header .logo img {
-        width: 125px;
-        height: 125px;
+        width: 85px !important;
+        height: 85px !important;
     }
 }
 
