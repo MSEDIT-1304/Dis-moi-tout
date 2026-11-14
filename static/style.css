@@ -1218,5 +1218,32 @@ html body .members-dashboard form[action*="add_member"] button {
     margin-top: 3px !important;
 }
 
+/* CALENDRIER — EN-TÊTE ET BOUTONS */
+
+html body .calendar-page .calendar-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 15px !important;
+    margin-bottom: 25px !important;
+}
+
+html body .calendar-page .calendar-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    flex-wrap: wrap !important;
+}
+
+@media (max-width: 600px) {
+    html body .calendar-page .calendar-header {
+        flex-wrap: wrap !important;
+    }
+
+    html body .calendar-page .calendar-header-actions {
+        width: 100% !important;
+    }
+}
+
 
 
