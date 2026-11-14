@@ -1162,5 +1162,61 @@ html body .voice-command button {
     font-size: 12px !important;
 }
 
+/* ==========================================
+   GESTION DES MEMBRES — FORMULAIRE COMPACT
+   ========================================== */
+
+/* Cadre fuchsia Ajouter un membre */
+html body .members-dashboard .members-card:has(> form[action*="add_member"]) {
+    padding: 12px 16px !important;
+    margin-bottom: 14px !important;
+}
+
+/* Titre */
+html body .members-dashboard .members-card:has(> form[action*="add_member"]) h2 {
+    font-size: 17px !important;
+    margin: 0 0 7px !important;
+}
+
+/* Formulaire blanc */
+html body .members-dashboard .members-card form[action*="add_member"] {
+    padding: 9px 12px !important;
+    margin: 5px 0 !important;
+}
+
+/* Espacement des champs */
+html body .members-form-grid {
+    gap: 7px 12px !important;
+    margin: 5px 0 7px !important;
+}
+
+/* Intitulés */
+html body .members-form-grid label {
+    font-size: 12px !important;
+    margin-bottom: 2px !important;
+}
+
+/* Champs de saisie */
+html body .members-form-grid input,
+html body .members-form-grid select {
+    font-size: 13px !important;
+    min-height: 31px !important;
+    padding: 5px 8px !important;
+    margin: 2px 0 5px !important;
+}
+
+/* Case à cocher */
+html body .members-checkbox {
+    font-size: 12px !important;
+    margin: 5px 0 7px !important;
+}
+
+/* Bouton */
+html body .members-dashboard form[action*="add_member"] button {
+    font-size: 12px !important;
+    padding: 7px 12px !important;
+    margin-top: 3px !important;
+}
+
 
 
