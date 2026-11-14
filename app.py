@@ -3175,6 +3175,102 @@ def profile():
     )
 
 # ==========================================================
+# MODIFICATION DU PROFIL ADMINISTRATEUR
+# ==========================================================
+
+@app.route("/edit_profile", methods=["GET", "POST"])
+def edit_profile():
+
+    if not admin_required():
+        return redirect(url_for("home"))
+
+    admin_id = session.get("admin_id")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if request.method == "POST":
+
+        prenom = request.form.get("prenom", "").strip()
+        nom = request.form.get("nom", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        conjoint = request.form.get("conjoint", "non")
+        garde_partagee = request.form.get("garde_partagee", "non")
+        frequence_garde = request.form.get("frequence_garde", "").strip()
+        prochaine_date_garde = request.form.get("prochaine_date_garde", "").strip()
+
+        if not prenom or not nom or not email:
+            conn.close()
+            flash("Veuillez remplir le prénom, le nom et l'adresse e-mail.")
+            return redirect(url_for("edit_profile"))
+
+        cursor.execute(
+            """
+            SELECT id
+            FROM admin
+            WHERE email = ?
+            AND id != ?
+            """,
+            (email, admin_id)
+        )
+
+        if cursor.fetchone():
+            conn.close()
+            flash("Cette adresse e-mail est déjà utilisée.")
+            return redirect(url_for("edit_profile"))
+
+        if garde_partagee != "oui":
+            frequence_garde = ""
+            prochaine_date_garde = ""
+
+        cursor.execute(
+            """
+            UPDATE admin
+            SET prenom = ?,
+                nom = ?,
+                email = ?,
+                conjoint = ?,
+                garde_partagee = ?,
+                frequence_garde = ?,
+                prochaine_date_garde = ?
+            WHERE id = ?
+            """,
+            (
+                prenom,
+                nom,
+                email,
+                1 if conjoint == "oui" else 0,
+                1 if garde_partagee == "oui" else 0,
+                frequence_garde,
+                prochaine_date_garde,
+                admin_id
+            )
+        )
+
+        conn.commit()
+        conn.close()
+
+        session["email"] = email
+        session["user_name"] = f"{prenom} {nom}"
+
+        flash("Votre profil a été modifié.")
+        return redirect(url_for("profile"))
+
+    cursor.execute(
+        "SELECT * FROM admin WHERE id = ?",
+        (admin_id,)
+    )
+
+    admin = cursor.fetchone()
+    conn.close()
+
+    if admin is None:
+        session.clear()
+        return redirect(url_for("login"))
+
+    return render_template("edit_profile.html", admin=admin)
+
+# ==========================================================
 # PARAMÈTRES
 # ==========================================================
 
