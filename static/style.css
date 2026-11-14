@@ -1527,3 +1527,10 @@ html body .member-item form {
         margin-bottom: 5px !important;
     }
 }
+/* TITRES DES CADRES DU TABLEAU DE BORD — PC */
+@media (min-width: 769px) {
+    html body .admin-dashboard .dashboard-card h2,
+    html body .admin-dashboard .dashboard-card h3 {
+        font-size: 17px !important;
+    }
+}
