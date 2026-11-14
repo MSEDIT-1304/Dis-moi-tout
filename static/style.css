@@ -1284,5 +1284,65 @@ html body .profile-header-actions .profile-button {
         margin: 0 !important;
     }
 }
+/* MOBILE — ADMIN : MODIFIER MON PROFIL */
+@media (max-width: 600px) {
 
+    html body .profile-edit-page {
+        padding: 10px 8px !important;
+    }
+
+    html body .profile-edit-header {
+        margin-bottom: 10px !important;
+    }
+
+    html body .profile-edit-header h1 {
+        font-size: 23px !important;
+        margin-bottom: 5px !important;
+    }
+
+    html body .profile-edit-header p {
+        font-size: 13px !important;
+        margin: 4px 0 8px !important;
+    }
+
+    html body .profile-edit-card {
+        padding: 14px 12px !important;
+    }
+
+    html body .profile-edit-card h2 {
+        font-size: 16px !important;
+        margin: 4px 0 10px !important;
+    }
+
+    html body .profile-edit-grid {
+        gap: 8px !important;
+        margin-bottom: 8px !important;
+    }
+
+    html body .profile-edit-card label {
+        font-size: 12px !important;
+        margin-bottom: 4px !important;
+    }
+
+    html body .profile-edit-card input,
+    html body .profile-edit-card select {
+        height: 36px !important;
+        padding: 6px 9px !important;
+        font-size: 13px !important;
+    }
+
+    html body .profile-edit-card hr {
+        margin: 12px 0 !important;
+    }
+
+    html body .profile-edit-actions {
+        gap: 8px !important;
+        margin-top: 12px !important;
+    }
+
+    html body .profile-edit-button {
+        font-size: 12px !important;
+        padding: 9px 13px !important;
+    }
+}
 
