@@ -1,0 +1,144 @@
+
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="profile-page">
+
+    <header class="profile-header">
+        <h1>Modifier mon profil</h1>
+        <p>Modifiez vos informations personnelles et familiales.</p>
+    </header>
+
+    <section class="profile-card">
+
+        <form method="POST" action="{{ url_for('edit_profile') }}">
+
+            <label for="prenom">Prénom</label>
+            <input type="text" id="prenom" name="prenom"
+                   value="{{ admin['prenom'] }}" required>
+
+            <label for="nom">Nom</label>
+            <input type="text" id="nom" name="nom"
+                   value="{{ admin['nom'] }}" required>
+
+            <label for="email">Adresse e-mail</label>
+            <input type="email" id="email" name="email"
+                   value="{{ admin['email'] }}" required>
+
+            <label for="conjoint">Avez-vous un conjoint ?</label>
+            <select id="conjoint" name="conjoint">
+                <option value="non" {% if not admin['conjoint'] %}selected{% endif %}>Non</option>
+                <option value="oui" {% if admin['conjoint'] %}selected{% endif %}>Oui</option>
+            </select>
+
+            <label for="garde_partagee">Êtes-vous concerné par une garde partagée ?</label>
+            <select id="garde_partagee" name="garde_partagee">
+                <option value="non" {% if not admin['garde_partagee'] %}selected{% endif %}>Non</option>
+                <option value="oui" {% if admin['garde_partagee'] %}selected{% endif %}>Oui</option>
+            </select>
+
+            <div id="garde-options">
+
+                <label for="frequence_garde">Fréquence de la garde</label>
+                <select id="frequence_garde" name="frequence_garde">
+                    <option value="">Choisir une fréquence</option>
+                    <option value="1 semaine sur deux" {% if admin['frequence_garde'] == '1 semaine sur deux' %}selected{% endif %}>1 semaine sur deux</option>
+                    <option value="Tous les quinze jours" {% if admin['frequence_garde'] == 'Tous les quinze jours' %}selected{% endif %}>Tous les quinze jours</option>
+                    <option value="Tous les mois" {% if admin['frequence_garde'] == 'Tous les mois' %}selected{% endif %}>Tous les mois</option>
+                </select>
+
+                <label for="prochaine_date_garde">Prochaine date de garde</label>
+                <input type="date" id="prochaine_date_garde"
+                       name="prochaine_date_garde"
+                       value="{{ admin['prochaine_date_garde'] or '' }}">
+
+            </div>
+
+            <div class="profile-actions">
+                <button type="submit" class="profile-button">
+                    Enregistrer les modifications
+                </button>
+
+                <a href="{{ url_for('profile') }}" class="profile-button">
+                    Annuler
+                </a>
+            </div>
+
+        </form>
+
+    </section>
+
+</div>
+
+<style>
+.profile-page {
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 25px 15px;
+}
+
+.profile-card {
+    background: var(--fuchsia-profond, #A52D68);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+}
+
+.profile-card label {
+    display: block;
+    color: white;
+    margin: 15px 0 6px;
+}
+
+.profile-card input,
+.profile-card select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    box-sizing: border-box;
+}
+
+.profile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 25px;
+}
+
+.profile-button {
+    display: inline-block;
+    background: #A9CBEA;
+    color: #244967 !important;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.profile-button:hover {
+    background: #8FB8DE;
+}
+</style>
+
+<script>
+function afficherOptionsGarde() {
+    const choix = document.getElementById("garde_partagee");
+    const options = document.getElementById("garde-options");
+
+    options.style.display = choix.value === "oui" ? "block" : "none";
+}
+
+document.getElementById("garde_partagee").addEventListener(
+    "change",
+    afficherOptionsGarde
+);
+
+afficherOptionsGarde();
+</script>
+
+{% endblock %}
