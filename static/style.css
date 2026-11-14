@@ -1359,4 +1359,26 @@ html body .profile-header-actions .profile-button {
         padding: 9px 13px !important;
     }
 }
+/* PC — PIED DE PAGE PLUS BAS ET PLUS FIN */
+@media (min-width: 769px) {
+    html body {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 100vh !important;
+    }
+
+    html body .page-content {
+        flex: 1 0 auto !important;
+    }
+
+    html body .site-footer {
+        margin-top: auto !important;
+        padding: 8px 15px !important;
+    }
+
+    html body .site-footer p {
+        margin: 5px 0 !important;
+        line-height: 1.2 !important;
+    }
+}
 
