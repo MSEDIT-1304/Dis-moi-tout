@@ -1130,4 +1130,37 @@ html body .calendar-page form[action*="add_event"] button {
     margin-top: 4px !important;
 }
 
+/* COMMANDE VOCALE — CADRE PLUS PETIT */
+html body .voice-command {
+    padding: 8px 12px !important;
+    margin: 8px 0 10px !important;
+    min-height: 0 !important;
+    height: auto !important;
+}
+
+/* Titre */
+html body .voice-command h3 {
+    margin: 2px 0 5px !important;
+    font-size: 15px !important;
+}
+
+/* Textes */
+html body .voice-command p {
+    margin: 3px 0 6px !important;
+    font-size: 12px !important;
+}
+
+/* Masquer les lignes vides */
+html body .voice-command p:empty {
+    display: none !important;
+}
+
+/* Bouton parler */
+html body .voice-command button {
+    padding: 6px 12px !important;
+    margin: 3px 0 !important;
+    font-size: 12px !important;
+}
+
+
 
