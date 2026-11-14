@@ -343,9 +343,20 @@ textarea {
         gap: 8px;
     }
 }
-/* TITRE CENTRÉ ET AGRANDI — PC UNIQUEMENT */
-@media (min-width: 801px) {
+/* TITRE DIS-MOI TOUT — ÉCRITURE CALLIGRAPHIQUE */
 
+.site-name {
+    font-family: 'Allura', cursive !important;
+    font-size: 30px !important;
+    font-weight: 400 !important;
+    line-height: 1 !important;
+    text-align: center;
+    white-space: nowrap;
+    color: #244967;
+}
+
+/* CENTRAGE SUR PC */
+@media (min-width: 801px) {
     .site-header {
         position: relative;
         display: flex;
@@ -356,14 +367,16 @@ textarea {
         position: absolute;
         left: 50%;
         transform: translateX(-50%);
-        font-size: 36px !important;
-        font-weight: bold;
-        text-align: center;
-        white-space: nowrap;
     }
-
 }
 
+/* ADAPTATION MOBILE */
+@media (max-width: 800px) {
+    .site-name {
+        font-size: 26px !important;
+        margin-top: 2px;
+    }
+}
 /* =====================================
    PAGE CONNEXION — ABONNEMENTS ET BANDEAU
    ===================================== */
