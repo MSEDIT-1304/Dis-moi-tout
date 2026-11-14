@@ -3,66 +3,96 @@
 
 {% block content %}
 
-<div class="profile-page">
+<div class="profile-edit-page">
 
-    <header class="profile-header">
+    <header class="profile-edit-header">
         <h1>Modifier mon profil</h1>
         <p>Modifiez vos informations personnelles et familiales.</p>
     </header>
 
-    <section class="profile-card">
+    <section class="profile-edit-card">
 
         <form method="POST" action="{{ url_for('edit_profile') }}">
 
-            <label for="prenom">Prénom</label>
-            <input type="text" id="prenom" name="prenom"
-                   value="{{ admin['prenom'] }}" required>
+            <h2>Mes informations</h2>
 
-            <label for="nom">Nom</label>
-            <input type="text" id="nom" name="nom"
-                   value="{{ admin['nom'] }}" required>
+            <div class="profile-edit-grid">
 
-            <label for="email">Adresse e-mail</label>
-            <input type="email" id="email" name="email"
-                   value="{{ admin['email'] }}" required>
+                <div class="edit-field">
+                    <label for="prenom">Prénom</label>
+                    <input type="text" id="prenom" name="prenom"
+                           value="{{ admin['prenom'] }}" required>
+                </div>
 
-            <label for="conjoint">Avez-vous un conjoint ?</label>
-            <select id="conjoint" name="conjoint">
-                <option value="non" {% if not admin['conjoint'] %}selected{% endif %}>Non</option>
-                <option value="oui" {% if admin['conjoint'] %}selected{% endif %}>Oui</option>
-            </select>
+                <div class="edit-field">
+                    <label for="nom">Nom</label>
+                    <input type="text" id="nom" name="nom"
+                           value="{{ admin['nom'] }}" required>
+                </div>
 
-            <label for="garde_partagee">Êtes-vous concerné par une garde partagée ?</label>
-            <select id="garde_partagee" name="garde_partagee">
-                <option value="non" {% if not admin['garde_partagee'] %}selected{% endif %}>Non</option>
-                <option value="oui" {% if admin['garde_partagee'] %}selected{% endif %}>Oui</option>
-            </select>
-
-            <div id="garde-options">
-
-                <label for="frequence_garde">Fréquence de la garde</label>
-                <select id="frequence_garde" name="frequence_garde">
-                    <option value="">Choisir une fréquence</option>
-                    <option value="1 semaine sur deux" {% if admin['frequence_garde'] == '1 semaine sur deux' %}selected{% endif %}>1 semaine sur deux</option>
-                    <option value="Tous les quinze jours" {% if admin['frequence_garde'] == 'Tous les quinze jours' %}selected{% endif %}>Tous les quinze jours</option>
-                    <option value="Tous les mois" {% if admin['frequence_garde'] == 'Tous les mois' %}selected{% endif %}>Tous les mois</option>
-                </select>
-
-                <label for="prochaine_date_garde">Prochaine date de garde</label>
-                <input type="date" id="prochaine_date_garde"
-                       name="prochaine_date_garde"
-                       value="{{ admin['prochaine_date_garde'] or '' }}">
+                <div class="edit-field full-width">
+                    <label for="email">Adresse e-mail</label>
+                    <input type="email" id="email" name="email"
+                           value="{{ admin['email'] }}" required>
+                </div>
 
             </div>
 
-            <div class="profile-actions">
-                <button type="submit" class="profile-button">
+            <hr>
+
+            <h2>Ma situation familiale</h2>
+
+            <div class="profile-edit-grid">
+
+                <div class="edit-field">
+                    <label for="conjoint">Avez-vous un conjoint ?</label>
+                    <select id="conjoint" name="conjoint">
+                        <option value="non" {% if not admin['conjoint'] %}selected{% endif %}>Non</option>
+                        <option value="oui" {% if admin['conjoint'] %}selected{% endif %}>Oui</option>
+                    </select>
+                </div>
+
+                <div class="edit-field">
+                    <label for="garde_partagee">Êtes-vous concerné par une garde partagée ?</label>
+                    <select id="garde_partagee" name="garde_partagee">
+                        <option value="non" {% if not admin['garde_partagee'] %}selected{% endif %}>Non</option>
+                        <option value="oui" {% if admin['garde_partagee'] %}selected{% endif %}>Oui</option>
+                    </select>
+                </div>
+
+            </div>
+
+            <div id="garde-options" class="profile-edit-grid">
+
+                <div class="edit-field">
+                    <label for="frequence_garde">Fréquence de la garde</label>
+                    <select id="frequence_garde" name="frequence_garde">
+                        <option value="">Choisir une fréquence</option>
+                        <option value="1 semaine sur deux" {% if admin['frequence_garde'] == '1 semaine sur deux' %}selected{% endif %}>1 semaine sur deux</option>
+                        <option value="Tous les quinze jours" {% if admin['frequence_garde'] == 'Tous les quinze jours' %}selected{% endif %}>Tous les quinze jours</option>
+                        <option value="Tous les mois" {% if admin['frequence_garde'] == 'Tous les mois' %}selected{% endif %}>Tous les mois</option>
+                    </select>
+                </div>
+
+                <div class="edit-field">
+                    <label for="prochaine_date_garde">Prochaine date de garde</label>
+                    <input type="date" id="prochaine_date_garde"
+                           name="prochaine_date_garde"
+                           value="{{ admin['prochaine_date_garde'] or '' }}">
+                </div>
+
+            </div>
+
+            <div class="profile-edit-actions">
+
+                <button type="submit" class="profile-edit-button">
                     Enregistrer les modifications
                 </button>
 
-                <a href="{{ url_for('profile') }}" class="profile-button">
+                <a href="{{ url_for('profile') }}" class="profile-edit-button">
                     Annuler
                 </a>
+
             </div>
 
         </form>
@@ -72,56 +102,123 @@
 </div>
 
 <style>
-.profile-page {
-    max-width: 750px;
-    margin: 0 auto;
-    padding: 25px 15px;
-}
-
-.profile-card {
-    background: var(--fuchsia-profond, #A52D68);
-    color: white;
-    padding: 30px;
-    border-radius: 12px;
-}
-
-.profile-card label {
-    display: block;
-    color: white;
-    margin: 15px 0 6px;
-}
-
-.profile-card input,
-.profile-card select {
+.profile-edit-page {
     width: 100%;
-    padding: 12px;
-    border-radius: 8px;
-    border: none;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px 15px;
     box-sizing: border-box;
 }
 
-.profile-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 12px;
-    margin-top: 25px;
+.profile-edit-header {
+    margin-bottom: 15px;
 }
 
-.profile-button {
+.profile-edit-card {
+    width: 100%;
+    box-sizing: border-box;
+    background: #A52D68;
+    color: white;
+    padding: 22px 28px;
+    border-radius: 14px;
+}
+
+.profile-edit-card h2 {
+    color: white;
+    font-size: 19px;
+    margin: 5px 0 15px;
+}
+
+.profile-edit-card hr {
+    border: 0;
+    border-top: 1px solid rgba(255,255,255,0.35);
+    margin: 18px 0;
+}
+
+.profile-edit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 20px;
+    margin-bottom: 12px;
+}
+
+.edit-field {
+    min-width: 0;
+}
+
+.edit-field.full-width {
+    grid-column: 1 / -1;
+}
+
+.profile-edit-card label {
+    display: block;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    margin: 0 0 6px;
+}
+
+.profile-edit-card input,
+.profile-edit-card select {
+    display: block;
+    width: 100%;
+    height: 42px;
+    padding: 8px 12px;
+    box-sizing: border-box;
+    border: 1px solid #d2dce8;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #172b40;
+    font-size: 14px;
+}
+
+# garde-options {
+    margin-top: 8px;
+}
+
+.profile-edit-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.profile-edit-button {
     display: inline-block;
     background: #A9CBEA;
     color: #244967 !important;
-    padding: 12px 20px;
+    padding: 11px 20px;
     border: none;
     border-radius: 10px;
     text-decoration: none;
     font-weight: bold;
+    font-size: 14px;
     cursor: pointer;
 }
 
-.profile-button:hover {
+.profile-edit-button:hover {
     background: #8FB8DE;
+}
+
+@media (max-width: 650px) {
+    .profile-edit-page {
+        padding: 15px 10px;
+    }
+
+    .profile-edit-card {
+        padding: 18px 15px;
+    }
+
+    .profile-edit-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .edit-field.full-width {
+        grid-column: auto;
+    }
 }
 </style>
 
@@ -130,7 +227,7 @@ function afficherOptionsGarde() {
     const choix = document.getElementById("garde_partagee");
     const options = document.getElementById("garde-options");
 
-    options.style.display = choix.value === "oui" ? "block" : "none";
+    options.style.display = choix.value === "oui" ? "grid" : "none";
 }
 
 document.getElementById("garde_partagee").addEventListener(
