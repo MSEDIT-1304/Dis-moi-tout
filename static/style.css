@@ -1441,3 +1441,32 @@ html body .profile-header-actions .profile-button {
         font-family: Georgia, serif !important;
     }
 }
+/* BANDEAU ROSE DU BAS — ÉCRITURE ÉLÉGANTE SUR PC */
+@media (min-width: 769px) {
+
+    html body .site-footer {
+        font-family: Georgia, serif !important;
+        font-size: 14px !important;
+        font-weight: normal !important;
+        line-height: 1.6 !important;
+    }
+
+    html body .site-footer p {
+        font-family: Georgia, serif !important;
+        font-size: 14px !important;
+        font-weight: normal !important;
+        line-height: 1.6 !important;
+    }
+}
+/* BANDEAU ROSE — ÉCRITURE ÉLÉGANTE SUR MOBILE */
+@media (max-width: 768px) {
+    html body .site-footer {
+        font-family: Georgia, serif !important;
+        font-weight: normal !important;
+    }
+
+    html body .site-footer p {
+        font-family: Georgia, serif !important;
+        font-weight: normal !important;
+    }
+}
