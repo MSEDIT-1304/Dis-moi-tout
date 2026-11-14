@@ -1514,4 +1514,16 @@ html body .member-item form {
         margin-top: 3px !important;
     }
 }
+/* TITRE DU TABLEAU DE BORD — PC UNIQUEMENT */
+@media (min-width: 769px) {
+    html body .admin-dashboard .dashboard-header {
+        margin-top: -15px !important;
+        margin-bottom: 15px !important;
+    }
 
+    html body .admin-dashboard .dashboard-header h1 {
+        font-size: 27px !important;
+        margin-top: 0 !important;
+        margin-bottom: 5px !important;
+    }
+}
