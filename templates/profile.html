@@ -10,9 +10,15 @@
         <p>Consultez les informations de votre compte.</p>
     
         {% if admin %}
-            <a href="{{ url_for('edit_profile') }}" class="profile-button">
-                ✏️ Modifier
-            </a>
+            <div class="profile-header-actions">
+                <a href="{{ url_for('edit_profile') }}" class="profile-button">
+                    ✏️ Modifier
+                </a>
+    
+                <a href="{{ url_for('logout') }}" class="profile-button">
+                    Déconnexion
+                </a>
+            </div>
         {% endif %}
     </header>
 
