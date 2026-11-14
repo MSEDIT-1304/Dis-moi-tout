@@ -1381,17 +1381,33 @@ html body .profile-header-actions .profile-button {
         line-height: 1.2 !important;
     }
 }
-/* PC — LOGO JUSTE AVANT LE TITRE */
+/* PC — LOGO À GAUCHE DU TITRE SANS DÉPLACER CELUI-CI */
 @media (min-width: 801px) {
+
+    html body .site-header {
+        min-height: 105px !important;
+        height: 105px !important;
+        position: relative !important;
+    }
+
     html body .site-header .logo {
         position: absolute !important;
-        left: calc(50% - 180px) !important;
+        left: calc(50% - 185px) !important;
         top: 50% !important;
         transform: translateY(-50%) !important;
+        margin: 0 !important;
     }
 
     html body .site-header .logo img {
-        width: 85px !important;
-        height: 85px !important;
+        width: 75px !important;
+        height: 75px !important;
+        object-fit: contain !important;
+    }
+
+    html body .site-header .site-name {
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        font-size: 36px !important;
     }
 }
