@@ -1056,4 +1056,15 @@ html body .dashboard-card h2 + .dashboard-number {
     margin-top: 3px !important;
 }
 
+/* CALENDRIER — SUPPRIMER LE CADRE BLANC GOOGLE */
+
+html body .calendar-import-grid > .calendar-import-provider:first-child form {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
 
