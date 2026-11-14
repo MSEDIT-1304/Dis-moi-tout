@@ -1474,3 +1474,12 @@ html body .profile-header-actions .profile-button {
 html body *:not(.site-name):not(i):not(svg):not(path):not([class*="icon"]):not(.material-icons):not(.fa) {
     font-family: Georgia, serif !important;
 }
+/* RETIRER LE CADRE BLANC AUTOUR DE SUPPRIMER */
+html body .member-item form {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+}
