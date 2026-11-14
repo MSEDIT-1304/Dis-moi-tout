@@ -1411,3 +1411,33 @@ html body .profile-header-actions .profile-button {
         font-size: 36px !important;
     }
 }
+/* PAGE D'ACCUEIL — ÉCRITURE ÉLÉGANTE SUR PC UNIQUEMENT */
+@media (min-width: 769px) {
+
+    html body .home-container {
+        font-family: Georgia, serif !important;
+        font-size: 14px !important;
+    }
+
+    html body .home-container h1 {
+        font-family: Georgia, serif !important;
+        font-size: 25px !important;
+        font-weight: normal !important;
+    }
+
+    html body .home-container h2,
+    html body .home-container h3 {
+        font-family: Georgia, serif !important;
+        font-weight: normal !important;
+    }
+
+    html body .home-container p {
+        font-family: Georgia, serif !important;
+        font-size: 14px !important;
+        line-height: 1.6 !important;
+    }
+
+    html body .home-container a {
+        font-family: Georgia, serif !important;
+    }
+}
