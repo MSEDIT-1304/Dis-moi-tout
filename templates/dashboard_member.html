@@ -4,16 +4,20 @@
 {% block content %}
 
 <div class="members-dashboard">
-
+    
     <header class="members-header">
         <h1>Gestion des membres</h1>
         <p>Ajoutez, consultez et gérez les membres de votre famille.</p>
+    
         <a href="{{ url_for('dashboard') }}" class="members-button">
             Retour au tableau de bord
         </a>
+    
+        <a href="{{ url_for('logout') }}" class="members-button">
+            Déconnexion
+        </a>
     </header>
 
-    
     <section class="members-card">
         <h2>Ajouter un membre</h2>
 
