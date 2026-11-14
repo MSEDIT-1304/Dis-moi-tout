@@ -1244,6 +1244,17 @@ html body .calendar-page .calendar-header-actions {
         width: 100% !important;
     }
 }
+/* PROFIL — BOUTONS MODIFIER ET DÉCONNEXION CÔTE À CÔTE */
+html body .profile-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    flex-wrap: wrap !important;
+}
 
+html body .profile-header-actions .profile-button {
+    display: inline-block !important;
+    margin: 0 !important;
+}
 
 
