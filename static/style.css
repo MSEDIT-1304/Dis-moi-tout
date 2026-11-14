@@ -1067,4 +1067,67 @@ html body .calendar-import-grid > .calendar-import-provider:first-child form {
     box-shadow: none !important;
 }
 
+/* ==========================================
+   CALENDRIER — FORMULAIRE AJOUT ÉVÉNEMENT
+   VERSION COMPACTE ADMIN ET MEMBRES
+   ========================================== */
+
+/* Cadre blanc du formulaire */
+html body .calendar-page .calendar-card:has(form[action*="add_event"]) {
+    padding: 15px !important;
+}
+
+/* Formulaire */
+html body .calendar-page form[action*="add_event"] {
+    padding: 12px !important;
+    margin: 0 !important;
+}
+
+/* Titres des champs */
+html body .calendar-page form[action*="add_event"] label {
+    font-size: 12px !important;
+    margin-bottom: 2px !important;
+    line-height: 1.2 !important;
+}
+
+/* Espacement entre les champs */
+html body .calendar-page .calendar-form-grid {
+    gap: 7px 12px !important;
+    margin: 5px 0 8px !important;
+}
+
+/* Champs de saisie */
+html body .calendar-page form[action*="add_event"] input,
+html body .calendar-page form[action*="add_event"] select {
+    font-size: 12px !important;
+    padding: 5px 8px !important;
+    min-height: 30px !important;
+    margin: 2px 0 !important;
+}
+
+/* Description : conserver une belle zone d'écriture */
+html body .calendar-page .calendar-description {
+    margin: 5px 0 8px !important;
+}
+
+html body .calendar-page .calendar-description textarea {
+    font-size: 12px !important;
+    padding: 7px !important;
+    min-height: 65px !important;
+    line-height: 1.4 !important;
+}
+
+/* Rappel */
+html body .calendar-page .calendar-checkbox {
+    font-size: 12px !important;
+    margin: 5px 0 8px !important;
+}
+
+/* Bouton ajouter */
+html body .calendar-page form[action*="add_event"] button {
+    font-size: 12px !important;
+    padding: 7px 13px !important;
+    margin-top: 4px !important;
+}
+
 
