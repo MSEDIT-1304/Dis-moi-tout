@@ -3178,6 +3178,7 @@ def profile():
 # MODIFICATION DU PROFIL ADMINISTRATEUR
 # ==========================================================
 
+
 @app.route("/edit_profile", methods=["GET", "POST"])
 def edit_profile():
 
@@ -3193,30 +3194,14 @@ def edit_profile():
 
         prenom = request.form.get("prenom", "").strip()
         nom = request.form.get("nom", "").strip()
-        email = request.form.get("email", "").strip().lower()
         conjoint = request.form.get("conjoint", "non")
         garde_partagee = request.form.get("garde_partagee", "non")
         frequence_garde = request.form.get("frequence_garde", "").strip()
         prochaine_date_garde = request.form.get("prochaine_date_garde", "").strip()
 
-        if not prenom or not nom or not email:
+        if not prenom or not nom:
             conn.close()
-            flash("Veuillez remplir le prénom, le nom et l'adresse e-mail.")
-            return redirect(url_for("edit_profile"))
-
-        cursor.execute(
-            """
-            SELECT id
-            FROM admin
-            WHERE email = ?
-            AND id != ?
-            """,
-            (email, admin_id)
-        )
-
-        if cursor.fetchone():
-            conn.close()
-            flash("Cette adresse e-mail est déjà utilisée.")
+            flash("Veuillez remplir le prénom et le nom.")
             return redirect(url_for("edit_profile"))
 
         if garde_partagee != "oui":
@@ -3228,7 +3213,6 @@ def edit_profile():
             UPDATE admin
             SET prenom = ?,
                 nom = ?,
-                email = ?,
                 conjoint = ?,
                 garde_partagee = ?,
                 frequence_garde = ?,
@@ -3238,7 +3222,6 @@ def edit_profile():
             (
                 prenom,
                 nom,
-                email,
                 1 if conjoint == "oui" else 0,
                 1 if garde_partagee == "oui" else 0,
                 frequence_garde,
@@ -3250,7 +3233,6 @@ def edit_profile():
         conn.commit()
         conn.close()
 
-        session["email"] = email
         session["user_name"] = f"{prenom} {nom}"
 
         flash("Votre profil a été modifié.")
@@ -3269,6 +3251,7 @@ def edit_profile():
         return redirect(url_for("login"))
 
     return render_template("edit_profile.html", admin=admin)
+
 
 # ==========================================================
 # PARAMÈTRES
