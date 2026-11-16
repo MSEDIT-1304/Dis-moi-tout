@@ -2287,7 +2287,11 @@ def add_event():
     description = request.form.get("description", "").strip()
     date = request.form.get("date", "").strip()
     heure = request.form.get("heure", "").strip()
-    calendrier = request.form.get("calendrier", "Famille").strip()
+    couleur_evenement = request.form.get("couleur_evenement", "#4f8fc9").strip()
+    couleurs_autorisees = {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}
+    if couleur_evenement not in couleurs_autorisees:
+        couleur_evenement = "#4f8fc9"
+    calendrier = couleur_evenement
 
     if not titre or not date:
         flash("Veuillez saisir un titre et une date.")
@@ -3041,11 +3045,25 @@ def calendar():
 
     conn.close()
 
+    # Séparer les événements dans les deux agendas internes.
+    evenements_pro = []
+    evenements_perso = []
+    for evenement in evenements:
+        evenement_dict = dict(evenement)
+        type_agenda = (evenement_dict.get("type_agenda") or "").lower()
+        if type_agenda.endswith("_pro"):
+            evenements_pro.append(evenement_dict)
+        elif type_agenda.endswith("_perso") or type_agenda == "legacy":
+            evenements_perso.append(evenement_dict)
+
     return render_template(
         "calendar.html",
         evenements=evenements,
+        evenements_pro=evenements_pro,
+        evenements_perso=evenements_perso,
         membres=membres,
-        propositions=propositions
+        propositions=propositions,
+        est_admin=admin_logged
     )
 # ==========================================================
 # PROFIL
