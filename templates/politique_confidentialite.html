@@ -1,1 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Politique de confidentialité — Dis-moi tout{% endblock %}
+
+{% block content %}
+<article class="legal-page">
+    <h1>Politique de confidentialité</h1>
+    <p><strong>Application :</strong> Dis-moi tout</p>
+    <p><strong>Dernière mise à jour :</strong> 16 novembre 2026</p>
+
+    <h2>1. Responsable du traitement</h2>
+    <p>Le service Dis-moi tout est édité par <strong>Studio Web &amp; Applications</strong>.
+    Les coordonnées légales complètes de l’éditeur et son adresse de contact doivent être indiquées ici avant la mise en production définitive :
+    <strong>[adresse postale professionnelle et adresse e-mail de contact à compléter]</strong>.</p>
+
+    <h2>2. Données traitées</h2>
+    <p>Selon les fonctions que vous utilisez, Dis-moi tout peut traiter :</p>
+    <ul>
+        <li>les informations de compte : prénom, nom, adresse e-mail et mot de passe sous forme hachée ;</li>
+        <li>les informations nécessaires à l’organisation du foyer et à la gestion des membres ;</li>
+        <li>les événements d’agenda que vous créez ou importez : intitulé, description, date, heure et informations associées ;</li>
+        <li>les choix de partage et les autorisations d’accès aux agendas ;</li>
+        <li>les informations techniques nécessaires au fonctionnement et à la sécurité de la session.</li>
+    </ul>
+
+    <h2>3. Finalités</h2>
+    <p>Ces données sont utilisées pour créer et gérer les comptes, afficher les agendas PRO et PERSO, organiser les événements, appliquer les autorisations choisies, assurer le fonctionnement du service et gérer les abonnements.</p>
+
+    <h2>4. Vie privée et accès aux agendas</h2>
+    <p>Les événements personnels ne sont pas destinés à être consultés librement par l’administrateur de la famille ou par les autres membres. Les accès sont limités aux règles de visibilité et de partage prévues dans l’application : notamment les événements ajoutés par l’administrateur dans l’agenda d’un membre et les partages explicitement autorisés. Chaque utilisateur doit vérifier les personnes auxquelles il accorde un accès.</p>
+
+    <h2>5. Import Google Agenda</h2>
+    <p>Si vous choisissez de connecter Google, l’application utilise l’autorisation Google accordée afin de lire les agendas sélectionnés et d’importer leurs événements dans Dis-moi tout. Les événements importés sont ensuite enregistrés dans les agendas internes de l’application. Les jetons techniques nécessaires au maintien de la connexion Google sont conservés de manière sécurisée côté serveur. Ils ne sont pas utilisés pour vendre des données, faire de la publicité ou établir des profils publicitaires. Les données Google ne sont utilisées que pour fournir la fonction d’import et de synchronisation demandée par l’utilisateur.</p>
+
+    <h2>6. Import Apple / iCloud</h2>
+    <p>Si vous choisissez l’import Apple, votre identifiant Apple et le mot de passe spécifique d’application sont transmis au service iCloud pour accéder aux calendriers et importer les événements. Le code de l’application utilise ces identifiants pendant l’opération d’import ; il ne les enregistre pas dans la base de données de Dis-moi tout. Les événements importés sont enregistrés dans les agendas internes de l’application.</p>
+
+    <h2>7. Prestataires et destinataires</h2>
+    <p>Le service s’appuie sur des prestataires techniques nécessaires à son fonctionnement, notamment l’hébergement de l’application, Google pour l’import d’agendas, Apple/iCloud pour l’import demandé, Stripe pour le paiement et Make ainsi que Google Sheets pour le traitement technique des informations d’inscription et de suivi de l’abonnement. Ces prestataires traitent les informations dans le cadre de leurs services respectifs. Les données personnelles ne sont pas vendues.</p>
+
+    <h2>8. Durée de conservation</h2>
+    <p>Les données sont conservées pendant la durée nécessaire à la fourniture du service et à la gestion du compte. Lorsqu’un compte est supprimé depuis l’application, les données du compte et les événements qui lui sont associés sont supprimés de la base applicative selon les règles de suppression prévues. Certaines données peuvent subsister temporairement dans les sauvegardes techniques ou chez les prestataires, selon leurs propres délais de conservation et obligations légales.</p>
+
+    <h2>9. Sécurité</h2>
+    <p>Des mesures techniques sont mises en œuvre pour protéger les comptes et les données, notamment le hachage des mots de passe et la gestion des accès par session. Aucun service en ligne ne pouvant garantir une sécurité absolue, il est recommandé d’utiliser un mot de passe unique et de protéger l’accès à son appareil.</p>
+
+    <h2>10. Vos droits</h2>
+    <p>Conformément à la réglementation applicable, vous pouvez demander l’accès à vos données, leur rectification, leur effacement, la limitation du traitement ou exercer votre droit d’opposition lorsque celui-ci s’applique. Vous pouvez également retirer à tout moment l’autorisation Google depuis les paramètres de votre compte Google. Pour exercer vos droits, contactez l’éditeur à l’adresse de contact qui doit être complétée ci-dessus.</p>
+
+    <h2>11. Réclamation</h2>
+    <p>Vous pouvez introduire une réclamation auprès de la CNIL (www.cnil.fr) si vous estimez que vos droits ne sont pas respectés.</p>
+
+    <h2>12. Modifications</h2>
+    <p>Cette politique peut être mise à jour pour refléter l’évolution du service ou de la réglementation. La date de mise à jour figure en haut de cette page.</p>
+</article>
+<style>
+.legal-page{max-width:900px;margin:30px auto;padding:28px;background:#fff;border-radius:12px;line-height:1.65;color:#263238}
+.legal-page h1{margin-top:0}.legal-page h2{margin-top:26px;font-size:1.15rem}.legal-page li{margin:7px 0}
+</style>
+{% endblock %}
 
