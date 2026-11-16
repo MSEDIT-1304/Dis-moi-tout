@@ -2346,11 +2346,16 @@ def add_event():
     else:
         proprietaire = "membre"
 
-    if calendrier == "Travail":
-        type_agenda = f"{proprietaire}_pro"
-    else:
-        type_agenda = f"{proprietaire}_perso"
+    choix_agenda = request.form.get("type_agenda", "perso").strip().lower()
 
+    if choix_agenda not in ("pro", "perso"):
+        conn.close()
+        flash("Agenda invalide.")
+        return redirect(url_for("calendar"))
+
+    type_agenda = f"{proprietaire}_{choix_agenda}"
+
+    
     # ENREGISTREMENT
     cursor.execute(
         """
