@@ -1927,7 +1927,7 @@ def delete_member_route(membre_id):
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Supprimer les propositions et rendez-vous associés au membre
+    # Supprimer les événements et la connexion Google propres au membre.
     cursor.execute(
         """
         DELETE FROM evenements
@@ -1936,7 +1936,13 @@ def delete_member_route(membre_id):
         """,
         (famille_id, membre_id)
     )
-
+    cursor.execute(
+        """
+        DELETE FROM google_connections_users
+        WHERE owner_type = 'membre' AND owner_id = ?
+        """,
+        (membre_id,)
+    )
     cursor.execute(
         """
         DELETE FROM membres
@@ -3036,6 +3042,133 @@ def profile():
         admin=admin,
         membre=membre
     )
+
+# ==========================================================
+# SUPPRESSION DU COMPTE ET DES DONNÉES ASSOCIÉES
+# ==========================================================
+
+@app.route("/delete_account", methods=["POST"])
+def delete_account():
+
+    if not session.get("logged"):
+        return redirect(url_for("home"))
+
+    confirmation = request.form.get("confirmation", "").strip()
+    if confirmation != "SUPPRIMER":
+        flash("Pour confirmer, saisissez exactement SUPPRIMER.")
+        return redirect(url_for("profile"))
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        if session.get("admin_logged") is True:
+            admin_id = session.get("admin_id")
+            cursor.execute(
+                "SELECT id FROM admin WHERE id = ?",
+                (admin_id,)
+            )
+            if cursor.fetchone() is None:
+                conn.rollback()
+                session.clear()
+                return redirect(url_for("login"))
+
+            cursor.execute(
+                "SELECT id FROM famille WHERE admin_id = ?",
+                (admin_id,)
+            )
+            familles = [row["id"] for row in cursor.fetchall()]
+
+            for famille_id in familles:
+                # Tous les événements de la famille appartiennent aux données
+                # supprimées avec le compte administrateur.
+                cursor.execute(
+                    "DELETE FROM evenements WHERE famille_id = ?",
+                    (famille_id,)
+                )
+                cursor.execute(
+                    "DELETE FROM google_connections_users WHERE famille_id = ?",
+                    (famille_id,)
+                )
+                cursor.execute(
+                    "DELETE FROM google_connections WHERE famille_id = ?",
+                    (famille_id,)
+                )
+                cursor.execute(
+                    "DELETE FROM membres WHERE famille_id = ?",
+                    (famille_id,)
+                )
+
+            cursor.execute(
+                "DELETE FROM famille WHERE admin_id = ?",
+                (admin_id,)
+            )
+            cursor.execute(
+                "DELETE FROM admin WHERE id = ?",
+                (admin_id,)
+            )
+            message = "Le compte administrateur, la famille, les membres et les données associées ont été supprimés."
+
+        else:
+            membre_id = session.get("membre_id")
+            famille_id = session.get("famille_id")
+
+            cursor.execute(
+                """
+                SELECT id FROM membres
+                WHERE id = ? AND famille_id = ?
+                """,
+                (membre_id, famille_id)
+            )
+            if cursor.fetchone() is None:
+                conn.rollback()
+                session.clear()
+                return redirect(url_for("home"))
+
+            # Supprime les événements liés à ce membre, y compris ceux
+            # qu'il a créés ou validés pour un autre agenda.
+            colonnes = {
+                row["name"] for row in
+                cursor.execute("PRAGMA table_info(evenements)").fetchall()
+            }
+            conditions = ["membre_id = ?"]
+            params = [membre_id]
+            for colonne in ("created_by_membre_id", "valide_par_membre_id"):
+                if colonne in colonnes:
+                    conditions.append(f"{colonne} = ?")
+                    params.append(membre_id)
+
+            cursor.execute(
+                "DELETE FROM evenements WHERE " + " OR ".join(conditions),
+                tuple(params)
+            )
+            cursor.execute(
+                """
+                DELETE FROM google_connections_users
+                WHERE owner_type = 'membre' AND owner_id = ?
+                """,
+                (membre_id,)
+            )
+            cursor.execute(
+                "DELETE FROM membres WHERE id = ? AND famille_id = ?",
+                (membre_id, famille_id)
+            )
+            message = "Votre compte, vos événements et votre connexion Google ont été supprimés."
+
+        conn.commit()
+        session.clear()
+        flash(message)
+        return redirect(url_for("home"))
+
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Erreur lors de la suppression d'un compte")
+        flash("La suppression a échoué. Aucune modification n'a été validée.")
+        return redirect(url_for("profile"))
+
+    finally:
+        conn.close()
+
 # ==========================================================
 # MODIFICATION DES AUTORISATIONS DE PARTAGE DES AGENDAS
 # ==========================================================
