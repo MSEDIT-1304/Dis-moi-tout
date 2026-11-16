@@ -1116,6 +1116,8 @@ def init_database():
 
         "prochaine_date_garde":
             "TEXT"
+        "partage_agenda_pro": "INTEGER DEFAULT 0",
+        "partage_agenda_perso": "INTEGER DEFAULT 0",
     }
 
     for colonne, definition in colonnes_a_ajouter.items():
@@ -1220,9 +1222,30 @@ def init_database():
             ADD COLUMN acces_agenda_admin INTEGER DEFAULT 0
             """
         )
+        
+    # Consentement du conjoint ou ex-conjoint
+    # pour partager ses agendas avec l'administratrice
 
+    cursor.execute("PRAGMA table_info(membres)")
+
+    colonnes_membres = {
+        ligne[1]
+        for ligne in cursor.fetchall()
+    }
+
+    colonnes_partage = {
+        "partage_vers_admin_pro": "INTEGER DEFAULT 0",
+        "partage_vers_admin_perso": "INTEGER DEFAULT 0"
+    }
+
+    for colonne, definition in colonnes_partage.items():
+        if colonne not in colonnes_membres:
+            cursor.execute(
+                f"ALTER TABLE membres ADD COLUMN {colonne} {definition}"
+            )
     # Les anciens rendez-vous attribués à un membre
     # sont considérés comme créés par ce membre.
+    
 
     cursor.execute(
         """
