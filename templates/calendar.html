@@ -22,56 +22,61 @@
         {% endif %}
     {% endwith %}
 
-    <section class="calendar-card">
-        <h2>Connexion et import de calendriers externes</h2>
-        <p>Connectez votre propre compte. Les événements importés seront ajoutés uniquement à votre agenda Dis-moi tout.</p>
+    <div class="calendar-import-links" aria-label="Importer des événements">
+        <span>Importer des événements depuis :</span>
+        <a href="#google-import-panel" class="calendar-import-link" data-import-panel="google-import-panel">Google Agenda</a>
+        <span class="calendar-import-separator">|</span>
+        <a href="#apple-import-panel" class="calendar-import-link" data-import-panel="apple-import-panel">Apple / iCloud</a>
+    </div>
 
-        <div class="calendar-form-grid">
-            <div>
-                <h3>Google Agenda</h3>
-                {% if google_email %}
-                    <p>Compte connecté : <strong>{{ google_email }}</strong></p>
-                    {% if google_error %}<p>{{ google_error }}</p>{% endif %}
-                    <form method="POST" action="{{ url_for('calendar_import') }}">
-                        <label for="google-type-agenda">Importer dans</label>
-                        <select id="google-type-agenda" name="type_agenda">
-                            <option value="perso">Mon agenda PERSO</option>
-                            {% if afficher_pro %}<option value="pro">Mon agenda PRO</option>{% endif %}
-                        </select>
-                        <p>Sélectionnez jusqu'à deux agendas Google :</p>
-                        {% for google_cal in google_calendars %}
-                        <label class="calendar-checkbox">
-                            <input type="checkbox" name="calendar_ids" value="{{ google_cal['id'] }}" {% if google_cal['principal'] %}checked{% endif %}>
-                            {{ google_cal['nom'] or 'Agenda sans nom' }}{% if google_cal['principal'] %} (principal){% endif %}
-                        </label>
-                        {% else %}
-                        <p>Aucun agenda Google disponible pour le moment.</p>
-                        {% endfor %}
-                        <button type="submit" class="calendar-button" {% if not google_calendars %}disabled{% endif %}>Importer les agendas sélectionnés</button>
-                    </form>
+    <section class="calendar-import-panel" id="google-import-panel" hidden>
+        <h3>Google Agenda</h3>
+        {% if google_email %}
+            <p>Compte connecté : <strong>{{ google_email }}</strong></p>
+            {% if google_error %}<p>{{ google_error }}</p>{% endif %}
+            <form method="POST" action="{{ url_for('calendar_import') }}">
+                <label for="google-type-agenda">Importer dans</label>
+                <select id="google-type-agenda" name="type_agenda">
+                    <option value="perso">Mon agenda PERSO</option>
+                    {% if afficher_pro %}<option value="pro">Mon agenda PRO</option>{% endif %}
+                </select>
+                <p>Sélectionnez jusqu'à deux agendas Google :</p>
+                {% for google_cal in google_calendars %}
+                <label class="calendar-checkbox">
+                    <input type="checkbox" name="calendar_ids" value="{{ google_cal['id'] }}" {% if google_cal['principal'] %}checked{% endif %}>
+                    {{ google_cal['nom'] or 'Agenda sans nom' }}{% if google_cal['principal'] %} (principal){% endif %}
+                </label>
                 {% else %}
-                    <p>Aucun compte Google connecté.</p>
-                    <a class="calendar-button" href="{{ url_for('google_connect') }}">Connecter mon compte Google</a>
-                {% endif %}
-            </div>
+                <p>Aucun agenda Google disponible pour le moment.</p>
+                {% endfor %}
+                <button type="submit" class="calendar-button" {% if not google_calendars %}disabled{% endif %}>Importer les agendas sélectionnés</button>
+            </form>
+        {% else %}
+            <p>Indiquez votre adresse Gmail pour continuer vers Google et autoriser l'import de vos événements.</p>
+            <form method="POST" action="{{ url_for('google_connect') }}">
+                <label for="google_email">Adresse e-mail Google</label>
+                <input type="email" id="google_email" name="google_email" autocomplete="email" placeholder="exemple@gmail.com" required>
+                <button type="submit" class="calendar-button">Continuer avec Google</button>
+            </form>
+            <p class="calendar-import-note">Votre mot de passe Google sera saisi uniquement sur le site officiel de Google.</p>
+        {% endif %}
+    </section>
 
-            <div>
-                <h3>Apple / iCloud</h3>
-                <p>Apple nécessite un mot de passe spécifique d’application. Il n'est pas enregistré dans Dis-moi tout.</p>
-                <form method="POST" action="{{ url_for('apple_import') }}">
-                    <label for="apple_id">Identifiant Apple</label>
-                    <input type="email" id="apple_id" name="apple_id" autocomplete="username" required>
-                    <label for="apple_app_password">Mot de passe spécifique d’application</label>
-                    <input type="password" id="apple_app_password" name="apple_app_password" autocomplete="off" required>
-                    <label for="apple-type-agenda">Importer dans</label>
-                    <select id="apple-type-agenda" name="type_agenda">
-                        <option value="perso">Mon agenda PERSO</option>
-                        {% if afficher_pro %}<option value="pro">Mon agenda PRO</option>{% endif %}
-                    </select>
-                    <button type="submit" class="calendar-button">Connecter et importer Apple</button>
-                </form>
-            </div>
-        </div>
+    <section class="calendar-import-panel" id="apple-import-panel" hidden>
+        <h3>Apple / iCloud</h3>
+        <p>Apple nécessite un mot de passe spécifique d’application. Il n'est pas enregistré dans Dis-moi tout.</p>
+        <form method="POST" action="{{ url_for('apple_import') }}">
+            <label for="apple_id">Identifiant Apple</label>
+            <input type="email" id="apple_id" name="apple_id" autocomplete="username" required>
+            <label for="apple_app_password">Mot de passe spécifique d’application</label>
+            <input type="password" id="apple_app_password" name="apple_app_password" autocomplete="off" required>
+            <label for="apple-type-agenda">Importer dans</label>
+            <select id="apple-type-agenda" name="type_agenda">
+                <option value="perso">Mon agenda PERSO</option>
+                {% if afficher_pro %}<option value="pro">Mon agenda PRO</option>{% endif %}
+            </select>
+            <button type="submit" class="calendar-button">Connecter et importer Apple</button>
+        </form>
     </section>
 
     <section class="calendar-switcher" aria-label="Choisir un agenda">
@@ -286,6 +291,16 @@
 .event-actions form { margin-top:10px; }
 .calendar-delete { background:#a94442; color:white; border:0; border-radius:6px; padding:10px 15px; cursor:pointer; }
 .calendar-messages { margin-bottom:15px; }
+.calendar-import-links { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:10px; margin:0 0 18px; padding:0; color:#17324d; font-size:15px; }
+.calendar-import-link { color:#17324d; font-weight:bold; text-decoration:underline; text-decoration-color:#c5a15b; text-underline-offset:4px; cursor:pointer; }
+.calendar-import-link:hover { color:#a8792f; }
+.calendar-import-separator { color:#c5a15b; }
+.calendar-import-panel { background:rgba(23,50,77,.08); border:1px solid rgba(23,50,77,.18); border-radius:8px; padding:16px 20px; margin:0 0 18px; color:#17324d; }
+.calendar-import-panel[hidden] { display:none; }
+.calendar-import-panel h3,.calendar-import-panel p,.calendar-import-panel label { color:#17324d; }
+.calendar-import-panel form { max-width:560px; }
+.calendar-import-panel input:not([type="checkbox"]),.calendar-import-panel select { width:100%; box-sizing:border-box; padding:10px; border:1px solid #b8cce0; border-radius:6px; margin:5px 0 12px; }
+.calendar-import-panel .calendar-checkbox { justify-content:flex-start; }
 @media(max-width:650px) {
  .calendar-page { padding:15px 10px; }
  .calendar-card,.calendar-view-card { padding:18px; }
@@ -300,6 +315,18 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".calendar-import-link").forEach(link => {
+        link.addEventListener("click", function (event) {
+            event.preventDefault();
+            const targetId = this.dataset.importPanel;
+            const target = document.getElementById(targetId);
+            document.querySelectorAll(".calendar-import-panel").forEach(panel => {
+                if (panel !== target) panel.hidden = true;
+            });
+            target.hidden = !target.hidden;
+            if (!target.hidden) target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+    });
     const events = [
         {% for evenement in evenements_perso %}
         {date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
