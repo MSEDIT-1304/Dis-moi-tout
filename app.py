@@ -304,6 +304,20 @@ def verify_password(
 
 
 # ==========================================================
+# PAGES PUBLIQUES — INFORMATIONS LÉGALES
+# ==========================================================
+
+@app.route("/politique-confidentialite")
+def politique_confidentialite():
+    return render_template("politique_confidentialite.html")
+
+
+@app.route("/conditions-utilisation")
+def conditions_utilisation():
+    return render_template("conditions_utilisation.html")
+
+
+# ==========================================================
 # ACCUEIL
 # ==========================================================
 
