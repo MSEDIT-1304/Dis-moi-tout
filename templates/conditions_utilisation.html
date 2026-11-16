@@ -1,1 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Conditions d’utilisation — Dis-moi tout{% endblock %}
+
+{% block content %}
+<article class="legal-page">
+    <h1>Conditions d’utilisation</h1>
+    <p><strong>Service :</strong> Dis-moi tout</p>
+    <p><strong>Dernière mise à jour :</strong> 16 novembre 2026</p>
+
+    <h2>1. Éditeur</h2>
+    <p>Dis-moi tout est édité par <strong>Studio Web &amp; Applications</strong>. Les coordonnées légales complètes de l’éditeur, son adresse postale et son adresse de contact doivent être complétées avant la mise en production définitive : <strong>[coordonnées de l’éditeur à compléter]</strong>.</p>
+
+    <h2>2. Objet du service</h2>
+    <p>Dis-moi tout est une application d’organisation familiale permettant de gérer des agendas PRO et PERSO, de créer des événements, d’organiser le partage de certains événements et, lorsque l’utilisateur le demande, d’importer des événements depuis Google Agenda ou Apple/iCloud.</p>
+
+    <h2>3. Création et sécurité du compte</h2>
+    <p>L’utilisateur fournit des informations exactes lors de son inscription et veille à préserver la confidentialité de son mot de passe. Il est responsable des actions réalisées depuis son compte et doit signaler à l’éditeur tout accès non autorisé dont il aurait connaissance.</p>
+
+    <h2>4. Essai gratuit et abonnements</h2>
+    <p>Le service propose actuellement une période d’essai gratuite de 15 jours, selon les modalités affichées lors de l’inscription. À l’issue de cette période, l’accès aux fonctions soumises à abonnement nécessite une formule payante. Les tarifs actuellement affichés sont de 10 € TTC par mois ou 90 € TTC par an. Le paiement est traité par Stripe. Les conditions de facturation, de renouvellement et de résiliation sont celles présentées par Stripe au moment du paiement et dans l’espace de gestion de l’abonnement.</p>
+
+    <h2>5. Utilisation des agendas</h2>
+    <p>L’utilisateur est responsable du contenu des événements qu’il ajoute ou importe et doit disposer des droits nécessaires pour utiliser ces informations. Il lui appartient de choisir le bon agenda PRO ou PERSO et de vérifier les autorisations de partage. Les règles de visibilité de l’application visent à préserver la vie privée de chaque membre ; l’utilisateur doit néanmoins contrôler les partages qu’il active.</p>
+
+    <h2>6. Connexions à des services tiers</h2>
+    <p>Les imports Google et Apple sont facultatifs et nécessitent l’autorisation ou les identifiants spécifiques fournis par l’utilisateur. Leur fonctionnement dépend également de la disponibilité et des conditions des services Google et Apple. L’utilisateur peut choisir de ne pas connecter ces services.</p>
+
+    <h2>7. Suppression du compte</h2>
+    <p>L’utilisateur peut demander la suppression de son compte depuis la fonction prévue dans l’application. La suppression est définitive et entraîne la suppression des données et événements associés conformément aux règles applicables au type de compte. L’administrateur doit être conscient que la suppression de son compte peut également entraîner la suppression de la famille et des comptes membres qui y sont rattachés.</p>
+
+    <h2>8. Disponibilité et évolution</h2>
+    <p>L’éditeur s’efforce de maintenir le service accessible, mais ne garantit pas une disponibilité permanente ni l’absence d’interruption, notamment en cas de maintenance, d’incident technique ou de défaillance d’un prestataire tiers. Les fonctionnalités peuvent évoluer pour améliorer le service.</p>
+
+    <h2>9. Responsabilité de l’utilisateur</h2>
+    <p>L’utilisateur s’engage à utiliser l’application conformément aux lois en vigueur, à ne pas tenter d’accéder aux données d’autrui sans autorisation et à ne pas perturber le fonctionnement ou la sécurité du service.</p>
+
+    <h2>10. Propriété intellectuelle</h2>
+    <p>Les éléments propres à l’application, notamment son interface, sa présentation, ses textes et ses éléments graphiques, sont protégés par les droits applicables. Toute reproduction ou réutilisation non autorisée est interdite.</p>
+
+    <h2>11. Données personnelles</h2>
+    <p>Le traitement des données personnelles est décrit dans la <a href="{{ url_for('politique_confidentialite') }}">Politique de confidentialité</a>, qui fait partie des informations applicables à l’utilisation du service.</p>
+
+    <h2>12. Droit applicable et contact</h2>
+    <p>Les présentes conditions sont soumises au droit français, sous réserve des règles impératives applicables au consommateur. Pour toute question ou réclamation, l’utilisateur peut contacter l’éditeur à l’adresse de contact qui doit être complétée dans les mentions légales de l’application.</p>
+</article>
+<style>
+.legal-page{max-width:900px;margin:30px auto;padding:28px;background:#fff;border-radius:12px;line-height:1.65;color:#263238}
+.legal-page h1{margin-top:0}.legal-page h2{margin-top:26px;font-size:1.15rem}
+</style>
+{% endblock %}
 
