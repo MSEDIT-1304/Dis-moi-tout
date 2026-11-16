@@ -1726,7 +1726,6 @@ def create_family():
 # CRÉATION D'UN MEMBRE
 # ==========================================================
 
-
 def create_member(
     famille_id,
     prenom,
@@ -1779,40 +1778,6 @@ def create_member(
 
     return True
 
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        INSERT INTO membres
-        (
-            famille_id,
-            prenom,
-            nom,
-            email,
-            password,
-            role,
-            peut_modifier,
-            acces_agenda_admin
-        )
-        VALUES (?, ?, ?, ?, NULL, ?, ?, ?)
-        """,
-        (
-            famille_id,
-            prenom,
-            nom,
-            email,
-            role,
-            1 if peut_modifier else 0,
-            1 if acces_agenda_admin and role == "conjoint" else 0
-        )
-    )
-
-    conn.commit()
-    conn.close()
-
-    return True
 
 # ==========================================================
 # ROUTE AJOUT D'UN MEMBRE
@@ -2110,7 +2075,6 @@ def member_login():
 # ==========================================================
 # TABLEAU DE BORD MEMBRE
 # ==========================================================
-
 @app.route("/member_dashboard")
 def member_dashboard():
 
@@ -2155,9 +2119,14 @@ def member_dashboard():
         else "private"
     )
 
-    acces_agenda_admin = (
-        membre["role"] == "conjoint"
-        and membre["acces_agenda_admin"] == 1
+    autorise_admin_pro = (
+        membre["role"] in ("conjoint", "ex-conjoint")
+        and membre["acces_agenda_admin_pro"] == 1
+    )
+
+    autorise_admin_perso = (
+        membre["role"] in ("conjoint", "ex-conjoint")
+        and membre["acces_agenda_admin_perso"] == 1
     )
 
     cursor.execute(
@@ -2176,25 +2145,27 @@ def member_dashboard():
 
     for evenement in tous_evenements:
 
-        # Agenda personnel de l'administrateur
         if evenement["concerne_admin"] == 1:
 
-            if acces_agenda_admin:
+            if (
+                evenement["type_agenda"] == "admin_pro"
+                and autorise_admin_pro
+            ) or (
+                evenement["type_agenda"] == "admin_perso"
+                and autorise_admin_perso
+            ):
                 evenements.append(evenement)
 
             continue
 
-        # Rendez-vous personnels du membre connecté
         if evenement["membre_id"] == membre_id:
             evenements.append(evenement)
             continue
 
-        # Rendez-vous familiaux
         if evenement["calendrier"] == "Famille":
             evenements.append(evenement)
             continue
 
-        # Mode ouvert : visibilité des rendez-vous des autres membres
         if mode_confidentialite == "open":
             evenements.append(evenement)
 
@@ -2206,6 +2177,7 @@ def member_dashboard():
         famille=famille,
         evenements=evenements
     )
+
 # ==========================================================
 # ESPACE FAMILLE
 # ==========================================================
@@ -2629,6 +2601,7 @@ def edit_event(event_id):
 
     famille_id = session.get("famille_id")
     admin_logged = session.get("admin_logged") is True
+    admin_id = session.get("admin_id")
     membre_id = session.get("membre_id")
 
     conn = get_connection()
@@ -2658,30 +2631,16 @@ def edit_event(event_id):
 
     autorise = False
 
-    # L'administrateur peut modifier les rendez-vous de sa famille.
     if admin_logged:
-        autorise = True
+
+        if (
+            evenement["concerne_admin"] == 1
+            or evenement["created_by_admin_id"] == admin_id
+        ):
+            autorise = True
 
     else:
 
-        cursor.execute(
-            """
-            SELECT id
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
-            (membre_id, famille_id)
-        )
-
-        membre = cursor.fetchone()
-
-        if membre is None:
-            conn.close()
-            return redirect(url_for("home"))
-
-        # Un membre peut modifier uniquement ses propres
-        # rendez-vous qu'il a lui-même créés.
         if (
             evenement["membre_id"] == membre_id
             and evenement["created_by_membre_id"] == membre_id
@@ -2706,8 +2665,7 @@ def edit_event(event_id):
     cursor.execute(
         """
         UPDATE evenements
-        SET
-            titre = ?,
+        SET titre = ?,
             description = ?,
             date = ?,
             heure = ?
@@ -2729,7 +2687,6 @@ def edit_event(event_id):
 
     flash("Événement modifié.")
     return redirect(url_for("calendar"))
-    
 # ==========================================================
 # SUPPRESSION D'UN ÉVÉNEMENT
 # ==========================================================
@@ -2745,6 +2702,7 @@ def delete_event(event_id):
 
     famille_id = session.get("famille_id")
     admin_logged = session.get("admin_logged") is True
+    admin_id = session.get("admin_id")
     membre_id = session.get("membre_id")
 
     conn = get_connection()
@@ -2774,34 +2732,20 @@ def delete_event(event_id):
 
     autorise = False
 
-    # L'administrateur peut supprimer les événements de sa famille.
     if admin_logged:
 
-        autorise = True
+        if (
+            evenement["concerne_admin"] == 1
+            or evenement["created_by_admin_id"] == admin_id
+        ):
+            autorise = True
 
     else:
 
-        cursor.execute(
-            """
-            SELECT id, role
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
-            (membre_id, famille_id)
-        )
-
-        membre = cursor.fetchone()
-
-        if membre is None:
-            conn.close()
-            return redirect(url_for("home"))
-
-        # Un membre peut supprimer uniquement un rendez-vous
-        # qu'il a lui-même créé.
-        # Cela interdit de supprimer les rendez-vous créés par l'administrateur.
-        if evenement["created_by_membre_id"] == membre_id:
-
+        if (
+            evenement["membre_id"] == membre_id
+            and evenement["created_by_membre_id"] == membre_id
+        ):
             autorise = True
 
     if not autorise:
@@ -3037,28 +2981,9 @@ def calendar():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Récupération du mode de confidentialité
-    cursor.execute(
-        """
-        SELECT mode_confidentialite
-        FROM famille
-        WHERE id = ?
-        """,
-        (famille_id,)
-    )
-
-    famille = cursor.fetchone()
-    mode_confidentialite = (
-        famille["mode_confidentialite"]
-        if famille and famille["mode_confidentialite"]
-        else "private"
-    )
-
-    # Informations du membre connecté
     membre = None
-    acces_agenda_admin = False
 
-    if not admin_logged and membre_id is not None:
+    if not admin_logged:
 
         cursor.execute(
             """
@@ -3077,18 +3002,15 @@ def calendar():
             session.clear()
             return redirect(url_for("home"))
 
-        acces_agenda_admin = (
-            membre["role"] == "conjoint"
-            and membre["acces_agenda_admin"] == 1
-        )
-
-    # Récupération des rendez-vous acceptés uniquement
+    # Récupération des événements acceptés
     cursor.execute(
         """
         SELECT
             e.*,
             m.prenom,
-            m.nom
+            m.nom,
+            m.partage_vers_admin_pro,
+            m.partage_vers_admin_perso
         FROM evenements e
         LEFT JOIN membres m
             ON e.membre_id = m.id
@@ -3104,41 +3026,40 @@ def calendar():
 
     for evenement in tous_evenements:
 
-        evenement_admin = evenement["concerne_admin"] == 1
+        # L'administrateur consulte son propre agenda
+        if admin_logged and evenement["concerne_admin"] == 1:
+            evenements.append(evenement)
+            continue
 
-        # L'agenda de l'administrateur reste privé
-        if evenement_admin:
+        # Événement placé dans l'agenda d'un membre
+        if evenement["membre_id"] is not None:
 
-            if admin_logged or acces_agenda_admin:
+            if admin_logged:
+
+                # L'administrateur voit les événements
+                # qu'elle a elle-même ajoutés.
+                if evenement["created_by_admin_id"] == session.get("admin_id"):
+                    evenements.append(evenement)
+                    continue
+
+                # Le membre doit avoir donné son accord
+                # pour l'agenda PRO ou PERSO concerné.
+                if (
+                    evenement["type_agenda"] == "membre_pro"
+                    and evenement["partage_vers_admin_pro"] == 1
+                ) or (
+                    evenement["type_agenda"] == "membre_perso"
+                    and evenement["partage_vers_admin_perso"] == 1
+                ):
+                    evenements.append(evenement)
+
+                continue
+
+            # Un membre ne voit que ses propres événements.
+            if evenement["membre_id"] == membre_id:
                 evenements.append(evenement)
 
             continue
-
-        # L'administrateur consulte les agendas de la famille
-        if admin_logged:
-
-            if (
-                mode_confidentialite == "open"
-                or evenement["calendrier"] == "Famille"
-                or evenement["created_by_admin_id"] == session.get("admin_id")
-            ):
-                evenements.append(evenement)
-
-            continue
-
-        # Un membre voit ses propres rendez-vous
-        if evenement["membre_id"] == membre_id:
-            evenements.append(evenement)
-            continue
-
-        # Les rendez-vous familiaux sont visibles par tous
-        if evenement["calendrier"] == "Famille":
-            evenements.append(evenement)
-            continue
-
-        # En mode ouvert, les rendez-vous des autres membres sont visibles
-        if mode_confidentialite == "open":
-            evenements.append(evenement)
 
     # Récupération des propositions en attente
     if admin_logged:
@@ -3202,7 +3123,6 @@ def calendar():
         membres=membres,
         propositions=propositions
     )
-
 # ==========================================================
 # PROFIL
 # ==========================================================
@@ -3268,6 +3188,122 @@ def profile():
         admin=admin,
         membre=membre
     )
+# ==========================================================
+# MODIFICATION DES AUTORISATIONS DE PARTAGE DES AGENDAS
+# ==========================================================
+
+@app.route("/update_agenda_sharing", methods=["POST"])
+def update_agenda_sharing():
+
+    if not session.get("logged") or session.get("admin_logged"):
+        return redirect(url_for("home"))
+
+    membre_id = session.get("membre_id")
+
+    partage_pro = request.form.get("partage_vers_admin_pro") == "oui"
+    partage_perso = request.form.get("partage_vers_admin_perso") == "oui"
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT role
+        FROM membres
+        WHERE id = ?
+        AND famille_id = ?
+        """,
+        (membre_id, session.get("famille_id"))
+    )
+
+    membre = cursor.fetchone()
+
+    if membre is None or membre["role"] not in ("conjoint", "ex-conjoint"):
+        conn.close()
+        return redirect(url_for("profile"))
+
+    cursor.execute(
+        """
+        UPDATE membres
+        SET partage_vers_admin_pro = ?,
+            partage_vers_admin_perso = ?
+        WHERE id = ?
+        """,
+        (
+            1 if partage_pro else 0,
+            1 if partage_perso else 0,
+            membre_id
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+    flash("Vos autorisations de partage ont été mises à jour.")
+
+    return redirect(url_for("profile"))
+
+
+# ==========================================================
+# MODIFICATION DU PARTAGE DES AGENDAS PAR LE MEMBRE
+# ==========================================================
+
+@app.route("/update_agenda_sharing", methods=["POST"])
+def update_agenda_sharing():
+
+    if not session.get("logged") or session.get("admin_logged"):
+        return redirect(url_for("home"))
+
+    membre_id = session.get("membre_id")
+    famille_id = session.get("famille_id")
+
+    if not membre_id or not famille_id:
+        return redirect(url_for("home"))
+
+    membre = get_member_by_id(membre_id)
+
+    if membre is None or membre["famille_id"] != famille_id:
+        session.clear()
+        return redirect(url_for("home"))
+
+    if membre["role"] not in ("conjoint", "ex-conjoint"):
+        flash("Cette autorisation est réservée au conjoint ou ex-conjoint.")
+        return redirect(url_for("profile"))
+
+    partage_pro = (
+        1 if request.form.get("partage_vers_admin_pro") == "oui" else 0
+    )
+
+    partage_perso = (
+        1 if request.form.get("partage_vers_admin_perso") == "oui" else 0
+    )
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        UPDATE membres
+        SET partage_vers_admin_pro = ?,
+            partage_vers_admin_perso = ?
+        WHERE id = ?
+        AND famille_id = ?
+        AND role IN ('conjoint', 'ex-conjoint')
+        """,
+        (
+            partage_pro,
+            partage_perso,
+            membre_id,
+            famille_id
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+    flash("Vos préférences de partage ont été enregistrées.")
+
+    return redirect(url_for("profile"))
 
 # ==========================================================
 # MODIFICATION DU PROFIL ADMINISTRATEUR
