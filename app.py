@@ -2889,6 +2889,73 @@ def calendar():
     # Un enfant et un ex-conjoint n'ont qu'un agenda PERSO.
     afficher_pro = est_admin or (membre and membre["role"] == "conjoint")
 
+    # Connexion Google propre à chaque propriétaire (admin ou membre).
+    owner_type, owner_id = get_calendar_owner()
+    google_email = None
+    google_calendars = []
+    google_error = None
+    google_conn = get_connection()
+    google_cursor = google_conn.cursor()
+    google_cursor.execute(
+        """
+        SELECT google_email, access_token, refresh_token, expires_at
+        FROM google_connections_users
+        WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+        """,
+        (famille_id, owner_type, owner_id)
+    )
+    google_connection = google_cursor.fetchone()
+    google_conn.close()
+
+    if google_connection:
+        google_email = google_connection["google_email"]
+        google_access_token = google_connection["access_token"]
+        try:
+            expiry = datetime.fromisoformat(google_connection["expires_at"])
+        except (TypeError, ValueError):
+            expiry = datetime.min
+
+        if expiry.timestamp() <= datetime.now().timestamp() + 120:
+            if google_connection["refresh_token"]:
+                try:
+                    refreshed = refresh_google_token(
+                        GOOGLE_CLIENT_ID,
+                        GOOGLE_CLIENT_SECRET,
+                        google_connection["refresh_token"]
+                    )
+                    if refreshed and refreshed.get("access_token"):
+                        google_access_token = refreshed["access_token"]
+                        new_expiry = datetime.now().timestamp() + int(refreshed.get("expires_in", 3600))
+                        update_conn = get_connection()
+                        update_conn.execute(
+                            """
+                            UPDATE google_connections_users
+                            SET access_token = ?, expires_at = ?
+                            WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+                            """,
+                            (
+                                google_access_token,
+                                datetime.fromtimestamp(new_expiry).isoformat(),
+                                famille_id, owner_type, owner_id
+                            )
+                        )
+                        update_conn.commit()
+                        update_conn.close()
+                    else:
+                        google_error = "La connexion Google doit être renouvelée."
+                except Exception:
+                    app.logger.exception("Renouvellement Google depuis le calendrier impossible")
+                    google_error = "Impossible de renouveler Google. Reconnectez votre compte."
+            else:
+                google_error = "La connexion Google doit être renouvelée."
+
+        if not google_error:
+            try:
+                google_calendars = get_google_calendars(google_access_token)
+            except Exception:
+                app.logger.exception("Lecture des calendriers Google impossible")
+                google_error = "Google est connecté, mais la liste des agendas est inaccessible."
+
     return render_template(
         "calendar.html",
         evenements=evenements,
@@ -2897,7 +2964,10 @@ def calendar():
         membres=membres,
         propositions=propositions,
         est_admin=est_admin,
-        afficher_pro=afficher_pro
+        afficher_pro=afficher_pro,
+        google_email=google_email,
+        google_calendars=google_calendars,
+        google_error=google_error
     )
 
 
@@ -3355,7 +3425,11 @@ def calendar_import():
         type_choisi = request.form.get("type_agenda", "perso").strip().lower()
         if type_choisi not in ("pro", "perso"):
             flash("Choisissez un agenda PRO ou PERSO.")
-            return redirect(url_for("calendar_import"))
+            return redirect(url_for("calendar"))
+        if owner_type == "membre":
+            current_member = get_member_by_id(owner_id)
+            if not current_member or current_member["role"] != "conjoint":
+                type_choisi = "perso"
         type_agenda = f"{owner_type}_{type_choisi}"
 
         conn = get_connection()
@@ -3427,11 +3501,11 @@ def calendar_import():
         except Exception as exc:
             app.logger.exception("Impossible de récupérer les agendas Google")
             flash(f"Impossible de récupérer les agendas Google : {exc}")
-            return redirect(url_for("calendar_import"))
+            return redirect(url_for("calendar"))
 
         if not calendars:
             flash("Aucun agenda Google accessible n'a été trouvé.")
-            return redirect(url_for("calendar_import"))
+            return redirect(url_for("calendar"))
 
         # Deux agendas maximum par import. Si le formulaire fournit des IDs,
         # seuls ceux sélectionnés sont importés ; sinon les deux premiers.
@@ -3445,7 +3519,7 @@ def calendar_import():
 
         if not calendars:
             flash("Sélectionnez au moins un agenda Google.")
-            return redirect(url_for("calendar_import"))
+            return redirect(url_for("calendar"))
 
         total_imported = 0
         total_skipped = 0
@@ -3514,9 +3588,13 @@ def apple_import():
     type_choisi = request.form.get("type_agenda", "perso").strip().lower()
     if type_choisi not in ("pro", "perso"):
         flash("Choisissez un agenda PRO ou PERSO.")
-        return redirect(url_for("calendar_import"))
+        return redirect(url_for("calendar"))
 
     owner_type, owner_id = get_calendar_owner()
+    if owner_type == "membre":
+        current_member = get_member_by_id(owner_id)
+        if not current_member or current_member["role"] != "conjoint":
+            type_choisi = "perso"
     type_agenda = f"{owner_type}_{type_choisi}"
 
     try:
