@@ -1180,16 +1180,16 @@ def init_database():
     }
 
     colonnes_evenements_a_ajouter = {
-        "created_by_admin_id": "INTEGER",
-        "created_by_membre_id": "INTEGER",
-        "membre_peut_modifier": "INTEGER DEFAULT 0",
-        "membre_peut_supprimer": "INTEGER DEFAULT 0",
-        "statut_validation": "TEXT DEFAULT 'accepte'",
-        "valide_par_admin_id": "INTEGER",
-        "valide_par_membre_id": "INTEGER",
-        "concerne_admin": "INTEGER DEFAULT 0"
+    "created_by_admin_id": "INTEGER",
+    "created_by_membre_id": "INTEGER",
+    "membre_peut_modifier": "INTEGER DEFAULT 0",
+    "membre_peut_supprimer": "INTEGER DEFAULT 0",
+    "statut_validation": "TEXT DEFAULT 'accepte'",
+    "valide_par_admin_id": "INTEGER",
+    "valide_par_membre_id": "INTEGER",
+    "concerne_admin": "INTEGER DEFAULT 0",
+    "type_agenda": "TEXT DEFAULT 'legacy'"
     }
-
     for colonne, definition in colonnes_evenements_a_ajouter.items():
 
         if colonne not in colonnes_evenements:
