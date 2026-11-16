@@ -78,11 +78,49 @@
 
         {% else %}
 
-            <h2>Profil administrateur indisponible</h2>
-            <p>Les informations de ce profil ne sont pas disponibles.</p>
+            <div class="profile-avatar">
+                {{ (membre['prenom'] or '?')[0] }}{{ (membre['nom'] or '?')[0] }}
+            </div>
+
+            <h2>{{ membre['prenom'] }} {{ membre['nom'] }}</h2>
+
+            <div class="profile-information">
+                <div>
+                    <span>Prénom</span>
+                    <strong>{{ membre['prenom'] or 'Non renseigné' }}</strong>
+                </div>
+                <div>
+                    <span>Nom</span>
+                    <strong>{{ membre['nom'] or 'Non renseigné' }}</strong>
+                </div>
+                <div>
+                    <span>Adresse e-mail</span>
+                    <strong>{{ membre['email'] or 'Non renseignée' }}</strong>
+                </div>
+                <div>
+                    <span>Rôle</span>
+                    <strong>{{ membre['role'] or 'Membre' }}</strong>
+                </div>
+            </div>
 
         {% endif %}
 
+    </section>
+
+    <section class="delete-account-card">
+        <h2>Supprimer mon compte</h2>
+        {% if admin %}
+            <p>Cette action supprimera définitivement votre compte administrateur, toute la famille, les comptes des membres et les données associées.</p>
+        {% else %}
+            <p>Cette action supprimera définitivement votre compte, vos événements et votre connexion Google. Les autres comptes de la famille ne seront pas touchés.</p>
+        {% endif %}
+        <form method="POST" action="{{ url_for('delete_account') }}"
+              onsubmit="return confirm('Confirmez-vous la suppression définitive de votre compte ? Cette action est irréversible.');">
+            <label for="confirmation-delete">Pour confirmer, saisissez SUPPRIMER :</label>
+            <input id="confirmation-delete" name="confirmation" type="text"
+                   autocomplete="off" required>
+            <button type="submit" class="delete-account-button">Supprimer définitivement mon compte</button>
+        </form>
     </section>
 
     <div class="profile-actions">
@@ -192,6 +230,49 @@
         text-align: left;
     }
 }
+
+
+.delete-account-card {
+    margin-top: 28px;
+    padding: 22px;
+    border: 1px solid #b94a48;
+    border-radius: 12px;
+    background: rgba(185, 74, 72, 0.07);
+}
+.delete-account-card h2 {
+    margin-top: 0;
+    color: #b94a48;
+}
+.delete-account-card p {
+    line-height: 1.5;
+}
+.delete-account-card label {
+    display: block;
+    margin: 14px 0 7px;
+    font-weight: bold;
+}
+.delete-account-card input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px;
+    border: 1px solid #999;
+    border-radius: 7px;
+    margin-bottom: 12px;
+}
+.delete-account-button {
+    background: #a93226;
+    color: white;
+    border: 0;
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.delete-account-button:hover {
+    background: #84251d;
+}
+
 </style>
 
 {% endblock %}
