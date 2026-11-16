@@ -1,514 +1,356 @@
-
 {% extends "base.html" %}
 
 {% block content %}
-
 <div class="calendar-page">
-    
     <header class="calendar-header">
         <div>
-            <h1>Calendrier familial</h1>
-            <p>Retrouvez les événements et organisez votre quotidien.</p>
+            <h1>Mes calendriers</h1>
+            <p>Retrouvez vos rendez-vous dans vos deux agendas personnels.</p>
         </div>
-    
+        {% if est_admin %}
         <div class="calendar-header-actions">
-            <a href="{{ url_for('dashboard') }}" class="calendar-button">
-                Retour au tableau de bord
-            </a>
-    
-            <a href="{{ url_for('logout') }}" class="calendar-button">
-                Déconnexion
-            </a>
+            <a href="{{ url_for('members') }}" class="calendar-button">Gestion des membres</a>
         </div>
+        {% endif %}
     </header>
 
-{% with messages = get_flashed_messages() %}
-    {% if messages %}
-        <div class="calendar-messages" role="status">
-            {% for message in messages %}
-                <p>{{ message }}</p>
-            {% endfor %}
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="calendar-messages" role="status">
+                {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <section class="calendar-switcher" aria-label="Choisir un agenda">
+        <button type="button" class="agenda-tab active" data-agenda="perso">AGENDA PERSO</button>
+        <button type="button" class="agenda-tab" data-agenda="pro">AGENDA PRO</button>
+    </section>
+
+    <section class="calendar-view-card" id="calendar-view-card">
+        <div class="calendar-toolbar">
+            <div class="calendar-toolbar-left">
+                <button type="button" id="calendar-prev" class="calendar-button calendar-small">‹</button>
+                <button type="button" id="calendar-today" class="calendar-button calendar-small">Aujourd'hui</button>
+                <button type="button" id="calendar-next" class="calendar-button calendar-small">›</button>
+                <h2 id="calendar-period-title"></h2>
+            </div>
+            <label class="view-picker">
+                Affichage
+                <select id="calendar-view">
+                    <option value="month">Mois</option>
+                    <option value="week">Semaine</option>
+                    <option value="day">Jour</option>
+                </select>
+            </label>
         </div>
-    {% endif %}
-{% endwith %}
-<section class="calendar-card calendar-import-card">
-    <h2>Importer mes calendriers externes</h2>
-    <p>Importez vos événements Google ou iCloud dans le calendrier familial.</p>
-
-    <div class="calendar-import-grid">
-
-        <div class="calendar-import-provider">
-            <h3>Google Calendar</h3>
-            <p>Connectez votre compte Google puis lancez l'import.</p>
-
-            <a class="calendar-button" href="{{ url_for('google_connect') }}">
-                Connecter Google
-            </a>
-
-            <form method="POST" action="{{ url_for('calendar_import') }}">
-                <button type="submit" class="calendar-button">
-                    Importer tous mes agendas Google
-                </button>
-            </form>
+        <div class="calendar-weekdays" id="calendar-weekdays">
+            <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
         </div>
+        <div class="calendar-grid" id="calendar-grid" aria-live="polite"></div>
+        <p class="calendar-legend">
+            <span><i class="legend-dot" style="background:#4f8fc9"></i> Bleu</span>
+            <span><i class="legend-dot" style="background:#d94f9b"></i> Fuchsia</span>
+            <span><i class="legend-dot" style="background:#54a66b"></i> Vert</span>
+            <span><i class="legend-dot" style="background:#e2a43b"></i> Doré</span>
+        </p>
+    </section>
 
-        <div class="calendar-import-provider">
-            <h3>Apple Calendar / iCloud</h3>
-            <p>Utilisez votre identifiant Apple et un mot de passe spécifique d'application.</p>
-
-            <form method="POST" action="{{ url_for('apple_import') }}">
-                <label for="apple_id">Identifiant Apple</label>
-                <input type="text" id="apple_id" name="apple_id" required>
-
-                <label for="apple_app_password">Mot de passe spécifique d'application</label>
-                <input type="password" id="apple_app_password"
-                       name="apple_app_password" required>
-
-                <button type="submit" class="calendar-button">
-                    Importer mes agendas Apple
-                </button>
-            </form>
-        </div>
-
-    </div>
-</section>
     <section class="calendar-card">
         <h2>Ajouter un événement</h2>
         <div class="voice-command">
-        <h3>🎙️ Ajouter par commande vocale</h3>
-        <p>Exemple : « Rendez-vous chez le dentiste demain à 14 heures »</p>
-    
-        <button type="button" id="voice-button" class="calendar-button">
-            🎙️ Parler
-        </button>
-    
-        <p id="voice-status" role="status"></p>
-        <p id="voice-transcript"></p>
-    </div>
+            <h3>🎙️ Ajouter par commande vocale</h3>
+            <p>Exemple : « Rendez-vous chez le dentiste demain à 14 heures »</p>
+            <button type="button" id="voice-button" class="calendar-button">🎙️ Parler</button>
+            <p id="voice-status" role="status"></p>
+            <p id="voice-transcript"></p>
+        </div>
+
         <form method="POST" action="{{ url_for('add_event') }}">
-
             <div class="calendar-form-grid">
-
                 <div>
                     <label for="titre">Titre</label>
                     <input type="text" id="titre" name="titre" required>
                 </div>
-
+                {% if est_admin %}
                 <div>
-                    <label for="membre_id">Concerne</label>
+                    <label for="membre_id">Ajouter dans</label>
                     <select id="membre_id" name="membre_id">
-                        <option value="">Toute la famille</option>
+                        <option value="">Mon agenda administrateur</option>
                         {% for membre in membres %}
-                            <option value="{{ membre['id'] }}">
-                                {{ membre['prenom'] }} {{ membre['nom'] }}
-                            </option>
+                        <option value="{{ membre['id'] }}">{{ membre['prenom'] }} {{ membre['nom'] }}</option>
                         {% endfor %}
                     </select>
                 </div>
-
+                {% endif %}
                 <div>
                     <label for="date">Date</label>
                     <input type="date" id="date" name="date" required>
                 </div>
-
                 <div>
                     <label for="heure">Heure</label>
                     <input type="time" id="heure" name="heure">
                 </div>
-
                 <div>
-                    <label for="type_agenda">Agenda</label>
+                    <label for="type_agenda">Agenda de destination</label>
                     <select id="type_agenda" name="type_agenda" required>
                         <option value="perso">PERSO</option>
                         <option value="pro">PRO</option>
                     </select>
                 </div>
-
                 <div>
-                    <label for="calendrier">Calendrier</label>
-                    <select id="calendrier" name="calendrier">
-                        <option value="Famille">Famille</option>
-                        <option value="Personnel">Personnel</option>
-                        <option value="Scolaire">Scolaire</option>
-                        <option value="Travail">Travail</option>
+                    <label for="couleur_evenement">Couleur de l'événement</label>
+                    <select id="couleur_evenement" name="couleur_evenement">
+                        <option value="#4f8fc9">Bleu</option>
+                        <option value="#d94f9b">Fuchsia</option>
+                        <option value="#54a66b">Vert</option>
+                        <option value="#e2a43b">Doré</option>
                     </select>
                 </div>
-
             </div>
-
             <div class="calendar-description">
                 <label for="description">Description</label>
                 <textarea id="description" name="description" rows="3"></textarea>
             </div>
-
             <label class="calendar-checkbox">
-                <input type="checkbox" name="rappel" value="oui">
-                Activer un rappel
+                <input type="checkbox" name="rappel" value="oui"> Activer un rappel
             </label>
-
-            <button type="submit" class="calendar-button">
-                Ajouter l'événement
-            </button>
-
+            <button type="submit" class="calendar-button">Ajouter l'événement</button>
         </form>
     </section>
 
     <section class="calendar-card">
-        <h2>Événements à venir et passés</h2>
-
-        {% if evenements %}
-
-            <div class="events-list">
-
-                {% for evenement in evenements %}
-
-                    <article class="event-item">
-
-                        <div class="event-details">
-
-                            <h3>{{ evenement['titre'] }}</h3>
-
-                            <p>
-                                <strong>Date :</strong>
-                                {{ evenement['date'] }}
-                                {% if evenement['heure'] %}
-                                    à {{ evenement['heure'] }}
-                                {% endif %}
-                            </p>
-
-                            {% if evenement['prenom'] %}
-                                <p>
-                                    <strong>Membre :</strong>
-                                    {{ evenement['prenom'] }}
-                                    {{ evenement['nom'] }}
-                                </p>
-                            {% endif %}
-
-                            {% if evenement['calendrier'] %}
-                                <p>
-                                    <strong>Catégorie :</strong>
-                                    {{ evenement['calendrier'] }}
-                                </p>
-                            {% endif %}
-
-                            {% if evenement['description'] %}
-                                <p>{{ evenement['description'] }}</p>
-                            {% endif %}
-
-                            {% if evenement['type_evenement'] == 'garde_partagee' %}
-                                <span class="event-tag">Garde partagée automatique</span>
-                            {% endif %}
-
-                        </div>
-
-                        {% if evenement['type_evenement'] != 'garde_partagee' %}
-
-                            <div class="event-actions">
-
-                                <details>
-                                    <summary>Modifier</summary>
-
-                                    <form method="POST"
-                                          action="{{ url_for('edit_event', event_id=evenement['id']) }}">
-
-                                        <label>Titre</label>
-                                        <input type="text" name="titre"
-                                               value="{{ evenement['titre'] }}" required>
-
-                                        <label>Description</label>
-                                        <textarea name="description" rows="2">{{ evenement['description'] or '' }}</textarea>
-
-                                        <label>Date</label>
-                                        <input type="date" name="date"
-                                               value="{{ evenement['date'] }}" required>
-
-                                        <label>Heure</label>
-                                        <input type="time" name="heure"
-                                               value="{{ evenement['heure'] or '' }}">
-
-                                        <button type="submit" class="calendar-button">
-                                            Enregistrer
-                                        </button>
-                                    </form>
-                                </details>
-
-                                <form method="POST"
-                                      action="{{ url_for('delete_event', event_id=evenement['id']) }}"
-                                      onsubmit="return confirm('Supprimer cet événement ?');">
-
-                                    <button type="submit" class="calendar-delete">
-                                        Supprimer
-                                    </button>
-                                </form>
-
-                            </div>
-
-                        {% endif %}
-
-                    </article>
-
-                {% endfor %}
-
-            </div>
-
-        {% else %}
-
-            <p>Aucun événement pour le moment.</p>
-
-        {% endif %}
+        <h2>Événements de l'agenda <span id="events-agenda-label">PERSO</span></h2>
+        <div id="agenda-events-list">
+            {% for evenement in evenements_perso %}
+            <article class="event-item agenda-event" data-agenda="perso" data-date="{{ evenement['date'] }}">
+                <span class="event-color" style="background:{{ evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b' }}"></span>
+                <div class="event-details">
+                    <h3>{{ evenement['titre'] }}</h3>
+                    <p><strong>Date :</strong> {{ evenement['date'] }}{% if evenement['heure'] %} à {{ evenement['heure'] }}{% endif %}</p>
+                    {% if evenement['prenom'] %}<p><strong>Membre :</strong> {{ evenement['prenom'] }} {{ evenement['nom'] }}</p>{% endif %}
+                    {% if evenement['description'] %}<p>{{ evenement['description'] }}</p>{% endif %}
+                </div>
+                {% if evenement['type_evenement'] != 'garde_partagee' %}
+                <div class="event-actions">
+                    <details>
+                        <summary>Modifier</summary>
+                        <form method="POST" action="{{ url_for('edit_event', event_id=evenement['id']) }}">
+                            <label>Titre</label><input type="text" name="titre" value="{{ evenement['titre'] }}" required>
+                            <label>Description</label><textarea name="description" rows="2">{{ evenement['description'] or '' }}</textarea>
+                            <label>Date</label><input type="date" name="date" value="{{ evenement['date'] }}" required>
+                            <label>Heure</label><input type="time" name="heure" value="{{ evenement['heure'] or '' }}">
+                            <button type="submit" class="calendar-button">Enregistrer</button>
+                        </form>
+                    </details>
+                    <form method="POST" action="{{ url_for('delete_event', event_id=evenement['id']) }}" onsubmit="return confirm('Supprimer cet événement ?');">
+                        <button type="submit" class="calendar-delete">Supprimer</button>
+                    </form>
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+            {% for evenement in evenements_pro %}
+            <article class="event-item agenda-event" data-agenda="pro" data-date="{{ evenement['date'] }}" hidden>
+                <span class="event-color" style="background:{{ evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9' }}"></span>
+                <div class="event-details">
+                    <h3>{{ evenement['titre'] }}</h3>
+                    <p><strong>Date :</strong> {{ evenement['date'] }}{% if evenement['heure'] %} à {{ evenement['heure'] }}{% endif %}</p>
+                    {% if evenement['prenom'] %}<p><strong>Membre :</strong> {{ evenement['prenom'] }} {{ evenement['nom'] }}</p>{% endif %}
+                    {% if evenement['description'] %}<p>{{ evenement['description'] }}</p>{% endif %}
+                </div>
+                {% if evenement['type_evenement'] != 'garde_partagee' %}
+                <div class="event-actions">
+                    <details>
+                        <summary>Modifier</summary>
+                        <form method="POST" action="{{ url_for('edit_event', event_id=evenement['id']) }}">
+                            <label>Titre</label><input type="text" name="titre" value="{{ evenement['titre'] }}" required>
+                            <label>Description</label><textarea name="description" rows="2">{{ evenement['description'] or '' }}</textarea>
+                            <label>Date</label><input type="date" name="date" value="{{ evenement['date'] }}" required>
+                            <label>Heure</label><input type="time" name="heure" value="{{ evenement['heure'] or '' }}">
+                            <button type="submit" class="calendar-button">Enregistrer</button>
+                        </form>
+                    </details>
+                    <form method="POST" action="{{ url_for('delete_event', event_id=evenement['id']) }}" onsubmit="return confirm('Supprimer cet événement ?');">
+                        <button type="submit" class="calendar-delete">Supprimer</button>
+                    </form>
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+            <p id="no-agenda-events" {% if evenements_perso or evenements_pro %}hidden{% endif %}>Aucun événement dans cet agenda pour le moment.</p>
+        </div>
     </section>
-
 </div>
 
 <style>
-.calendar-page {
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: 25px 15px;
-}
-
-.calendar-header {
-    margin-bottom: 25px;
-}
-
-.calendar-card {
-    background: var(--bleu-fonce, #17324d);
-    color: white;
-    padding: 25px;
-    border-radius: 12px;
-    margin-bottom: 22px;
-}
-
-.calendar-card h2,
-.calendar-card h3,
-.calendar-card p,
-.calendar-card label {
-    color: white;
-}
-
-.calendar-form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    margin: 20px 0;
-}
-
-.calendar-form-grid label,
-.calendar-description label {
-    display: block;
-    margin-bottom: 7px;
-}
-
-.calendar-form-grid input,
-.calendar-form-grid select,
-.calendar-description textarea,
-.event-actions input,
-.event-actions textarea {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 11px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    margin-bottom: 12px;
-}
-
-.calendar-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 15px 0;
-}
-
-.calendar-checkbox input {
-    width: auto;
-}
-
-.calendar-button {
-    display: inline-block;
-    background: #c5a15b;
-    color: #172b40;
-    padding: 12px 20px;
-    border: none;
-    border-radius: 7px;
-    text-decoration: none;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.calendar-button:hover {
-    background: #dfbd78;
-}
-
-.event-item {
-    padding: 18px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.2);
-}
-
-.event-item:last-child {
-    border-bottom: none;
-}
-
-.event-item h3 {
-    margin-top: 0;
-}
-
-.event-tag {
-    display: inline-block;
-    color: #dfbd78;
-    font-size: 13px;
-    margin-top: 5px;
-}
-
-.event-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 15px;
-    margin-top: 12px;
-}
-
-.event-actions details {
-    flex: 1;
-    min-width: 200px;
-}
-
-.event-actions summary {
-    cursor: pointer;
-    color: #dfbd78;
-    margin-bottom: 12px;
-}
-
-.event-actions form {
-    margin-top: 10px;
-}
-
-.calendar-delete {
-    background: #a94442;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: 10px 15px;
-    cursor: pointer;
-}
-
-@media (max-width: 600px) {
-    .calendar-page {
-        padding: 15px 10px;
-    }
-
-    .calendar-card {
-        padding: 18px;
-    }
-
-    .calendar-form-grid {
-        grid-template-columns: 1fr;
-    }
+.calendar-page { max-width:1000px; margin:0 auto; padding:25px 15px; }
+.calendar-header { margin-bottom:25px; display:flex; justify-content:space-between; align-items:center; gap:15px; }
+.calendar-card, .calendar-view-card { background:var(--bleu-fonce,#17324d); color:white; padding:25px; border-radius:12px; margin-bottom:22px; }
+.calendar-card h2,.calendar-card h3,.calendar-card p,.calendar-card label,.calendar-view-card h2 { color:white; }
+.calendar-button { display:inline-block; background:#c5a15b; color:#172b40; padding:12px 20px; border:0; border-radius:7px; text-decoration:none; font-weight:bold; cursor:pointer; }
+.calendar-button:hover { background:#dfbd78; }
+.calendar-small { padding:8px 13px; }
+.calendar-switcher { display:flex; gap:12px; margin:0 0 18px; }
+.agenda-tab { flex:1; border:2px solid #d94f9b; border-radius:10px; padding:15px; font-weight:bold; cursor:pointer; background:#d94f9b; color:white; }
+.agenda-tab[data-agenda="pro"] { background:#4f8fc9; border-color:#d94f9b; }
+.agenda-tab.active { outline:3px solid #c5a15b; outline-offset:2px; }
+.calendar-view-card { background:#d94f9b; }
+.calendar-view-card.pro-mode { background:#4f8fc9; }
+.calendar-toolbar,.calendar-toolbar-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.calendar-toolbar { justify-content:space-between; margin-bottom:18px; }
+.calendar-toolbar h2 { margin:0; }
+.view-picker { display:flex; align-items:center; gap:8px; color:white; }
+.view-picker select { padding:8px; border-radius:6px; border:1px solid #ccc; }
+.calendar-weekdays,.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+.calendar-weekdays span { text-align:center; font-weight:bold; padding:8px 2px; color:white; }
+.calendar-day { min-height:88px; background:rgba(255,255,255,.94); color:#17324d; border-radius:6px; padding:7px; overflow:hidden; }
+.calendar-day.outside { opacity:.48; }
+.calendar-day.today { outline:3px solid #c5a15b; }
+.calendar-day-number { font-weight:bold; margin-bottom:5px; }
+.calendar-day-event { display:block; font-size:12px; line-height:1.3; color:white; padding:3px 5px; margin:3px 0; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.calendar-legend { display:flex; gap:16px; flex-wrap:wrap; margin:14px 0 0; }
+.calendar-legend span { display:flex; align-items:center; gap:6px; color:white; }
+.legend-dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+.calendar-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
+.calendar-form-grid label,.calendar-description label { display:block; margin-bottom:7px; }
+.calendar-form-grid input,.calendar-form-grid select,.calendar-description textarea,.event-actions input,.event-actions textarea,.event-actions select { width:100%; box-sizing:border-box; padding:11px; border:1px solid #ccc; border-radius:6px; margin-bottom:12px; }
+.calendar-checkbox { display:flex; align-items:center; gap:10px; margin:15px 0; }
+.calendar-checkbox input { width:auto; }
+.voice-command { background:rgba(255,255,255,.88); color:#17324d; padding:14px; border-radius:8px; margin-bottom:16px; }
+.voice-command h3,.voice-command p { color:#17324d; }
+.event-item { display:flex; gap:13px; align-items:flex-start; padding:18px 0; border-bottom:1px solid rgba(255,255,255,.2); }
+.event-item:last-child { border-bottom:none; }
+.event-color { flex:0 0 10px; width:10px; min-height:55px; border-radius:6px; }
+.event-details { flex:1; min-width:0; }
+.event-item h3 { margin-top:0; }
+.event-actions { display:flex; flex-wrap:wrap; align-items:flex-start; gap:15px; margin-top:12px; }
+.event-actions details { flex:1; min-width:150px; }
+.event-actions summary { cursor:pointer; color:#dfbd78; margin-bottom:12px; }
+.event-actions form { margin-top:10px; }
+.calendar-delete { background:#a94442; color:white; border:0; border-radius:6px; padding:10px 15px; cursor:pointer; }
+.calendar-messages { margin-bottom:15px; }
+@media(max-width:650px) {
+ .calendar-page { padding:15px 10px; }
+ .calendar-card,.calendar-view-card { padding:18px; }
+ .calendar-form-grid { grid-template-columns:1fr; }
+ .calendar-day { min-height:65px; padding:4px; }
+ .calendar-day-event { font-size:10px; }
+ .calendar-toolbar { align-items:flex-start; }
+ .event-item { flex-wrap:wrap; }
+ .event-actions { width:100%; }
 }
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    const events = [
+        {% for evenement in evenements_perso %}
+        {date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
+        {% endfor %}
+        {% for evenement in evenements_pro %}
+        {date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
+        {% endfor %}
+    ];
+    const grid = document.getElementById("calendar-grid");
+    const title = document.getElementById("calendar-period-title");
+    const viewSelect = document.getElementById("calendar-view");
+    const tabs = document.querySelectorAll(".agenda-tab");
+    const viewCard = document.getElementById("calendar-view-card");
+    const eventCards = document.querySelectorAll(".agenda-event");
+    const eventLabel = document.getElementById("events-agenda-label");
+    const noEvents = document.getElementById("no-agenda-events");
+    let activeAgenda = "perso";
+    let current = new Date();
+    current.setHours(12,0,0,0);
+
+    function ymd(d) {
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    }
+    function monday(d) {
+        const x = new Date(d); x.setDate(x.getDate() - ((x.getDay()+6)%7)); x.setHours(12,0,0,0); return x;
+    }
+    function render() {
+        const mode = viewSelect.value;
+        let start, count, heading;
+        if (mode === "month") {
+            start = monday(new Date(current.getFullYear(), current.getMonth(), 1));
+            const end = new Date(current.getFullYear(), current.getMonth()+1, 0);
+            count = Math.ceil(((end - start)/86400000 + 1)/7)*7;
+            heading = current.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+        } else if (mode === "week") {
+            start = monday(current); count = 7;
+            heading = `Semaine du ${start.toLocaleDateString("fr-FR")}`;
+        } else {
+            start = new Date(current); count = 1;
+            heading = current.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+        }
+        title.textContent = heading.charAt(0).toUpperCase()+heading.slice(1);
+        document.getElementById("calendar-weekdays").style.display = mode === "day" ? "none" : "grid";
+        grid.style.gridTemplateColumns = mode === "day" ? "1fr" : "repeat(7,minmax(0,1fr))";
+        grid.innerHTML = "";
+        for (let i=0;i<count;i++) {
+            const day = new Date(start); day.setDate(start.getDate()+i);
+            const key = ymd(day);
+            const cell = document.createElement("div");
+            cell.className = "calendar-day";
+            if (mode === "month" && day.getMonth() !== current.getMonth()) cell.classList.add("outside");
+            if (key === ymd(new Date())) cell.classList.add("today");
+            const number = document.createElement("div"); number.className="calendar-day-number"; number.textContent=day.getDate(); cell.appendChild(number);
+            events.filter(e=>e.agenda===activeAgenda && e.date===key).sort((a,b)=>(a.time||"").localeCompare(b.time||"")).forEach(e=>{
+                const item=document.createElement("span"); item.className="calendar-day-event"; item.style.background=e.color; item.textContent=(e.time ? e.time+" " : "")+e.title; item.title=e.title; cell.appendChild(item);
+            });
+            grid.appendChild(cell);
+        }
+        eventCards.forEach(card => card.hidden = card.dataset.agenda !== activeAgenda);
+        const hasEvents = Array.from(eventCards).some(card=>card.dataset.agenda===activeAgenda);
+        noEvents.hidden = hasEvents;
+        eventLabel.textContent = activeAgenda.toUpperCase();
+        viewCard.classList.toggle("pro-mode",activeAgenda==="pro");
+        document.querySelectorAll(".agenda-tab").forEach(tab=>tab.classList.toggle("active",tab.dataset.agenda===activeAgenda));
+        const agendaSelect=document.getElementById("type_agenda");
+        if (agendaSelect) agendaSelect.value=activeAgenda;
+    }
+    tabs.forEach(tab=>tab.addEventListener("click",()=>{activeAgenda=tab.dataset.agenda;render();}));
+    viewSelect.addEventListener("change",render);
+    document.getElementById("calendar-prev").addEventListener("click",()=>{const mode=viewSelect.value;if(mode==="month")current=new Date(current.getFullYear(),current.getMonth()-1,1,12);else current.setDate(current.getDate()-(mode==="week"?7:1));render();});
+    document.getElementById("calendar-next").addEventListener("click",()=>{const mode=viewSelect.value;if(mode==="month")current=new Date(current.getFullYear(),current.getMonth()+1,1,12);else current.setDate(current.getDate()+(mode==="week"?7:1));render();});
+    document.getElementById("calendar-today").addEventListener("click",()=>{current=new Date();current.setHours(12,0,0,0);render();});
+    render();
+
     const button = document.getElementById("voice-button");
     const status = document.getElementById("voice-status");
     const transcript = document.getElementById("voice-transcript");
-
     const titre = document.getElementById("titre");
     const date = document.getElementById("date");
     const heure = document.getElementById("heure");
-
-    const SpeechRecognition =
-        window.SpeechRecognition || window.webkitSpeechRecognition;
-
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!button || !status || !transcript) return;
-
     if (!SpeechRecognition) {
         button.disabled = true;
         status.textContent = "La reconnaissance vocale nécessite Chrome ou Edge à jour.";
         return;
     }
-
     const recognition = new SpeechRecognition();
-    recognition.lang = "fr-FR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    button.addEventListener("click", function () {
-        transcript.textContent = "";
-        status.textContent = "Je vous écoute...";
-        recognition.start();
-    });
-
-    recognition.onresult = function (event) {
-        const phrase = event.results[0][0].transcript.trim();
-        transcript.textContent = "Vous avez dit : " + phrase;
-
-        let texte = phrase.toLowerCase();
-        const maintenant = new Date();
-
-        let dateTrouvee = null;
-
-        if (texte.includes("après-demain") || texte.includes("apres-demain")) {
-            maintenant.setDate(maintenant.getDate() + 2);
-            dateTrouvee = true;
-            texte = texte.replace(/après-demain|apres-demain/, "");
-        } else if (texte.includes("demain")) {
-            maintenant.setDate(maintenant.getDate() + 1);
-            dateTrouvee = true;
-            texte = texte.replace("demain", "");
-        } else if (texte.includes("aujourd'hui") || texte.includes("aujourd’hui")) {
-            dateTrouvee = true;
-            texte = texte.replace(/aujourd'hui|aujourd’hui/, "");
-        }
-
-        const dateNumerique = texte.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/);
-
-        if (dateNumerique) {
-            const jour = dateNumerique[1].padStart(2, "0");
-            const mois = dateNumerique[2].padStart(2, "0");
-            const annee = dateNumerique[3] || maintenant.getFullYear();
-            date.value = `${annee}-${mois}-${jour}`;
-            texte = texte.replace(dateNumerique[0], "");
-        } else if (dateTrouvee) {
-            date.value = maintenant.toISOString().slice(0, 10);
-        }
-
-        const heureTrouvee = texte.match(/\b(\d{1,2})\s*(?:h|heures?)(?:\s*(\d{1,2}))?\b|\b(\d{1,2}):(\d{2})\b/);
-
-        if (heureTrouvee) {
-            const h = heureTrouvee[1] || heureTrouvee[3];
-            const m = heureTrouvee[2] || heureTrouvee[4] || "00";
-            heure.value = `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
-            texte = texte.replace(heureTrouvee[0], "");
-        }
-
-        texte = texte.replace(
-            /\b(rendez-vous|rdv|prévois|prevois|planifie|ajoute|ajouter|crée|cree|un|une|le|la|pour)\b/gi,
-            ""
-        ).replace(/\s+/g, " ").trim();
-
-        if (texte && titre) {
-            titre.value = texte.charAt(0).toUpperCase() + texte.slice(1);
-        }
-
-        status.textContent = "Champs remplis. Vérifiez les informations avant d'ajouter l'événement.";
+    recognition.lang="fr-FR"; recognition.continuous=false; recognition.interimResults=false; recognition.maxAlternatives=1;
+    button.addEventListener("click",function(){transcript.textContent="";status.textContent="Je vous écoute...";button.disabled=true;recognition.start();});
+    recognition.onresult=function(event){
+        const phrase=event.results[0][0].transcript.trim(); transcript.textContent="Vous avez dit : "+phrase;
+        let texte=phrase.toLowerCase(); const maintenant=new Date(); let dateTrouvee=false;
+        if(texte.includes("après-demain")||texte.includes("apres-demain")){maintenant.setDate(maintenant.getDate()+2);dateTrouvee=true;texte=texte.replace(/après-demain|apres-demain/,"");}
+        else if(texte.includes("demain")){maintenant.setDate(maintenant.getDate()+1);dateTrouvee=true;texte=texte.replace("demain","");}
+        else if(texte.includes("aujourd'hui")||texte.includes("aujourd’hui")){dateTrouvee=true;texte=texte.replace(/aujourd'hui|aujourd’hui/,"");}
+        const dm=texte.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/);
+        if(dm){date.value=`${dm[3]||maintenant.getFullYear()}-${dm[2].padStart(2,"0")}-${dm[1].padStart(2,"0")}`;texte=texte.replace(dm[0],"");}
+        else if(dateTrouvee){date.value=ymd(maintenant);}
+        const hm=texte.match(/\b(\d{1,2})\s*(?:h|heures?)(?:\s*(\d{1,2}))?\b|\b(\d{1,2}):(\d{2})\b/);
+        if(hm){const h=hm[1]||hm[3],m=hm[2]||hm[4]||"00";heure.value=`${h.padStart(2,"0")}:${m}`;texte=texte.replace(hm[0],"");}
+        texte=texte.replace(/\b(rendez-vous|rdv|prévois|prevois|planifie|ajoute|ajouter|crée|cree|un|une|le|la|pour)\b/gi,"").replace(/\s+/g," ").trim();
+        if(texte&&titre)titre.value=texte.charAt(0).toUpperCase()+texte.slice(1);
+        status.textContent="Champs remplis. Vérifiez les informations avant d'ajouter l'événement.";
     };
-
-    recognition.onerror = function (event) {
-        status.textContent = event.error === "not-allowed"
-            ? "Autorisez l'accès au microphone dans votre navigateur."
-            : "Je n'ai pas réussi à comprendre. Vous pouvez réessayer.";
-    };
-
-    recognition.onend = function () {
-        button.disabled = false;
-    };
-
-    button.addEventListener("click", function () {
-        button.disabled = true;
-    });
+    recognition.onerror=function(event){status.textContent=event.error==="not-allowed"?"Autorisez l'accès au microphone dans votre navigateur.":"Je n'ai pas réussi à comprendre. Vous pouvez réessayer.";};
+    recognition.onend=function(){button.disabled=false;};
 });
 </script>
-
 {% endblock %}
-
