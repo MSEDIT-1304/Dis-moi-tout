@@ -57,10 +57,16 @@ GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 
-GOOGLE_REDIRECT_URI = os.environ.get(
-    "GOOGLE_REDIRECT_URI",
-    "http://127.0.0.1:5000/google/callback"
-)
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "").strip()
+
+
+def get_google_redirect_uri():
+    """Utilise l'URI Render configurée, ou construit l'URL publique courante."""
+    if GOOGLE_REDIRECT_URI:
+        return GOOGLE_REDIRECT_URI
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
+    host = request.headers.get("X-Forwarded-Host", request.host).split(",")[0].strip()
+    return f"{scheme}://{host}{url_for('google_callback')}"
 
 
 # ==========================================================
@@ -1091,6 +1097,39 @@ def init_database():
         )
         """
     )
+
+    # Connexions Google séparées par utilisateur. L'ancienne table familiale
+    # est conservée intacte pour ne perdre aucun token déjà enregistré.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS google_connections_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            owner_type TEXT NOT NULL CHECK(owner_type IN ('admin', 'membre')),
+            owner_id INTEGER NOT NULL,
+            google_email TEXT,
+            access_token TEXT,
+            refresh_token TEXT,
+            expires_at TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(owner_type, owner_id)
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_google_connections_family
+        ON google_connections_users(famille_id)
+    """)
+    # Migration non destructive : l'ancienne connexion familiale devient
+    # la connexion de l'administrateur de cette famille.
+    cursor.execute("""
+        INSERT OR IGNORE INTO google_connections_users
+            (famille_id, owner_type, owner_id, google_email,
+             access_token, refresh_token, expires_at, created_at)
+        SELECT f.id, 'admin', f.admin_id, g.google_email,
+               g.access_token, g.refresh_token, g.expires_at, g.created_at
+        FROM google_connections g
+        JOIN famille f ON f.id = g.famille_id
+        WHERE f.admin_id IS NOT NULL
+    """)
     # ======================================================
     # COMPATIBILITÉ AVEC UNE BASE EXISTANTE
     # ======================================================
@@ -1259,6 +1298,9 @@ def init_database():
         AND created_by_membre_id IS NULL
         """
     )
+
+    conn.commit()
+    conn.close()
 
 # ==========================================================
 # INITIALISATION DE LA BASE
@@ -1573,10 +1615,15 @@ def create_shared_custody_events(
                     heure,
                     calendrier,
                     rappel,
-                    type_evenement
+                    type_evenement,
+                    created_by_admin_id,
+                    statut_validation,
+                    valide_par_admin_id,
+                    concerne_admin,
+                    type_agenda
                 )
                 VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     famille_id,
@@ -1585,9 +1632,14 @@ def create_shared_custody_events(
                     "Garde chez l'autre personne",
                     date_str,
                     "",
-                    "Famille",
+                    "Agenda personnel",
                     1,
-                    "garde_partagee"
+                    "garde_partagee",
+                    get_family_admin(famille_id),
+                    "accepte",
+                    get_family_admin(famille_id),
+                    1,
+                    "admin_perso"
                 )
             )
 
@@ -2101,24 +2153,6 @@ def member_dashboard():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
-        SELECT mode_confidentialite
-        FROM famille
-        WHERE id = ?
-        """,
-        (membre["famille_id"],)
-    )
-
-    famille_confidentialite = cursor.fetchone()
-
-    mode_confidentialite = (
-        famille_confidentialite["mode_confidentialite"]
-        if famille_confidentialite
-        and famille_confidentialite["mode_confidentialite"]
-        else "private"
-    )
-
     autorise_admin_pro = (
         membre["role"] in ("conjoint", "ex-conjoint")
         and membre["acces_agenda_admin_pro"] == 1
@@ -2158,15 +2192,8 @@ def member_dashboard():
 
             continue
 
+        # Un membre voit uniquement les événements de son propre agenda.
         if evenement["membre_id"] == membre_id:
-            evenements.append(evenement)
-            continue
-
-        if evenement["calendrier"] == "Famille":
-            evenements.append(evenement)
-            continue
-
-        if mode_confidentialite == "open":
             evenements.append(evenement)
 
     conn.close()
@@ -2309,6 +2336,10 @@ def add_event():
 
     destinataire_id = None
 
+    # Par défaut, un membre ajoute l'événement dans son propre agenda.
+    if not admin_logged:
+        destinataire_id = auteur_membre_id
+
     if membre_id_form:
 
         try:
@@ -2404,6 +2435,11 @@ def add_event():
 
     type_agenda = f"{proprietaire}_{choix_agenda}"
 
+    # Une création de l'administrateur sans destinataire membre
+    # appartient à son propre agenda.
+    if admin_logged and destinataire_id is None:
+        concerne_admin = True
+
     
     # ENREGISTREMENT
     cursor.execute(
@@ -2458,134 +2494,7 @@ def add_event():
         flash("Événement ajouté.")
 
     return redirect(url_for("calendar"))
-    
-    # ------------------------------------------------------
-    # DÉTERMINER LE DESTINATAIRE
-    # ------------------------------------------------------
 
-    destinataire_id = None
-
-    if membre_id_form:
-
-        try:
-            destinataire_id = int(membre_id_form)
-        except ValueError:
-            conn.close()
-            flash("Membre destinataire invalide.")
-            return redirect(url_for("calendar"))
-
-        cursor.execute(
-            """
-            SELECT id
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
-            (destinataire_id, famille_id)
-        )
-
-        if cursor.fetchone() is None:
-            conn.close()
-            flash("Ce membre n'appartient pas à votre famille.")
-            return redirect(url_for("calendar"))
-
-    # ------------------------------------------------------
-    # IDENTIFIER LE CRÉATEUR ET LE STATUT
-    # ------------------------------------------------------
-
-    created_by_admin_id = admin_id if admin_logged else None
-    created_by_membre_id = None if admin_logged else auteur_membre_id
-
-    statut_validation = "accepte"
-    valide_par_admin_id = None
-    valide_par_membre_id = None
-
-    # Un administrateur valide directement ses propres créations.
-    if admin_logged:
-        statut_validation = "accepte"
-        valide_par_admin_id = admin_id
-
-    # Un membre crée son propre rendez-vous.
-    elif destinataire_id == auteur_membre_id and not concerne_admin:
-        statut_validation = "accepte"
-        valide_par_membre_id = auteur_membre_id
-
-    # Toute proposition destinée à une autre personne
-    # reste en attente de validation.
-    else:
-        statut_validation = "en_attente"
-
-    # ------------------------------------------------------
-    # RENDEZ-VOUS DESTINÉ À L'ADMINISTRATEUR
-    # ------------------------------------------------------
-
-    if concerne_admin:
-
-        if admin_logged:
-            conn.close()
-            flash("Vous ne pouvez pas créer une proposition destinée à votre propre agenda.")
-            return redirect(url_for("calendar"))
-
-        # L'accès à l'agenda administrateur ne donne pas
-        # automatiquement le droit d'y ajouter un rendez-vous.
-        statut_validation = "en_attente"
-        destinataire_id = None
-
-    # ------------------------------------------------------
-    # ENREGISTREMENT
-    # ------------------------------------------------------
-
-    cursor.execute(
-        """
-        INSERT INTO evenements
-        (
-            famille_id,
-            membre_id,
-            titre,
-            description,
-            date,
-            heure,
-            calendrier,
-            rappel,
-            type_evenement,
-            created_by_admin_id,
-            created_by_membre_id,
-            statut_validation,
-            valide_par_admin_id,
-            valide_par_membre_id,
-            concerne_admin
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            famille_id,
-            destinataire_id,
-            titre,
-            description,
-            date,
-            heure,
-            calendrier,
-            rappel,
-            "normal",
-            created_by_admin_id,
-            created_by_membre_id,
-            statut_validation,
-            valide_par_admin_id,
-            valide_par_membre_id,
-            1 if concerne_admin else 0
-        )
-    )
-
-    conn.commit()
-    conn.close()
-
-    if statut_validation == "en_attente":
-        flash("Votre proposition de rendez-vous a été envoyée pour validation.")
-    else:
-        flash("Événement ajouté.")
-
-    return redirect(url_for("calendar"))
-    
 # ==========================================================
 # MODIFICATION D'UN ÉVÉNEMENT
 # ==========================================================
@@ -3026,9 +2935,24 @@ def calendar():
 
     for evenement in tous_evenements:
 
-        # L'administrateur consulte son propre agenda
+        # L'administrateur consulte son propre agenda.
         if admin_logged and evenement["concerne_admin"] == 1:
             evenements.append(evenement)
+            continue
+
+        # Un conjoint/ex-conjoint ne voit que les agendas administrateur
+        # qu'il a explicitement autorisés.
+        if not admin_logged and evenement["concerne_admin"] == 1:
+            if (
+                evenement["type_agenda"] == "admin_pro"
+                and membre["role"] in ("conjoint", "ex-conjoint")
+                and membre["acces_agenda_admin_pro"] == 1
+            ) or (
+                evenement["type_agenda"] == "admin_perso"
+                and membre["role"] in ("conjoint", "ex-conjoint")
+                and membre["acces_agenda_admin_perso"] == 1
+            ):
+                evenements.append(evenement)
             continue
 
         # Événement placé dans l'agenda d'un membre
@@ -3342,6 +3266,16 @@ def settings():
     )
 
 # ==========================================================
+# IDENTITÉ DU PROPRIÉTAIRE DE LA CONNEXION GOOGLE
+# ==========================================================
+
+def get_calendar_owner():
+    if session.get("admin_logged") is True:
+        return "admin", session.get("admin_id")
+    return "membre", session.get("membre_id")
+
+
+# ==========================================================
 # VÉRIFICATION ACCÈS CALENDRIER
 # ==========================================================
 
@@ -3407,20 +3341,35 @@ def google_connect():
         return redirect(url_for("home"))
 
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        flash("La connexion Google n'est pas encore configurée.")
+        flash("La connexion Google n'est pas configurée dans Render.")
+        return redirect(url_for("calendar_import"))
+
+    redirect_uri = get_google_redirect_uri()
+    owner_type, owner_id = get_calendar_owner()
+    if not owner_id:
+        flash("Impossible d'identifier le propriétaire de cet agenda.")
         return redirect(url_for("calendar_import"))
 
     state = secrets.token_urlsafe(32)
-
     session["google_oauth_state"] = state
+    session["google_oauth_owner_type"] = owner_type
+    session["google_oauth_owner_id"] = int(owner_id)
+    session["google_oauth_family_id"] = int(session["famille_id"])
+    session["google_oauth_redirect_uri"] = redirect_uri
 
-    auth_url = get_google_auth_url(
-        GOOGLE_CLIENT_ID,
-        GOOGLE_REDIRECT_URI,
-        state
-    )
+    try:
+        auth_url = get_google_auth_url(
+            GOOGLE_CLIENT_ID,
+            redirect_uri,
+            state
+        )
+    except Exception:
+        app.logger.exception("Erreur création URL OAuth Google")
+        flash("Impossible de démarrer la connexion Google.")
+        return redirect(url_for("calendar_import"))
 
     return redirect(auth_url)
+
 
 # ==========================================================
 # RETOUR APRÈS AUTORISATION GOOGLE
@@ -3429,60 +3378,81 @@ def google_connect():
 @app.route("/google/callback")
 def google_callback():
 
+    # Google peut retourner une erreur avant même de fournir un code.
+    google_error = request.args.get("error")
+    if google_error:
+        session.pop("google_oauth_state", None)
+        flash(f"Google a refusé la connexion : {google_error}")
+        return redirect(url_for("calendar_import"))
+
     if not calendar_access_required():
         return redirect(url_for("home"))
 
     state = request.args.get("state", "")
     saved_state = session.pop("google_oauth_state", "")
 
-    if not state or not saved_state:
-        flash("Connexion Google invalide. Veuillez recommencer.")
+    if not state or not saved_state or not secrets.compare_digest(state, saved_state):
+        flash("Vérification de sécurité Google échouée. Recommencez la connexion.")
         return redirect(url_for("calendar_import"))
 
-    if not secrets.compare_digest(state, saved_state):
-        flash("Vérification de sécurité Google échouée.")
+    owner_type = session.pop("google_oauth_owner_type", None)
+    owner_id = session.pop("google_oauth_owner_id", None)
+    oauth_family_id = session.pop("google_oauth_family_id", None)
+    redirect_uri = session.pop("google_oauth_redirect_uri", None)
+
+    current_owner_type, current_owner_id = get_calendar_owner()
+    if (
+        owner_type != current_owner_type
+        or not owner_id
+        or int(owner_id) != int(current_owner_id or 0)
+        or int(oauth_family_id or 0) != int(session.get("famille_id") or 0)
+    ):
+        flash("La session a changé pendant la connexion Google. Recommencez.")
         return redirect(url_for("calendar_import"))
 
     code = request.args.get("code")
-
     if not code:
-        flash("L'autorisation Google a été annulée ou refusée.")
+        flash("L'autorisation Google n'a pas fourni de code.")
         return redirect(url_for("calendar_import"))
 
-    token_data = get_google_token(
-        GOOGLE_CLIENT_ID,
-        GOOGLE_CLIENT_SECRET,
-        GOOGLE_REDIRECT_URI,
-        code
-    )
+    redirect_uri = redirect_uri or get_google_redirect_uri()
+
+    try:
+        token_data = get_google_token(
+            GOOGLE_CLIENT_ID,
+            GOOGLE_CLIENT_SECRET,
+            redirect_uri,
+            code
+        )
+    except Exception:
+        app.logger.exception("Échec échange du code OAuth Google")
+        flash("Erreur réseau lors de la récupération du jeton Google.")
+        return redirect(url_for("calendar_import"))
 
     if not token_data or not token_data.get("access_token"):
-        flash("Impossible de récupérer la connexion Google.")
+        detail = (token_data or {}).get("error_description") or (token_data or {}).get("error")
+        app.logger.error("Google OAuth token error: %s", detail or "réponse vide")
+        flash("Google n'a pas délivré de jeton. Vérifiez l'URI de redirection autorisée dans Google Cloud et dans Render.")
         return redirect(url_for("calendar_import"))
 
     access_token = token_data["access_token"]
     refresh_token = token_data.get("refresh_token")
 
     profil = get_google_profile(access_token)
-
     google_email = profil.get("email", "") if profil else ""
 
-    expires_at = datetime.now().timestamp() + int(
-        token_data.get("expires_in", 3600)
-    )
+    expires_at = datetime.now().timestamp() + int(token_data.get("expires_in", 3600))
 
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute(
         """
         SELECT refresh_token
-        FROM google_connections
-        WHERE famille_id = ?
+        FROM google_connections_users
+        WHERE owner_type = ? AND owner_id = ?
         """,
-        (session["famille_id"],)
+        (owner_type, owner_id)
     )
-
     ancienne_connexion = cursor.fetchone()
 
     if not refresh_token and ancienne_connexion:
@@ -3490,38 +3460,30 @@ def google_callback():
 
     cursor.execute(
         """
-        INSERT INTO google_connections
-        (
-            famille_id,
-            google_email,
-            access_token,
-            refresh_token,
-            expires_at
-        )
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(famille_id)
-        DO UPDATE SET
+        INSERT INTO google_connections_users
+            (famille_id, owner_type, owner_id, google_email,
+             access_token, refresh_token, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(owner_type, owner_id) DO UPDATE SET
+            famille_id = excluded.famille_id,
             google_email = excluded.google_email,
             access_token = excluded.access_token,
             refresh_token = excluded.refresh_token,
             expires_at = excluded.expires_at
         """,
         (
-            session["famille_id"],
-            google_email,
-            access_token,
-            refresh_token,
+            session["famille_id"], owner_type, owner_id, google_email,
+            access_token, refresh_token,
             datetime.fromtimestamp(expires_at).isoformat()
         )
     )
-
     conn.commit()
     conn.close()
 
     flash("Compte Google connecté avec succès.")
-
     return redirect(url_for("calendar_import"))
-    
+
+
 # ==========================================================
 # IMPORT CALENDRIER EXTERNE
 # ==========================================================
@@ -3534,29 +3496,34 @@ def calendar_import():
 
     if request.method == "POST":
         famille_id = session.get("famille_id")
-        membre_id = session.get("membre_id")
+        owner_type, owner_id = get_calendar_owner()
+
+        type_choisi = request.form.get("type_agenda", "perso").strip().lower()
+        if type_choisi not in ("pro", "perso"):
+            flash("Choisissez un agenda PRO ou PERSO.")
+            return redirect(url_for("calendar_import"))
+        type_agenda = f"{owner_type}_{type_choisi}"
 
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
             """
             SELECT google_email, access_token, refresh_token, expires_at
-            FROM google_connections
-            WHERE famille_id = ?
+            FROM google_connections_users
+            WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
             """,
-            (famille_id,)
+            (famille_id, owner_type, owner_id)
         )
         connection = cursor.fetchone()
         conn.close()
 
         if not connection:
-            flash("Connectez d'abord votre compte Google.")
-            return redirect(url_for("calendar_import"))
+            flash("Connectez d'abord votre propre compte Google.")
+            return redirect(url_for("google_connect"))
 
         access_token = connection["access_token"]
         refresh_token = connection["refresh_token"]
 
-        # Renouveler le token lorsqu'il expire dans moins de 2 minutes.
         try:
             expiration = datetime.fromisoformat(connection["expires_at"])
         except (TypeError, ValueError):
@@ -3567,32 +3534,35 @@ def calendar_import():
                 flash("La connexion Google doit être renouvelée. Reconnectez votre compte.")
                 return redirect(url_for("google_connect"))
 
-            refreshed = refresh_google_token(
-                GOOGLE_CLIENT_ID,
-                GOOGLE_CLIENT_SECRET,
-                refresh_token
-            )
+            try:
+                refreshed = refresh_google_token(
+                    GOOGLE_CLIENT_ID,
+                    GOOGLE_CLIENT_SECRET,
+                    refresh_token
+                )
+            except Exception:
+                app.logger.exception("Erreur renouvellement token Google")
+                refreshed = None
+
             if not refreshed or not refreshed.get("access_token"):
                 flash("Impossible de renouveler la connexion Google. Reconnectez votre compte.")
                 return redirect(url_for("google_connect"))
 
             access_token = refreshed["access_token"]
-            new_expiry = datetime.now().timestamp() + int(
-                refreshed.get("expires_in", 3600)
-            )
+            new_expiry = datetime.now().timestamp() + int(refreshed.get("expires_in", 3600))
 
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute(
                 """
-                UPDATE google_connections
+                UPDATE google_connections_users
                 SET access_token = ?, expires_at = ?
-                WHERE famille_id = ?
+                WHERE owner_type = ? AND owner_id = ? AND famille_id = ?
                 """,
                 (
                     access_token,
                     datetime.fromtimestamp(new_expiry).isoformat(),
-                    famille_id
+                    owner_type, owner_id, famille_id
                 )
             )
             conn.commit()
@@ -3601,6 +3571,7 @@ def calendar_import():
         try:
             calendars = get_google_calendars(access_token)
         except Exception as exc:
+            app.logger.exception("Impossible de récupérer les agendas Google")
             flash(f"Impossible de récupérer les agendas Google : {exc}")
             return redirect(url_for("calendar_import"))
 
@@ -3608,27 +3579,41 @@ def calendar_import():
             flash("Aucun agenda Google accessible n'a été trouvé.")
             return redirect(url_for("calendar_import"))
 
+        # Deux agendas maximum par import. Si le formulaire fournit des IDs,
+        # seuls ceux sélectionnés sont importés ; sinon les deux premiers.
+        selected_ids = (
+            request.form.getlist("calendar_ids")
+            or request.form.getlist("calendars")
+        )
+        if selected_ids:
+            calendars = [c for c in calendars if c.get("id") in selected_ids]
+        calendars = calendars[:2]
+
+        if not calendars:
+            flash("Sélectionnez au moins un agenda Google.")
+            return redirect(url_for("calendar_import"))
+
         total_imported = 0
         total_skipped = 0
         errors = []
 
-        for calendar in calendars:
-            calendar_id = calendar.get("id")
-            calendar_name = calendar.get("nom") or "Agenda Google"
+        for calendar_item in calendars:
+            calendar_id = calendar_item.get("id")
+            calendar_name = calendar_item.get("nom") or "Agenda Google"
             if not calendar_id:
                 continue
 
-            # Le suffixe d'identifiant évite les collisions entre agendas
-            # qui portent le même nom dans Google.
             source_name = f"Google | {calendar_name} [{calendar_id}]"
-
             try:
                 result = sync_google_calendar_by_id(
                     access_token=access_token,
                     calendar_id=calendar_id,
                     famille_id=famille_id,
-                    membre_id=membre_id,
-                    calendar_name=source_name
+                    membre_id=owner_id if owner_type == "membre" else None,
+                    calendar_name=source_name,
+                    type_agenda=type_agenda,
+                    created_by_admin_id=owner_id if owner_type == "admin" else None,
+                    created_by_membre_id=owner_id if owner_type == "membre" else None
                 )
                 if result.get("error"):
                     errors.append(f"{calendar_name}: {result['error']}")
@@ -3636,6 +3621,7 @@ def calendar_import():
                     total_imported += result.get("imported", 0)
                     total_skipped += result.get("skipped", 0)
             except Exception as exc:
+                app.logger.exception("Erreur import agenda Google %s", calendar_name)
                 errors.append(f"{calendar_name}: {exc}")
 
         if errors:
@@ -3649,7 +3635,7 @@ def calendar_import():
                 f"{total_skipped} déjà présent(s), sur {len(calendars)} agenda(s)."
             )
 
-        return redirect(url_for("calendar_import"))
+        return redirect(url_for("calendar"))
 
     return redirect(url_for("calendar"))
 
@@ -3671,22 +3657,35 @@ def apple_import():
         flash("Saisissez votre identifiant Apple et votre mot de passe spécifique d’application.")
         return redirect(url_for("calendar_import"))
 
+    type_choisi = request.form.get("type_agenda", "perso").strip().lower()
+    if type_choisi not in ("pro", "perso"):
+        flash("Choisissez un agenda PRO ou PERSO.")
+        return redirect(url_for("calendar_import"))
+
+    owner_type, owner_id = get_calendar_owner()
+    type_agenda = f"{owner_type}_{type_choisi}"
+
     try:
         result = sync_apple_calendar(
             username=apple_id,
             password=app_password,
             famille_id=session.get("famille_id"),
-            membre_id=session.get("membre_id"),
-            calendar_name="Apple Calendar"
+            membre_id=owner_id if owner_type == "membre" else None,
+            calendar_name="Apple Calendar",
+            type_agenda=type_agenda,
+            created_by_admin_id=owner_id if owner_type == "admin" else None,
+            created_by_membre_id=owner_id if owner_type == "membre" else None
         )
         flash(
             f"Import Apple terminé : {result.get('imported', 0)} événement(s) ajouté(s), "
             f"{result.get('skipped', 0)} déjà présent(s)."
         )
     except Exception as exc:
+        app.logger.exception("Échec import Apple Calendar")
         flash(f"Import Apple impossible : {exc}")
 
     return redirect(url_for("calendar_import"))
+
 
 # ==========================================================
 # REDIRECTION ADMIN APRÈS CONNEXION
