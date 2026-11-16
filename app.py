@@ -1793,7 +1793,7 @@ def create_member(
     conn = get_connection()
     cursor = conn.cursor()
 
-    autorise = role in ("conjoint", "ex-conjoint")
+    autorise = role == "conjoint"
 
     cursor.execute(
         """
@@ -1875,12 +1875,12 @@ def add_member():
     
     acces_agenda_admin_pro = (
         request.form.get("partage_agenda_pro") == "oui"
-        and role in ("conjoint", "ex-conjoint")
+        and role == "conjoint"
     )
 
     acces_agenda_admin_perso = (
         request.form.get("partage_agenda_perso") == "oui"
-        and role in ("conjoint", "ex-conjoint")
+        and role == "conjoint"
     )
 
     create_member(
@@ -2154,12 +2154,12 @@ def member_dashboard():
     cursor = conn.cursor()
 
     autorise_admin_pro = (
-        membre["role"] in ("conjoint", "ex-conjoint")
+        membre["role"] == "conjoint"
         and membre["acces_agenda_admin_pro"] == 1
     )
 
     autorise_admin_perso = (
-        membre["role"] in ("conjoint", "ex-conjoint")
+        membre["role"] == "conjoint"
         and membre["acces_agenda_admin_perso"] == 1
     )
 
@@ -2268,17 +2268,12 @@ def family():
 # AJOUT D'UN ÉVÉNEMENT
 # ==========================================================
 
-@app.route(
-    "/add_event",
-    methods=["POST"]
-)
+@app.route("/add_event", methods=["POST"])
 def add_event():
-
     if not session.get("logged"):
         return redirect(url_for("home"))
 
     famille_id = session.get("famille_id")
-
     if famille_id is None:
         flash("Famille introuvable.")
         return redirect(url_for("dashboard"))
@@ -2287,217 +2282,108 @@ def add_event():
     description = request.form.get("description", "").strip()
     date = request.form.get("date", "").strip()
     heure = request.form.get("heure", "").strip()
-    couleur_evenement = request.form.get("couleur_evenement", "#4f8fc9").strip()
-    couleurs_autorisees = {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}
-    if couleur_evenement not in couleurs_autorisees:
-        couleur_evenement = "#4f8fc9"
-    calendrier = couleur_evenement
-
+    couleur = request.form.get("couleur_evenement", "#4f8fc9").strip()
+    couleurs = {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}
+    if couleur not in couleurs:
+        couleur = "#4f8fc9"
     if not titre or not date:
         flash("Veuillez saisir un titre et une date.")
         return redirect(url_for("calendar"))
 
-    rappel = (
-        1 if request.form.get("rappel") == "oui" else 0
-    )
-
-    admin_logged = bool(session.get("admin_logged"))
+    rappel = 1 if request.form.get("rappel") == "oui" else 0
+    est_admin = session.get("admin_logged") is True
     admin_id = session.get("admin_id")
-    auteur_membre_id = session.get("membre_id")
-
-    membre_id_form = request.form.get("membre_id", "").strip()
-    concerne_admin = request.form.get("concerne_admin") == "oui"
+    membre_connecte_id = session.get("membre_id")
+    membre_form = request.form.get("membre_id", "").strip()
+    agenda = request.form.get("type_agenda", "perso").strip().lower()
+    if agenda not in ("pro", "perso"):
+        flash("Agenda invalide.")
+        return redirect(url_for("calendar"))
 
     conn = get_connection()
     cursor = conn.cursor()
+    destinataire_id = None
+    role_destinataire = None
 
-    role_auteur = None
-
-    if not admin_logged:
-
+    if est_admin:
+        if membre_form:
+            try:
+                destinataire_id = int(membre_form)
+            except ValueError:
+                conn.close()
+                flash("Membre destinataire invalide.")
+                return redirect(url_for("calendar"))
+            cursor.execute(
+                "SELECT id, role FROM membres WHERE id = ? AND famille_id = ?",
+                (destinataire_id, famille_id)
+            )
+            destinataire = cursor.fetchone()
+            if destinataire is None:
+                conn.close()
+                flash("Ce membre n'appartient pas à votre famille.")
+                return redirect(url_for("calendar"))
+            role_destinataire = (destinataire["role"] or "enfant").lower()
+            # L'administratrice peut uniquement déposer un rendez-vous
+            # dans le PERSO du conjoint, de l'ex-conjoint ou d'un enfant.
+            if agenda != "perso":
+                conn.close()
+                flash("L'administratrice peut ajouter des rendez-vous uniquement dans les agendas PERSO des membres.")
+                return redirect(url_for("calendar"))
+            proprietaire = "membre"
+            type_agenda = "membre_perso"
+            concerne_admin = 0
+        else:
+            proprietaire = "admin"
+            type_agenda = f"admin_{agenda}"
+            concerne_admin = 1
+    else:
         cursor.execute(
-            """
-            SELECT id, famille_id, role
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
-            (auteur_membre_id, famille_id)
+            "SELECT id, role FROM membres WHERE id = ? AND famille_id = ?",
+            (membre_connecte_id, famille_id)
         )
-
         auteur = cursor.fetchone()
-
         if auteur is None:
             conn.close()
             session.clear()
             return redirect(url_for("home"))
-
         role_auteur = (auteur["role"] or "enfant").lower()
-
-    # ------------------------------------------------------
-    # DÉTERMINER LE DESTINATAIRE
-    # ------------------------------------------------------
-
-    destinataire_id = None
-
-    # Par défaut, un membre ajoute l'événement dans son propre agenda.
-    if not admin_logged:
-        destinataire_id = auteur_membre_id
-
-    if membre_id_form:
-
-        try:
-            destinataire_id = int(membre_id_form)
-        except ValueError:
+        if role_auteur != "conjoint" and agenda == "pro":
             conn.close()
-            flash("Membre destinataire invalide.")
+            flash("Seul le conjoint actuel dispose d'un agenda PRO.")
             return redirect(url_for("calendar"))
-
-        cursor.execute(
-            """
-            SELECT id
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
-            (destinataire_id, famille_id)
-        )
-
-        if cursor.fetchone() is None:
-            conn.close()
-            flash("Ce membre n'appartient pas à votre famille.")
-            return redirect(url_for("calendar"))
-
-    # ------------------------------------------------------
-    # IDENTIFIER LE CRÉATEUR ET LE STATUT
-    # ------------------------------------------------------
-
-    created_by_admin_id = admin_id if admin_logged else None
-    created_by_membre_id = None if admin_logged else auteur_membre_id
-
-    statut_validation = "accepte"
-    valide_par_admin_id = None
-    valide_par_membre_id = None
-
-    # Les rendez-vous créés par l'administrateur
-    # sont acceptés directement.
-    if admin_logged:
-
-        statut_validation = "accepte"
-        valide_par_admin_id = admin_id
-
-    # Un membre crée son propre rendez-vous.
-    elif destinataire_id == auteur_membre_id and not concerne_admin:
-
-        statut_validation = "accepte"
-        valide_par_membre_id = auteur_membre_id
-
-    # Toute proposition destinée à une autre personne
-    # reste en attente de validation.
-    else:
-
-        statut_validation = "en_attente"
-
-    # ------------------------------------------------------
-    # RENDEZ-VOUS DESTINÉ À L'ADMINISTRATEUR
-    # ------------------------------------------------------
-
-    if concerne_admin:
-
-        destinataire_id = None
-
-        # Un rendez-vous créé par l'administrateur
-        # dans son propre agenda est accepté directement.
-        if admin_logged:
-
-            statut_validation = "accepte"
-            valide_par_admin_id = admin_id
-
-        # Une proposition faite par un membre à l'administrateur
-        # reste en attente de validation.
-        else:
-
-            statut_validation = "en_attente"
-            valide_par_admin_id = None
-            valide_par_membre_id = None
-            
-    # IDENTIFIER L'AGENDA : PRO OU PERSO
-
-    if concerne_admin or (
-        admin_logged and destinataire_id is None
-    ):
-        proprietaire = "admin"
-    else:
+        destinataire_id = membre_connecte_id
         proprietaire = "membre"
+        type_agenda = f"membre_{agenda}"
+        concerne_admin = 0
 
-    choix_agenda = request.form.get("type_agenda", "perso").strip().lower()
+    created_by_admin_id = admin_id if est_admin else None
+    created_by_membre_id = None if est_admin else membre_connecte_id
+    statut_validation = "accepte"
 
-    if choix_agenda not in ("pro", "perso"):
-        conn.close()
-        flash("Agenda invalide.")
-        return redirect(url_for("calendar"))
-
-    type_agenda = f"{proprietaire}_{choix_agenda}"
-
-    # Une création de l'administrateur sans destinataire membre
-    # appartient à son propre agenda.
-    if admin_logged and destinataire_id is None:
-        concerne_admin = True
-
-    
-    # ENREGISTREMENT
     cursor.execute(
         """
-        INSERT INTO evenements
-        (
-            famille_id,
-            membre_id,
-            titre,
-            description,
-            date,
-            heure,
-            calendrier,
-            rappel,
-            type_evenement,
-            created_by_admin_id,
-            created_by_membre_id,
-            statut_validation,
-            valide_par_admin_id,
-            valide_par_membre_id,
-            concerne_admin,
-            type_agenda
+        INSERT INTO evenements (
+            famille_id, membre_id, titre, description, date, heure,
+            calendrier, rappel, type_evenement, created_by_admin_id,
+            created_by_membre_id, statut_validation, valide_par_admin_id,
+            valide_par_membre_id, concerne_admin, type_agenda
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            famille_id,
-            destinataire_id,
-            titre,
-            description,
-            date,
-            heure,
-            calendrier,
-            rappel,
-            "normal",
-            created_by_admin_id,
-            created_by_membre_id,
-            statut_validation,
-            valide_par_admin_id,
-            valide_par_membre_id,
-            1 if concerne_admin else 0,
-            type_agenda
+            famille_id, destinataire_id, titre, description, date, heure,
+            couleur, rappel, "normal", created_by_admin_id,
+            created_by_membre_id, statut_validation,
+            admin_id if est_admin else None,
+            None if est_admin else membre_connecte_id,
+            concerne_admin, type_agenda
         )
     )
-   
     conn.commit()
     conn.close()
-
-    if statut_validation == "en_attente":
-        flash("Votre proposition de rendez-vous a été envoyée pour validation.")
-    else:
-        flash("Événement ajouté.")
-
+    flash("Événement ajouté.")
     return redirect(url_for("calendar"))
+
 
 # ==========================================================
 # MODIFICATION D'UN ÉVÉNEMENT
@@ -2545,20 +2431,12 @@ def edit_event(event_id):
     autorise = False
 
     if admin_logged:
-
-        if (
-            evenement["concerne_admin"] == 1
-            or evenement["created_by_admin_id"] == admin_id
-        ):
-            autorise = True
-
+        autorise = evenement["created_by_admin_id"] == admin_id
     else:
-
-        if (
+        autorise = (
             evenement["membre_id"] == membre_id
             and evenement["created_by_membre_id"] == membre_id
-        ):
-            autorise = True
+        )
 
     if not autorise:
         conn.close()
@@ -2646,20 +2524,12 @@ def delete_event(event_id):
     autorise = False
 
     if admin_logged:
-
-        if (
-            evenement["concerne_admin"] == 1
-            or evenement["created_by_admin_id"] == admin_id
-        ):
-            autorise = True
-
+        autorise = evenement["created_by_admin_id"] == admin_id
     else:
-
-        if (
+        autorise = (
             evenement["membre_id"] == membre_id
             and evenement["created_by_membre_id"] == membre_id
-        ):
-            autorise = True
+        )
 
     if not autorise:
         conn.close()
@@ -2879,182 +2749,145 @@ def refuse_event(event_id):
 
 @app.route("/calendar")
 def calendar():
-
     if not session.get("logged"):
         return redirect(url_for("home"))
 
     famille_id = session.get("famille_id")
-
     if famille_id is None:
         return redirect(url_for("dashboard"))
 
-    admin_logged = session.get("admin_logged") is True
+    est_admin = session.get("admin_logged") is True
     membre_id = session.get("membre_id")
-
+    admin_id = session.get("admin_id")
     conn = get_connection()
     cursor = conn.cursor()
-
     membre = None
 
-    if not admin_logged:
-
+    if not est_admin:
         cursor.execute(
-            """
-            SELECT *
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
+            "SELECT * FROM membres WHERE id = ? AND famille_id = ?",
             (membre_id, famille_id)
         )
-
         membre = cursor.fetchone()
-
         if membre is None:
             conn.close()
             session.clear()
             return redirect(url_for("home"))
 
-    # Récupération des événements acceptés
     cursor.execute(
         """
-        SELECT
-            e.*,
-            m.prenom,
-            m.nom,
-            m.partage_vers_admin_pro,
-            m.partage_vers_admin_perso
+        SELECT e.*, m.prenom, m.nom, m.role,
+               m.partage_vers_admin_pro, m.partage_vers_admin_perso
         FROM evenements e
-        LEFT JOIN membres m
-            ON e.membre_id = m.id
-        WHERE e.famille_id = ?
-        AND e.statut_validation = 'accepte'
+        LEFT JOIN membres m ON e.membre_id = m.id
+        WHERE e.famille_id = ? AND e.statut_validation = 'accepte'
         ORDER BY e.date, e.heure
         """,
         (famille_id,)
     )
-
     tous_evenements = cursor.fetchall()
     evenements = []
 
-    for evenement in tous_evenements:
+    for ev in tous_evenements:
+        ev_dict = dict(ev)
+        owner_type = (ev_dict.get("type_agenda") or "legacy").lower()
 
-        # L'administrateur consulte son propre agenda.
-        if admin_logged and evenement["concerne_admin"] == 1:
-            evenements.append(evenement)
-            continue
-
-        # Un conjoint/ex-conjoint ne voit que les agendas administrateur
-        # qu'il a explicitement autorisés.
-        if not admin_logged and evenement["concerne_admin"] == 1:
-            if (
-                evenement["type_agenda"] == "admin_pro"
-                and membre["role"] in ("conjoint", "ex-conjoint")
-                and membre["acces_agenda_admin_pro"] == 1
-            ) or (
-                evenement["type_agenda"] == "admin_perso"
-                and membre["role"] in ("conjoint", "ex-conjoint")
-                and membre["acces_agenda_admin_perso"] == 1
-            ):
-                evenements.append(evenement)
-            continue
-
-        # Événement placé dans l'agenda d'un membre
-        if evenement["membre_id"] is not None:
-
-            if admin_logged:
-
-                # L'administrateur voit les événements
-                # qu'elle a elle-même ajoutés.
-                if evenement["created_by_admin_id"] == session.get("admin_id"):
-                    evenements.append(evenement)
-                    continue
-
-                # Le membre doit avoir donné son accord
-                # pour l'agenda PRO ou PERSO concerné.
-                if (
-                    evenement["type_agenda"] == "membre_pro"
-                    and evenement["partage_vers_admin_pro"] == 1
-                ) or (
-                    evenement["type_agenda"] == "membre_perso"
-                    and evenement["partage_vers_admin_perso"] == 1
-                ):
-                    evenements.append(evenement)
-
+        if est_admin:
+            # Ses propres rendez-vous et uniquement ceux qu'elle a créés
+            # dans les agendas des membres.
+            if ev_dict.get("concerne_admin") == 1 and ev_dict.get("created_by_admin_id") == admin_id:
+                evenements.append(ev_dict)
                 continue
 
-            # Un membre ne voit que ses propres événements.
-            if evenement["membre_id"] == membre_id:
-                evenements.append(evenement)
+            if ev_dict.get("membre_id") is not None and ev_dict.get("created_by_admin_id") == admin_id:
+                evenements.append(ev_dict)
+                continue
 
+            # Exception de confidentialité : seul le conjoint actuel peut
+            # partager explicitement ses agendas avec l'administratrice.
+            if (
+                ev_dict.get("membre_id") is not None
+                and ev_dict.get("role") == "conjoint"
+                and (
+                    (owner_type == "membre_pro" and ev_dict.get("partage_vers_admin_pro") == 1)
+                    or (owner_type == "membre_perso" and ev_dict.get("partage_vers_admin_perso") == 1)
+                )
+            ):
+                evenements.append(ev_dict)
             continue
 
-    # Récupération des propositions en attente
-    if admin_logged:
+        # Le membre voit ses propres rendez-vous.
+        if ev_dict.get("membre_id") == membre_id:
+            # Le membre voit aussi les rendez-vous que l'administratrice
+            # a explicitement ajoutés dans son agenda.
+            evenements.append(ev_dict)
+            continue
 
+        # Seul le conjoint actuel peut voir l'agenda de l'administratrice,
+        # et uniquement si elle lui a accordé l'autorisation.
+        if ev_dict.get("concerne_admin") == 1 and membre["role"] == "conjoint":
+            if (
+                owner_type == "admin_pro" and membre["acces_agenda_admin_pro"] == 1
+            ) or (
+                owner_type == "admin_perso" and membre["acces_agenda_admin_perso"] == 1
+            ):
+                evenements.append(ev_dict)
+
+    # Propositions en attente : chaque membre voit les siennes;
+    # l'administratrice voit les propositions qui lui sont adressées.
+    if est_admin:
         cursor.execute(
             """
-            SELECT
-                e.*,
-                m.prenom,
-                m.nom
-            FROM evenements e
-            LEFT JOIN membres m
-                ON e.membre_id = m.id
-            WHERE e.famille_id = ?
-            AND e.statut_validation = 'en_attente'
+            SELECT e.*, m.prenom, m.nom
+            FROM evenements e LEFT JOIN membres m ON e.membre_id = m.id
+            WHERE e.famille_id = ? AND e.statut_validation = 'en_attente'
+              AND e.concerne_admin = 1
             ORDER BY e.date, e.heure
             """,
             (famille_id,)
         )
-
     else:
-
         cursor.execute(
             """
-            SELECT
-                e.*,
-                m.prenom,
-                m.nom
-            FROM evenements e
-            LEFT JOIN membres m
-                ON e.membre_id = m.id
-            WHERE e.famille_id = ?
-            AND e.statut_validation = 'en_attente'
-            AND e.membre_id = ?
-            AND e.concerne_admin = 0
+            SELECT e.*, m.prenom, m.nom
+            FROM evenements e LEFT JOIN membres m ON e.membre_id = m.id
+            WHERE e.famille_id = ? AND e.statut_validation = 'en_attente'
+              AND e.membre_id = ?
             ORDER BY e.date, e.heure
             """,
             (famille_id, membre_id)
         )
-
     propositions = cursor.fetchall()
 
-    # Liste des membres de la famille
-    cursor.execute(
-        """
-        SELECT id, prenom, nom
-        FROM membres
-        WHERE famille_id = ?
-        ORDER BY prenom, nom
-        """,
-        (famille_id,)
-    )
-
-    membres = cursor.fetchall()
+    # L'administratrice peut créer un rendez-vous dans le PERSO de
+    # chaque membre. Le serveur interdit toute destination PRO membre.
+    if est_admin:
+        cursor.execute(
+            """
+            SELECT id, prenom, nom, role
+            FROM membres
+            WHERE famille_id = ?
+            ORDER BY prenom, nom
+            """,
+            (famille_id,)
+        )
+        membres = cursor.fetchall()
+    else:
+        membres = []
 
     conn.close()
 
-    # Séparer les événements dans les deux agendas internes.
     evenements_pro = []
     evenements_perso = []
-    for evenement in evenements:
-        evenement_dict = dict(evenement)
-        type_agenda = (evenement_dict.get("type_agenda") or "").lower()
-        if type_agenda.endswith("_pro"):
-            evenements_pro.append(evenement_dict)
-        elif type_agenda.endswith("_perso") or type_agenda == "legacy":
-            evenements_perso.append(evenement_dict)
+    for ev in evenements:
+        kind = (ev.get("type_agenda") or "legacy").lower()
+        if kind.endswith("_pro"):
+            evenements_pro.append(ev)
+        else:
+            evenements_perso.append(ev)
+
+    # Un enfant et un ex-conjoint n'ont qu'un agenda PERSO.
+    afficher_pro = est_admin or (membre and membre["role"] == "conjoint")
 
     return render_template(
         "calendar.html",
@@ -3063,8 +2896,11 @@ def calendar():
         evenements_perso=evenements_perso,
         membres=membres,
         propositions=propositions,
-        est_admin=admin_logged
+        est_admin=est_admin,
+        afficher_pro=afficher_pro
     )
+
+
 # ==========================================================
 # PROFIL
 # ==========================================================
@@ -3160,7 +2996,7 @@ def update_agenda_sharing():
 
     membre = cursor.fetchone()
 
-    if membre is None or membre["role"] not in ("conjoint", "ex-conjoint"):
+    if membre is None or membre["role"] != "conjoint":
         conn.close()
         return redirect(url_for("profile"))
 
