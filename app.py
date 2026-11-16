@@ -3244,66 +3244,6 @@ def update_agenda_sharing():
     return redirect(url_for("profile"))
 
 
-# ==========================================================
-# MODIFICATION DU PARTAGE DES AGENDAS PAR LE MEMBRE
-# ==========================================================
-
-@app.route("/update_agenda_sharing", methods=["POST"])
-def update_agenda_sharing():
-
-    if not session.get("logged") or session.get("admin_logged"):
-        return redirect(url_for("home"))
-
-    membre_id = session.get("membre_id")
-    famille_id = session.get("famille_id")
-
-    if not membre_id or not famille_id:
-        return redirect(url_for("home"))
-
-    membre = get_member_by_id(membre_id)
-
-    if membre is None or membre["famille_id"] != famille_id:
-        session.clear()
-        return redirect(url_for("home"))
-
-    if membre["role"] not in ("conjoint", "ex-conjoint"):
-        flash("Cette autorisation est réservée au conjoint ou ex-conjoint.")
-        return redirect(url_for("profile"))
-
-    partage_pro = (
-        1 if request.form.get("partage_vers_admin_pro") == "oui" else 0
-    )
-
-    partage_perso = (
-        1 if request.form.get("partage_vers_admin_perso") == "oui" else 0
-    )
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        UPDATE membres
-        SET partage_vers_admin_pro = ?,
-            partage_vers_admin_perso = ?
-        WHERE id = ?
-        AND famille_id = ?
-        AND role IN ('conjoint', 'ex-conjoint')
-        """,
-        (
-            partage_pro,
-            partage_perso,
-            membre_id,
-            famille_id
-        )
-    )
-
-    conn.commit()
-    conn.close()
-
-    flash("Vos préférences de partage ont été enregistrées.")
-
-    return redirect(url_for("profile"))
 
 # ==========================================================
 # MODIFICATION DU PROFIL ADMINISTRATEUR
