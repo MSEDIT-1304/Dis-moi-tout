@@ -1233,10 +1233,20 @@ def init_database():
         for ligne in cursor.fetchall()
     }
 
+    
     colonnes_partage = {
         "partage_vers_admin_pro": "INTEGER DEFAULT 0",
-        "partage_vers_admin_perso": "INTEGER DEFAULT 0"
+        "partage_vers_admin_perso": "INTEGER DEFAULT 0",
+        "acces_agenda_admin_pro": "INTEGER DEFAULT 0",
+        "acces_agenda_admin_perso": "INTEGER DEFAULT 0"
     }
+
+    for colonne, definition in colonnes_partage.items():
+        if colonne not in colonnes_membres:
+            cursor.execute(
+                f"ALTER TABLE membres ADD COLUMN {colonne} {definition}"
+            )
+
 
     for colonne, definition in colonnes_partage.items():
         if colonne not in colonnes_membres:
@@ -1722,6 +1732,7 @@ def create_family():
 # CRÉATION D'UN MEMBRE
 # ==========================================================
 
+
 def create_member(
     famille_id,
     prenom,
@@ -1729,8 +1740,51 @@ def create_member(
     email,
     peut_modifier=True,
     role="enfant",
-    acces_agenda_admin=False
+    acces_agenda_admin=False,
+    acces_agenda_admin_pro=False,
+    acces_agenda_admin_perso=False
 ):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    autorise = role in ("conjoint", "ex-conjoint")
+
+    cursor.execute(
+        """
+        INSERT INTO membres
+        (
+            famille_id,
+            prenom,
+            nom,
+            email,
+            password,
+            role,
+            peut_modifier,
+            acces_agenda_admin,
+            acces_agenda_admin_pro,
+            acces_agenda_admin_perso
+        )
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+        """,
+        (
+            famille_id,
+            prenom,
+            nom,
+            email,
+            role,
+            1 if peut_modifier else 0,
+            1 if acces_agenda_admin and autorise else 0,
+            1 if acces_agenda_admin_pro and autorise else 0,
+            1 if acces_agenda_admin_perso and autorise else 0
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+    return True
+
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1807,11 +1861,15 @@ def add_member():
         flash("Cette adresse e-mail est déjà utilisée.")
         return redirect(url_for("members"))
 
-    # Accès à l'agenda administrateur désactivé par défaut.
-    # Il sera accordé uniquement par une autorisation explicite.
-    acces_agenda_admin = (
-        request.form.get("acces_agenda_admin") == "oui"
-        and role == "conjoint"
+    
+    acces_agenda_admin_pro = (
+        request.form.get("partage_agenda_pro") == "oui"
+        and role in ("conjoint", "ex-conjoint")
+    )
+
+    acces_agenda_admin_perso = (
+        request.form.get("partage_agenda_perso") == "oui"
+        and role in ("conjoint", "ex-conjoint")
     )
 
     create_member(
@@ -1821,8 +1879,10 @@ def add_member():
         email=email,
         peut_modifier=peut_modifier,
         role=role,
-        acces_agenda_admin=acces_agenda_admin
+        acces_agenda_admin_pro=acces_agenda_admin_pro,
+        acces_agenda_admin_perso=acces_agenda_admin_perso
     )
+
 
     flash(
         "Membre ajouté avec succès. "
