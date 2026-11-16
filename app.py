@@ -1247,12 +1247,6 @@ def init_database():
                 f"ALTER TABLE membres ADD COLUMN {colonne} {definition}"
             )
 
-
-    for colonne, definition in colonnes_partage.items():
-        if colonne not in colonnes_membres:
-            cursor.execute(
-                f"ALTER TABLE membres ADD COLUMN {colonne} {definition}"
-            )
     # Les anciens rendez-vous attribués à un membre
     # sont considérés comme créés par ce membre.
     
