@@ -32,7 +32,8 @@ GOOGLE_SCOPES = [
 def get_google_auth_url(
     client_id,
     redirect_uri,
-    state
+    state,
+    login_hint=None
 ):
     """
     Génère l'URL permettant à l'utilisateur
@@ -46,9 +47,11 @@ def get_google_auth_url(
         "response_type": "code",
         "scope": " ".join(GOOGLE_SCOPES),
         "access_type": "offline",
-        "prompt": "consent",
+        "prompt": "select_account consent",
         "state": state
     }
+    if login_hint:
+        params["login_hint"] = login_hint
 
     return f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
 
