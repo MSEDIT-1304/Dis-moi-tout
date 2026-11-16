@@ -2337,30 +2337,21 @@ def add_event():
             valide_par_admin_id = None
             valide_par_membre_id = None
             
-    # IDENTIFIER L'AGENDA
-    if calendrier == "Famille":
-        type_agenda = "famille"
+    # IDENTIFIER L'AGENDA : PRO OU PERSO
 
-    elif concerne_admin:
-        type_agenda = (
-            "admin_professionnel"
-            if calendrier == "Travail"
-            else "admin_personnel"
-        )
-
-    elif admin_logged and destinataire_id is None:
-        type_agenda = (
-            "admin_professionnel"
-            if calendrier == "Travail"
-            else "admin_personnel"
-        )
-
+    if concerne_admin or (
+        admin_logged and destinataire_id is None
+    ):
+        proprietaire = "admin"
     else:
-        type_agenda = "membre_personnel"
-    # ------------------------------------------------------
-    # ENREGISTREMENT
-    # ------------------------------------------------------
+        proprietaire = "membre"
 
+    if calendrier == "Travail":
+        type_agenda = f"{proprietaire}_pro"
+    else:
+        type_agenda = f"{proprietaire}_perso"
+
+    # ENREGISTREMENT
     cursor.execute(
         """
         INSERT INTO evenements
@@ -2403,7 +2394,7 @@ def add_event():
             type_agenda
         )
     )
-
+   
     conn.commit()
     conn.close()
 
