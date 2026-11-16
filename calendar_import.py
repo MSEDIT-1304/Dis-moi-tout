@@ -30,7 +30,10 @@ def save_imported_event(
     description,
     date,
     heure,
-    calendrier
+    calendrier,
+    type_agenda="legacy",
+    created_by_admin_id=None,
+    created_by_membre_id=None
 ):
     conn = get_connection()
     cursor = conn.cursor()
@@ -44,9 +47,16 @@ def save_imported_event(
             date,
             heure,
             calendrier,
-            rappel
+            rappel,
+            type_agenda,
+            created_by_admin_id,
+            created_by_membre_id,
+            statut_validation,
+            valide_par_admin_id,
+            valide_par_membre_id,
+            concerne_admin
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         famille_id,
         membre_id,
@@ -55,7 +65,14 @@ def save_imported_event(
         date,
         heure,
         calendrier,
-        1
+        1,
+        type_agenda,
+        created_by_admin_id,
+        created_by_membre_id,
+        "accepte",
+        created_by_admin_id,
+        created_by_membre_id,
+        1 if created_by_admin_id is not None else 0
     ))
 
     conn.commit()
@@ -73,7 +90,8 @@ def event_exists(
     titre,
     date,
     heure,
-    calendrier
+    calendrier,
+    type_agenda="legacy"
 ):
     conn = get_connection()
     cursor = conn.cursor()
@@ -87,13 +105,15 @@ def event_exists(
         AND date = ?
         AND heure = ?
         AND calendrier = ?
+        AND type_agenda = ?
     """, (
         famille_id,
         membre_id,
         titre,
         date,
         heure,
-        calendrier
+        calendrier,
+        type_agenda
     ))
 
     result = cursor.fetchone()
@@ -110,7 +130,10 @@ def import_events(
     events,
     famille_id,
     membre_id,
-    calendrier
+    calendrier,
+    type_agenda="legacy",
+    created_by_admin_id=None,
+    created_by_membre_id=None
 ):
     """
     Importe une liste d'événements sans doublons visibles
@@ -130,7 +153,8 @@ def import_events(
             continue
 
         if event_exists(
-            famille_id, membre_id, titre, date, heure, calendrier
+            famille_id, membre_id, titre, date, heure, calendrier,
+            type_agenda
         ):
             skipped += 1
             continue
@@ -142,7 +166,10 @@ def import_events(
             description=description,
             date=date,
             heure=heure,
-            calendrier=calendrier
+            calendrier=calendrier,
+            type_agenda=type_agenda,
+            created_by_admin_id=created_by_admin_id,
+            created_by_membre_id=created_by_membre_id
         )
         imported += 1
 
