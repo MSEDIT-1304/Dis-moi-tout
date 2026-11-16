@@ -1115,7 +1115,7 @@ def init_database():
             "TEXT",
 
         "prochaine_date_garde":
-            "TEXT"
+            "TEXT",
         "partage_agenda_pro": "INTEGER DEFAULT 0",
         "partage_agenda_perso": "INTEGER DEFAULT 0",
     }
