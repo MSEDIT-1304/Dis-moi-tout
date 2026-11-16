@@ -24,7 +24,9 @@
 
     <section class="calendar-switcher" aria-label="Choisir un agenda">
         <button type="button" class="agenda-tab active" data-agenda="perso">AGENDA PERSO</button>
+        {% if afficher_pro %}
         <button type="button" class="agenda-tab" data-agenda="pro">AGENDA PRO</button>
+        {% endif %}
     </section>
 
     <section class="calendar-view-card" id="calendar-view-card">
@@ -95,7 +97,9 @@
                     <label for="type_agenda">Agenda de destination</label>
                     <select id="type_agenda" name="type_agenda" required>
                         <option value="perso">PERSO</option>
+                        {% if afficher_pro %}
                         <option value="pro">PRO</option>
+                        {% endif %}
                     </select>
                 </div>
                 <div>
@@ -324,6 +328,23 @@ document.addEventListener("DOMContentLoaded", function () {
     const titre = document.getElementById("titre");
     const date = document.getElementById("date");
     const heure = document.getElementById("heure");
+
+    // Un rendez-vous ajouté par l'administratrice dans l'agenda d'un
+    // membre est toujours placé dans son agenda PERSO.
+    const destinataireSelect = document.getElementById("membre_id");
+    const agendaSelectForm = document.getElementById("type_agenda");
+    if (destinataireSelect && agendaSelectForm) {
+        destinataireSelect.addEventListener("change", function () {
+            if (destinataireSelect.value) {
+                agendaSelectForm.value = "perso";
+                const optionPro = agendaSelectForm.querySelector('option[value="pro"]');
+                if (optionPro) optionPro.disabled = true;
+            } else {
+                const optionPro = agendaSelectForm.querySelector('option[value="pro"]');
+                if (optionPro) optionPro.disabled = false;
+            }
+        });
+    }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!button || !status || !transcript) return;
     if (!SpeechRecognition) {
