@@ -39,6 +39,7 @@
                     <input type="email" id="email" name="email">
                 </div>
 
+
                 <div>
                     <label for="role">Catégorie</label>
                     <select id="role" name="role" required>
@@ -48,6 +49,34 @@
                     </select>
                 </div>
             </div>
+
+            <div id="partage-agendas" style="display: none;">
+                <label class="members-checkbox">
+                    <input type="checkbox" name="partage_agenda_pro" value="oui">
+                    Autoriser l'accès à mon agenda PRO
+                </label>
+
+                <label class="members-checkbox">
+                    <input type="checkbox" name="partage_agenda_perso" value="oui">
+                    Autoriser l'accès à mon agenda PERSO
+                </label>
+            </div>
+
+            <script>
+                const roleSelect = document.getElementById("role");
+                const partageAgendas = document.getElementById("partage-agendas");
+
+                function afficherPartageAgendas() {
+                    partageAgendas.style.display =
+                        ["conjoint", "ex-conjoint"].includes(roleSelect.value)
+                        ? "block"
+                        : "none";
+                }
+
+                roleSelect.addEventListener("change", afficherPartageAgendas);
+                afficherPartageAgendas();
+            </script>
+
 
             <label class="members-checkbox">
                 <input type="checkbox" name="peut_modifier" value="oui">
