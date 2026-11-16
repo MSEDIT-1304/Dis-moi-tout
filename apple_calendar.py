@@ -247,6 +247,9 @@ def sync_apple_calendar(
     famille_id,
     membre_id,
     calendar_name="Apple Calendar",
+    type_agenda="legacy",
+    created_by_admin_id=None,
+    created_by_membre_id=None,
 ):
     total_imported = 0
     total_skipped = 0
@@ -275,6 +278,9 @@ def sync_apple_calendar(
             famille_id=famille_id,
             membre_id=membre_id,
             calendrier=source_name,
+            type_agenda=type_agenda,
+            created_by_admin_id=created_by_admin_id,
+            created_by_membre_id=created_by_membre_id,
         )
         total_imported += result.get("imported", 0)
         total_skipped += result.get("skipped", 0)
@@ -345,7 +351,12 @@ def get_apple_timezone():
 
 
 def check_apple_configuration():
-    return {"configured": True, "missing": []}
+    # Apple utilise un identifiant iCloud et un mot de passe spécifique
+    # fournis par l'utilisateur ; aucune clé serveur n'est configurée ici.
+    return {
+        "configured": False,
+        "missing": ["identifiant Apple et mot de passe spécifique d'application"]
+    }
 
 
 def is_apple_calendar_available():
