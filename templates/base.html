@@ -14,6 +14,10 @@
     <meta name="theme-color" content="#ffffff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Dis-moi tout">
+    <style>
+        .legal-footer-links { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin:12px 0 4px; }
+        .legal-footer-links a { color:inherit; text-decoration:underline; }
+    </style>
 </head>
 
 <body>
@@ -52,7 +56,11 @@
     Dis-moi tout — Organisons notre quotidien ensemble
 
     <p>© Tous droits réservés à Studio Web & Applications</p>
-
+    <nav class="legal-footer-links" aria-label="Informations légales">
+        <a href="{{ url_for('politique_confidentialite') }}">Politique de confidentialité</a>
+        <span aria-hidden="true">|</span>
+        <a href="{{ url_for('conditions_utilisation') }}">Conditions d’utilisation</a>
+    </nav>
 </footer>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
