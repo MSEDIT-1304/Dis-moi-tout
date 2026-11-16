@@ -3258,7 +3258,7 @@ def calendar_access_required():
 # CONNEXION GOOGLE CALENDAR
 # ==========================================================
 
-@app.route("/google/connect")
+@app.route("/google/connect", methods=["GET", "POST"])
 def google_connect():
 
     if not calendar_access_required():
@@ -3267,6 +3267,13 @@ def google_connect():
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         flash("La connexion Google n'est pas configurée dans Render.")
         return redirect(url_for("calendar_import"))
+
+    google_email_hint = ""
+    if request.method == "POST":
+        google_email_hint = request.form.get("google_email", "").strip().lower()
+        if not google_email_hint or "@" not in google_email_hint:
+            flash("Saisissez une adresse e-mail Google valide.")
+            return redirect(url_for("calendar"))
 
     redirect_uri = get_google_redirect_uri()
     owner_type, owner_id = get_calendar_owner()
@@ -3285,7 +3292,8 @@ def google_connect():
         auth_url = get_google_auth_url(
             GOOGLE_CLIENT_ID,
             redirect_uri,
-            state
+            state,
+            login_hint=google_email_hint or None
         )
     except Exception:
         app.logger.exception("Erreur création URL OAuth Google")
