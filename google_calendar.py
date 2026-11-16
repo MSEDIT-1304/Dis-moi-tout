@@ -21,7 +21,8 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
 GOOGLE_SCOPES = [
-    "https://www.googleapis.com/auth/calendar.readonly"
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/userinfo.email"
 ]
 
 # ==========================================================
@@ -80,10 +81,15 @@ def get_google_token(
         timeout=30
     )
 
-    if response.status_code == 200:
-        return response.json()
+    try:
+        result = response.json()
+    except ValueError:
+        result = {"error": "invalid_response"}
 
-    return None
+    if response.status_code == 200:
+        return result
+
+    return result
 
 # ==========================================================
 # RÉCUPÉRER LES ÉVÉNEMENTS GOOGLE
@@ -211,9 +217,8 @@ def is_google_token_valid(access_token):
     response = requests.get(
         "https://www.googleapis.com/oauth2/v1/tokeninfo",
         headers=headers,
-        params={
-            "access_token": access_token
-        }
+        params={"access_token": access_token},
+        timeout=20
     )
 
     return response.status_code == 200
@@ -319,7 +324,10 @@ def sync_google_calendar_by_id(
     calendar_id,
     famille_id,
     membre_id,
-    calendar_name="Google Agenda"
+    calendar_name="Google Agenda",
+    type_agenda="legacy",
+    created_by_admin_id=None,
+    created_by_membre_id=None
 ):
     """
     Importe les événements passés et futurs jusqu'au 31/12/2050.
@@ -383,7 +391,10 @@ def sync_google_calendar_by_id(
         events=events,
         famille_id=famille_id,
         membre_id=membre_id,
-        calendrier=calendar_name
+        calendrier=calendar_name,
+        type_agenda=type_agenda,
+        created_by_admin_id=created_by_admin_id,
+        created_by_membre_id=created_by_membre_id
     )
 
 
