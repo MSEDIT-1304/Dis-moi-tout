@@ -22,6 +22,58 @@
         {% endif %}
     {% endwith %}
 
+    <section class="calendar-card">
+        <h2>Connexion et import de calendriers externes</h2>
+        <p>Connectez votre propre compte. Les événements importés seront ajoutés uniquement à votre agenda Dis-moi tout.</p>
+
+        <div class="calendar-form-grid">
+            <div>
+                <h3>Google Agenda</h3>
+                {% if google_email %}
+                    <p>Compte connecté : <strong>{{ google_email }}</strong></p>
+                    {% if google_error %}<p>{{ google_error }}</p>{% endif %}
+                    <form method="POST" action="{{ url_for('calendar_import') }}">
+                        <label for="google-type-agenda">Importer dans</label>
+                        <select id="google-type-agenda" name="type_agenda">
+                            <option value="perso">Mon agenda PERSO</option>
+                            {% if afficher_pro %}<option value="pro">Mon agenda PRO</option>{% endif %}
+                        </select>
+                        <p>Sélectionnez jusqu'à deux agendas Google :</p>
+                        {% for google_cal in google_calendars %}
+                        <label class="calendar-checkbox">
+                            <input type="checkbox" name="calendar_ids" value="{{ google_cal['id'] }}" {% if google_cal['principal'] %}checked{% endif %}>
+                            {{ google_cal['nom'] or 'Agenda sans nom' }}{% if google_cal['principal'] %} (principal){% endif %}
+                        </label>
+                        {% else %}
+                        <p>Aucun agenda Google disponible pour le moment.</p>
+                        {% endfor %}
+                        <button type="submit" class="calendar-button" {% if not google_calendars %}disabled{% endif %}>Importer les agendas sélectionnés</button>
+                    </form>
+                {% else %}
+                    <p>Aucun compte Google connecté.</p>
+                    <a class="calendar-button" href="{{ url_for('google_connect') }}">Connecter mon compte Google</a>
+                {% endif %}
+            </div>
+
+            <div>
+                <h3>Apple / iCloud</h3>
+                <p>Apple nécessite un mot de passe spécifique d’application. Il n'est pas enregistré dans Dis-moi tout.</p>
+                <form method="POST" action="{{ url_for('apple_import') }}">
+                    <label for="apple_id">Identifiant Apple</label>
+                    <input type="email" id="apple_id" name="apple_id" autocomplete="username" required>
+                    <label for="apple_app_password">Mot de passe spécifique d’application</label>
+                    <input type="password" id="apple_app_password" name="apple_app_password" autocomplete="off" required>
+                    <label for="apple-type-agenda">Importer dans</label>
+                    <select id="apple-type-agenda" name="type_agenda">
+                        <option value="perso">Mon agenda PERSO</option>
+                        {% if afficher_pro %}<option value="pro">Mon agenda PRO</option>{% endif %}
+                    </select>
+                    <button type="submit" class="calendar-button">Connecter et importer Apple</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
     <section class="calendar-switcher" aria-label="Choisir un agenda">
         <button type="button" class="agenda-tab active" data-agenda="perso">AGENDA PERSO</button>
         {% if afficher_pro %}
@@ -345,6 +397,15 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     }
+    const googleChecks = document.querySelectorAll('input[name="calendar_ids"]');
+    googleChecks.forEach(check => check.addEventListener("change", function () {
+        const selected = Array.from(googleChecks).filter(item => item.checked);
+        if (selected.length > 2) {
+            this.checked = false;
+            alert("Vous pouvez importer deux agendas Google maximum.");
+        }
+    }));
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!button || !status || !transcript) return;
     if (!SpeechRecognition) {
