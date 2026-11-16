@@ -2379,7 +2379,7 @@ def add_event():
             statut_validation,
             valide_par_admin_id,
             valide_par_membre_id,
-            concerne_admin?
+            concerne_admin,
             type_agenda
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -2399,7 +2399,7 @@ def add_event():
             statut_validation,
             valide_par_admin_id,
             valide_par_membre_id,
-            1 if concerne_admin else 0?
+            1 if concerne_admin else 0,
             type_agenda
         )
     )
