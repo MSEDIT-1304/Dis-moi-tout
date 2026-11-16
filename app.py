@@ -2336,7 +2336,27 @@ def add_event():
             statut_validation = "en_attente"
             valide_par_admin_id = None
             valide_par_membre_id = None
+            
+    # IDENTIFIER L'AGENDA
+    if calendrier == "Famille":
+        type_agenda = "famille"
 
+    elif concerne_admin:
+        type_agenda = (
+            "admin_professionnel"
+            if calendrier == "Travail"
+            else "admin_personnel"
+        )
+
+    elif admin_logged and destinataire_id is None:
+        type_agenda = (
+            "admin_professionnel"
+            if calendrier == "Travail"
+            else "admin_personnel"
+        )
+
+    else:
+        type_agenda = "membre_personnel"
     # ------------------------------------------------------
     # ENREGISTREMENT
     # ------------------------------------------------------
@@ -2359,9 +2379,10 @@ def add_event():
             statut_validation,
             valide_par_admin_id,
             valide_par_membre_id,
-            concerne_admin
+            concerne_admin?
+            type_agenda
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             famille_id,
@@ -2378,7 +2399,8 @@ def add_event():
             statut_validation,
             valide_par_admin_id,
             valide_par_membre_id,
-            1 if concerne_admin else 0
+            1 if concerne_admin else 0?
+            type_agenda
         )
     )
 
