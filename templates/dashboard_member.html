@@ -111,15 +111,43 @@
                             </span>
                         </div>
 
-                        <form
-                            method="POST"
-                            action="{{ url_for('delete_member_route', membre_id=membre['id']) }}"
-                            onsubmit="return confirm('Voulez-vous vraiment supprimer ce membre ?');"
-                        >
-                            <button type="submit" class="members-delete">
-                                Supprimer
-                            </button>
-                        </form>
+                        <div class="member-actions">
+                            <details class="member-edit">
+                                <summary class="members-edit-toggle" title="Modifier ce membre" aria-label="Modifier ce membre">✏️ Modifier</summary>
+                                <form method="POST" action="{{ url_for('edit_member_route', membre_id=membre['id']) }}" class="member-edit-form">
+                                    <div class="members-form-grid">
+                                        <div>
+                                            <label for="prenom-{{ membre['id'] }}">Prénom</label>
+                                            <input type="text" id="prenom-{{ membre['id'] }}" name="prenom" value="{{ membre['prenom'] }}" required>
+                                        </div>
+                                        <div>
+                                            <label for="nom-{{ membre['id'] }}">Nom</label>
+                                            <input type="text" id="nom-{{ membre['id'] }}" name="nom" value="{{ membre['nom'] }}" required>
+                                        </div>
+                                        <div>
+                                            <label for="email-{{ membre['id'] }}">Adresse e-mail</label>
+                                            <input type="email" id="email-{{ membre['id'] }}" name="email" value="{{ membre['email'] or '' }}">
+                                        </div>
+                                        <div>
+                                            <label for="role-{{ membre['id'] }}">Catégorie</label>
+                                            <select id="role-{{ membre['id'] }}" name="role" required>
+                                                <option value="enfant" {% if membre['role'] == 'enfant' %}selected{% endif %}>Enfant</option>
+                                                <option value="conjoint" {% if membre['role'] == 'conjoint' %}selected{% endif %}>Conjoint</option>
+                                                <option value="ex-conjoint" {% if membre['role'] == 'ex-conjoint' %}selected{% endif %}>Ex-conjoint</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <label class="members-checkbox">
+                                        <input type="checkbox" name="peut_modifier" value="oui" {% if membre['peut_modifier'] %}checked{% endif %}>
+                                        Autoriser ce membre à modifier les informations
+                                    </label>
+                                    <button type="submit" class="members-button">Enregistrer les modifications</button>
+                                </form>
+                            </details>
+                            <form method="POST" action="{{ url_for('delete_member_route', membre_id=membre['id']) }}" onsubmit="return confirm('Voulez-vous vraiment supprimer ce membre ?');">
+                                <button type="submit" class="members-delete">Supprimer</button>
+                            </form>
+                        </div>
 
                     </div>
 
@@ -247,6 +275,15 @@
     color: #dfbd78;
 }
 
+.member-actions { display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+.member-edit { min-width:180px; }
+.members-edit-toggle { cursor:pointer; display:inline-block; background:#c5a15b; color:#172b40; border-radius:6px; padding:10px 15px; font-weight:bold; list-style:none; }
+.members-edit-toggle::-webkit-details-marker { display:none; }
+.member-edit[open] { flex-basis:100%; }
+.member-edit-form { margin-top:14px; padding:16px; background:rgba(255,255,255,.94); border-radius:8px; }
+.member-edit-form label { color:#17324d !important; }
+.member-edit-form .members-form-grid { margin-top:0; }
+.member-edit-form .members-checkbox { color:#17324d !important; }
 .members-delete {
     background: #a94442;
     color: white;
@@ -277,6 +314,8 @@
         align-items: flex-start;
         flex-direction: column;
     }
+    .member-actions { width:100%; }
+    .member-edit[open] { width:100%; }
 }
 </style>
 
