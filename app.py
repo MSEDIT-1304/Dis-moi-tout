@@ -2245,6 +2245,50 @@ def family():
 # AJOUT D'UN ÉVÉNEMENT
 # ==========================================================
 
+
+
+@app.route("/add-event", methods=["GET"])
+def add_event_page():
+    if not session.get("logged"):
+        return redirect(url_for("home"))
+
+    famille_id = session.get("famille_id")
+    if famille_id is None:
+        return redirect(url_for("dashboard"))
+
+    est_admin = session.get("admin_logged") is True
+    membres = []
+    afficher_pro = est_admin
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if est_admin:
+        cursor.execute(
+            "SELECT id, prenom, nom, role FROM membres WHERE famille_id = ? ORDER BY prenom, nom",
+            (famille_id,)
+        )
+        membres = cursor.fetchall()
+    else:
+        cursor.execute(
+            "SELECT role FROM membres WHERE id = ? AND famille_id = ?",
+            (session.get("membre_id"), famille_id)
+        )
+        membre = cursor.fetchone()
+        if membre is None:
+            conn.close()
+            session.clear()
+            return redirect(url_for("home"))
+        afficher_pro = (membre["role"] or "").lower() == "conjoint"
+
+    conn.close()
+    return render_template(
+        "add_event.html",
+        est_admin=est_admin,
+        afficher_pro=afficher_pro,
+        membres=membres
+    )
+
+
 @app.route("/add_event", methods=["POST"])
 def add_event():
     if not session.get("logged"):
