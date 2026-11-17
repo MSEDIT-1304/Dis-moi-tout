@@ -17,6 +17,10 @@
     <style>
         .legal-footer-links { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin:12px 0 4px; }
         .legal-footer-links a { color:inherit; text-decoration:underline; }
+        .navigation {
+            justify-content: center;
+            width: 100%;
+        }
         .navigation a.active { background: var(--fuchsia-profond, #A52D68) !important; color: #fff !important; }
     </style>
 </head>
@@ -75,6 +79,29 @@
 </footer>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
+{% if session.get("logged") %}
+<script>
+(function () {
+    const checkUrl = "{{ url_for('subscription_check') }}";
+    async function verifySubscription() {
+        try {
+            const response = await fetch(checkUrl, {
+                method: "GET",
+                credentials: "same-origin",
+                cache: "no-store"
+            });
+            if (response.status === 401 || response.status === 403) {
+                const data = await response.json();
+                window.location.href = data.redirect || "{{ url_for('login', abonnement='expire') }}";
+            }
+        } catch (error) {
+            console.warn("Vérification abonnement reportée :", error);
+        }
+    }
+    window.setInterval(verifySubscription, 60 * 60 * 1000);
+})();
+</script>
+{% endif %}
 <script>
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
