@@ -82,9 +82,20 @@
                 <label for="description">Description</label>
                 <textarea id="description" name="description" rows="3"></textarea>
             </div>
-            <label class="calendar-checkbox">
-                <input type="checkbox" name="rappel" value="oui"> Activer un rappel
-            </label>
+            <div class="calendar-reminder-block">
+                <label class="calendar-checkbox" for="rappel">
+                    <input type="checkbox" id="rappel" name="rappel" value="oui"> Activer un rappel
+                </label>
+                <div id="rappel-delai-container" hidden>
+                    <label for="rappel_delai_minutes">Quand souhaitez-vous recevoir le rappel ?</label>
+                    <select id="rappel_delai_minutes" name="rappel_delai_minutes">
+                        <option value="60">1 heure avant</option>
+                        <option value="4320">3 jours avant</option>
+                        <option value="10080">1 semaine avant</option>
+                        <option value="21600">15 jours avant</option>
+                    </select>
+                </div>
+            </div>
             <button type="submit" class="calendar-button">Ajouter l'événement</button>
         </form>
     </section>
@@ -128,6 +139,10 @@
 .calendar-form-grid input,.calendar-form-grid select,.calendar-description textarea,.event-actions input,.event-actions textarea,.event-actions select { width:100%; box-sizing:border-box; padding:11px; border:1px solid #ccc; border-radius:6px; margin-bottom:12px; }
 .calendar-checkbox { display:flex; align-items:center; gap:10px; margin:15px 0; }
 .calendar-checkbox input { width:auto; }
+.calendar-reminder-block { margin:15px 0; }
+#rappel-delai-container { max-width:360px; margin:8px 0 16px 28px; }
+#rappel-delai-container label { display:block; margin-bottom:7px; }
+#rappel_delai_minutes { width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:6px; }
 .voice-command { background:rgba(255,255,255,.88); color:#17324d; padding:14px; border-radius:8px; margin-bottom:16px; }
 .voice-command h3,.voice-command p { color:#17324d; }
 .event-item { display:flex; gap:13px; align-items:flex-start; padding:18px 0; border-bottom:1px solid rgba(255,255,255,.2); }
@@ -175,6 +190,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const titre=document.getElementById("titre");
     const date=document.getElementById("date");
     const heure=document.getElementById("heure");
+    const rappelCheckbox=document.getElementById("rappel");
+    const rappelDelai=document.getElementById("rappel-delai-container");
+    if(rappelCheckbox&&rappelDelai){
+        const actualiserRappel=()=>{rappelDelai.hidden=!rappelCheckbox.checked;};
+        rappelCheckbox.addEventListener("change",actualiserRappel);
+        actualiserRappel();
+    }
     if(!button||!status||!transcript)return;
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SpeechRecognition){button.disabled=true;status.textContent="La reconnaissance vocale nécessite Chrome ou Edge à jour.";return;}
