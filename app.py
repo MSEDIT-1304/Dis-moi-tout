@@ -1979,6 +1979,14 @@ def edit_member_route(membre_id):
     email = request.form.get("email", "").strip().lower()
     role = request.form.get("role", "enfant").strip().lower()
     peut_modifier = 1 if request.form.get("peut_modifier") == "oui" else 0
+    # Même règle que lors de l'ajout : les accès PRO/PERSO
+    # ne sont accordés qu'à un membre de catégorie « conjoint ».
+    acces_agenda_admin_pro = (
+        1 if request.form.get("partage_agenda_pro") == "oui" and role == "conjoint" else 0
+    )
+    acces_agenda_admin_perso = (
+        1 if request.form.get("partage_agenda_perso") == "oui" and role == "conjoint" else 0
+    )
 
     if not prenom or not nom:
         flash("Veuillez renseigner le prénom et le nom.")
@@ -2011,10 +2019,15 @@ def edit_member_route(membre_id):
     cursor.execute(
         """
         UPDATE membres
-        SET prenom = ?, nom = ?, email = ?, role = ?, peut_modifier = ?
+        SET prenom = ?, nom = ?, email = ?, role = ?, peut_modifier = ?,
+            acces_agenda_admin_pro = ?, acces_agenda_admin_perso = ?
         WHERE id = ? AND famille_id = ?
         """,
-        (prenom, nom, email, role, peut_modifier, membre_id, famille_id)
+        (
+            prenom, nom, email, role, peut_modifier,
+            acces_agenda_admin_pro, acces_agenda_admin_perso,
+            membre_id, famille_id
+        )
     )
     conn.commit()
     modifie = cursor.rowcount > 0
