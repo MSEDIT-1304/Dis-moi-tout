@@ -173,6 +173,26 @@
     {% endif %}
 </div>
 
+<dialog id="calendar-event-dialog" class="calendar-event-dialog">
+    <form id="calendar-edit-form" method="POST">
+        <h2>Modifier l'événement</h2>
+        <label for="event-edit-title">Titre</label>
+        <input id="event-edit-title" name="titre" type="text" required>
+        <label for="event-edit-description">Description</label>
+        <textarea id="event-edit-description" name="description" rows="3"></textarea>
+        <label for="event-edit-date">Date</label>
+        <input id="event-edit-date" name="date" type="date" required>
+        <label for="event-edit-time">Heure</label>
+        <input id="event-edit-time" name="heure" type="time">
+        <div class="calendar-event-dialog-actions">
+            <button type="submit" class="calendar-button">Enregistrer</button>
+            <button type="button" id="calendar-event-delete" class="calendar-delete">Supprimer</button>
+            <button type="button" id="calendar-event-close" class="calendar-button">Fermer</button>
+        </div>
+    </form>
+    <form id="calendar-delete-form" method="POST" hidden></form>
+</dialog>
+
 <style>
 .calendar-page { max-width:1000px; margin:0 auto; padding:25px 15px; }
 .calendar-header { margin-bottom:25px; display:flex; justify-content:space-between; align-items:center; gap:15px; }
@@ -247,6 +267,14 @@
 .calendar-import-panel form { max-width:560px; }
 .calendar-import-panel input:not([type="checkbox"]),.calendar-import-panel select { width:100%; box-sizing:border-box; padding:10px; border:1px solid #b8cce0; border-radius:6px; margin:5px 0 12px; }
 .calendar-import-panel .calendar-checkbox { justify-content:flex-start; }
+.calendar-day-event { cursor:pointer; border:0; text-align:left; width:100%; }
+.calendar-day-event:focus { outline:2px solid #c5a15b; outline-offset:2px; }
+.calendar-event-dialog { width:min(520px,calc(100% - 32px)); border:0; border-radius:12px; padding:22px; color:#17324d; box-shadow:0 12px 40px rgba(0,0,0,.3); }
+.calendar-event-dialog::backdrop { background:rgba(0,0,0,.55); }
+.calendar-event-dialog h2 { margin-top:0; }
+.calendar-event-dialog label { display:block; margin:12px 0 5px; font-weight:bold; }
+.calendar-event-dialog input,.calendar-event-dialog textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #b8cce0; border-radius:6px; }
+.calendar-event-dialog-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
 @media(max-width:650px) {
  .calendar-page { padding:15px 10px; }
  .calendar-card,.calendar-view-card { padding:18px; }
@@ -284,10 +312,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const events = [
         {% for evenement in evenements_perso %}
-        {date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
         {% endfor %}
         {% for evenement in evenements_pro %}
-        {date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
         {% endfor %}
     ];
     const grid = document.getElementById("calendar-grid");
@@ -333,7 +361,11 @@ document.addEventListener("DOMContentLoaded", function () {
             if (key === ymd(new Date())) cell.classList.add("today");
             const number = document.createElement("div"); number.className="calendar-day-number"; number.textContent=day.getDate(); cell.appendChild(number);
             events.filter(e=>e.agenda===activeAgenda && e.date===key).sort((a,b)=>(a.time||"").localeCompare(b.time||"")).forEach(e=>{
-                const item=document.createElement("span"); item.className="calendar-day-event"; item.style.background=e.color; item.textContent=(e.time ? e.time+" " : "")+e.title; item.title=e.title; cell.appendChild(item);
+                const item=document.createElement("button");
+                item.type="button"; item.className="calendar-day-event"; item.style.background=e.color;
+                item.textContent=(e.time ? e.time+" " : "")+e.title; item.title=e.title;
+                item.addEventListener("click",()=>openEvent(e));
+                cell.appendChild(item);
             });
             grid.appendChild(cell);
         }
@@ -342,6 +374,30 @@ document.addEventListener("DOMContentLoaded", function () {
         const agendaSelect=document.getElementById("type_agenda");
         if (agendaSelect) agendaSelect.value=activeAgenda;
     }
+    const eventDialog = document.getElementById("calendar-event-dialog");
+    const editEventForm = document.getElementById("calendar-edit-form");
+    const deleteEventForm = document.getElementById("calendar-delete-form");
+    const deleteEventButton = document.getElementById("calendar-event-delete");
+
+    function openEvent(eventData) {
+        if (!eventData.editable) {
+            alert("Cet événement est consultable, mais vous ne pouvez pas le modifier depuis cet agenda.");
+            return;
+        }
+        editEventForm.action = `/edit_event/${eventData.id}`;
+        deleteEventForm.action = `/delete_event/${eventData.id}`;
+        document.getElementById("event-edit-title").value = eventData.title || "";
+        document.getElementById("event-edit-description").value = eventData.description || "";
+        document.getElementById("event-edit-date").value = eventData.date || "";
+        document.getElementById("event-edit-time").value = eventData.time || "";
+        eventDialog.showModal();
+    }
+
+    deleteEventButton.addEventListener("click",()=>{
+        if (confirm("Supprimer cet événement de votre agenda ?")) deleteEventForm.submit();
+    });
+    document.getElementById("calendar-event-close").addEventListener("click",()=>eventDialog.close());
+
     tabs.forEach(tab=>tab.addEventListener("click",()=>{activeAgenda=tab.dataset.agenda;render();}));
     viewSelect.addEventListener("change",render);
     document.getElementById("calendar-prev").addEventListener("click",()=>{const mode=viewSelect.value;if(mode==="month")current=new Date(current.getFullYear(),current.getMonth()-1,1,12);else current.setDate(current.getDate()-(mode==="week"?7:1));render();});
