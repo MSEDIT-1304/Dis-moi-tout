@@ -586,31 +586,20 @@ def get_google_profile(access_token):
 # DÉCONNECTER GOOGLE ET SUPPRIMER LA SYNCHRONISATION
 # ==========================================================
 
-from calendar_import import delete_imported_events
-
-
 def disconnect_google_calendar(
     access_token,
-    famille_id,
-    membre_id,
+    famille_id=None,
+    membre_id=None,
     calendar_name="Google Agenda"
 ):
     """
-    Révoque l'accès Google puis supprime
-    les événements importés de cet agenda.
+    Révoque l'accès Google sans supprimer les événements
+    déjà importés dans Dis-moi tout.
     """
-
-    revoke_google_access(access_token)
-
-    deleted = delete_imported_events(
-        famille_id=famille_id,
-        membre_id=membre_id,
-        calendrier=calendar_name
-    )
-
+    success = revoke_google_access(access_token)
     return {
-        "success": True,
-        "deleted_events": deleted
+        "success": success,
+        "deleted_events": 0
     }
 
 # ==========================================================
