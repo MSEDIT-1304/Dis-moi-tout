@@ -17,6 +17,7 @@
     <style>
         .legal-footer-links { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin:12px 0 4px; }
         .legal-footer-links a { color:inherit; text-decoration:underline; }
+        .navigation a.active { background: var(--fuchsia-profond, #A52D68) !important; color: #fff !important; }
     </style>
 </head>
 
@@ -30,6 +31,16 @@
 
         <div class="site-name">Dis-moi tout</div>
     </header>
+
+    {% if session.get("logged") %}
+        <nav class="navigation" aria-label="Navigation principale">
+            <a href="{{ url_for('calendar') }}" class="{{ 'active' if request.endpoint == 'calendar' else '' }}">Calendrier</a>
+            {% if session.get("admin_logged") %}
+                <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint == 'members' else '' }}">Gérer les membres</a>
+            {% endif %}
+            <a href="{{ url_for('profile') }}" class="{{ 'active' if request.endpoint == 'profile' else '' }}">Profil</a>
+        </nav>
+    {% endif %}
 
     <main class="page-content">
 
