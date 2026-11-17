@@ -3564,6 +3564,95 @@ def google_callback():
 
 
 # ==========================================================
+# DÉCONNECTER LE COMPTE GOOGLE DU PROPRIÉTAIRE CONNECTÉ
+# ==========================================================
+
+@app.route("/google/disconnect", methods=["POST"])
+def google_disconnect():
+    if not calendar_access_required():
+        return redirect(url_for("home"))
+
+    famille_id = session.get("famille_id")
+    owner_type, owner_id = get_calendar_owner()
+    if not famille_id or not owner_id or owner_type not in ("admin", "membre"):
+        flash("Impossible d'identifier le propriétaire de cette connexion Google.")
+        return redirect(url_for("calendar"))
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT access_token, refresh_token
+        FROM google_connections_users
+        WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+        """,
+        (famille_id, owner_type, owner_id)
+    )
+    google_connection = cursor.fetchone()
+
+    if not google_connection:
+        conn.close()
+        flash("Aucun compte Google n'est actuellement connecté.")
+        return redirect(url_for("calendar"))
+
+    # Révocation côté Google : un échec réseau ne doit pas empêcher
+    # la suppression locale de la connexion appartenant à cet utilisateur.
+    token_to_revoke = (google_connection["refresh_token"]
+                       or google_connection["access_token"])
+    if token_to_revoke:
+        try:
+            requests.post(
+                "https://oauth2.googleapis.com/revoke",
+                params={"token": token_to_revoke},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=15
+            )
+        except Exception:
+            app.logger.exception("Révocation Google impossible lors de la déconnexion")
+
+    # Ne supprimer que les événements Google importés par ce propriétaire.
+    # Les événements saisis manuellement et les imports Apple sont conservés.
+    if owner_type == "admin":
+        cursor.execute(
+            """
+            DELETE FROM evenements
+            WHERE famille_id = ?
+              AND membre_id IS NULL
+              AND created_by_admin_id = ?
+              AND calendrier LIKE 'Google | %'
+              AND type_agenda IN ('admin_pro', 'admin_perso')
+            """,
+            (famille_id, owner_id)
+        )
+    else:
+        cursor.execute(
+            """
+            DELETE FROM evenements
+            WHERE famille_id = ?
+              AND membre_id = ?
+              AND created_by_membre_id = ?
+              AND calendrier LIKE 'Google | %'
+              AND type_agenda IN ('membre_pro', 'membre_perso')
+            """,
+            (famille_id, owner_id, owner_id)
+        )
+
+    deleted_events = cursor.rowcount
+    cursor.execute(
+        """
+        DELETE FROM google_connections_users
+        WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+        """,
+        (famille_id, owner_type, owner_id)
+    )
+    conn.commit()
+    conn.close()
+
+    flash(f"Compte Google déconnecté. {deleted_events} événement(s) Google importé(s) supprimé(s).")
+    return redirect(url_for("calendar"))
+
+
+# ==========================================================
 # IMPORT CALENDRIER EXTERNE
 # ==========================================================
 
