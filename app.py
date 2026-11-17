@@ -1285,7 +1285,8 @@ def init_database():
     "valide_par_admin_id": "INTEGER",
     "valide_par_membre_id": "INTEGER",
     "concerne_admin": "INTEGER DEFAULT 0",
-    "type_agenda": "TEXT DEFAULT 'legacy'"
+    "type_agenda": "TEXT DEFAULT 'legacy'",
+    "rappel_delai_minutes": "INTEGER DEFAULT 60"
     }
     for colonne, definition in colonnes_evenements_a_ajouter.items():
 
@@ -1959,6 +1960,71 @@ def add_member():
     return redirect(url_for("members"))
 
 # ==========================================================
+# MODIFIER UN MEMBRE — ADMINISTRATEUR UNIQUEMENT
+# ==========================================================
+
+@app.route("/edit_member/<int:membre_id>", methods=["POST"])
+def edit_member_route(membre_id):
+
+    if not admin_required():
+        return redirect(url_for("home"))
+
+    famille_id = get_family_id(session.get("admin_id"))
+    if famille_id is None or not member_belongs_to_family(membre_id, famille_id):
+        flash("Membre introuvable.")
+        return redirect(url_for("members"))
+
+    prenom = request.form.get("prenom", "").strip()
+    nom = request.form.get("nom", "").strip()
+    email = request.form.get("email", "").strip().lower()
+    role = request.form.get("role", "enfant").strip().lower()
+    peut_modifier = 1 if request.form.get("peut_modifier") == "oui" else 0
+
+    if not prenom or not nom:
+        flash("Veuillez renseigner le prénom et le nom.")
+        return redirect(url_for("members"))
+
+    if role not in ("enfant", "conjoint", "ex-conjoint"):
+        flash("Catégorie de membre invalide.")
+        return redirect(url_for("members"))
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    if email:
+        cursor.execute(
+            "SELECT id FROM membres WHERE lower(email) = lower(?) AND id != ?",
+            (email, membre_id)
+        )
+        email_existant = cursor.fetchone()
+        cursor.execute(
+            "SELECT id FROM admin WHERE lower(email) = lower(?)",
+            (email,)
+        )
+        email_admin = cursor.fetchone()
+        if email_existant or email_admin:
+            conn.close()
+            flash("Cette adresse e-mail est déjà utilisée.")
+            return redirect(url_for("members"))
+
+    # Les autorisations de partage d'agenda existantes sont volontairement
+    # conservées : cette modification ne touche qu'aux informations du membre.
+    cursor.execute(
+        """
+        UPDATE membres
+        SET prenom = ?, nom = ?, email = ?, role = ?, peut_modifier = ?
+        WHERE id = ? AND famille_id = ?
+        """,
+        (prenom, nom, email, role, peut_modifier, membre_id, famille_id)
+    )
+    conn.commit()
+    modifie = cursor.rowcount > 0
+    conn.close()
+
+    flash("Les informations du membre ont été mises à jour." if modifie else "Aucune modification effectuée.")
+    return redirect(url_for("members"))
+
+
+# ==========================================================
 # SUPPRIMER UN MEMBRE
 # ==========================================================
 
@@ -2350,6 +2416,13 @@ def add_event():
         return redirect(url_for("add_event_page"))
 
     rappel = 1 if request.form.get("rappel") == "oui" else 0
+    delais_autorises = {60, 4320, 10080, 21600}
+    try:
+        rappel_delai_minutes = int(request.form.get("rappel_delai_minutes", "60"))
+    except (TypeError, ValueError):
+        rappel_delai_minutes = 60
+    if rappel_delai_minutes not in delais_autorises:
+        rappel_delai_minutes = 60
     est_admin = session.get("admin_logged") is True
     admin_id = session.get("admin_id")
     auteur_membre_id = session.get("membre_id")
@@ -2416,7 +2489,6 @@ def add_event():
 
     created_by_admin_id = admin_id if est_admin else None
     created_by_membre_id = None if est_admin else auteur_membre_id
-    rappel = 1 if request.form.get("rappel") == "oui" else 0
     nombre_attente = 0
 
     # Une ligne indépendante par agenda destinataire : chaque personne
@@ -2440,15 +2512,15 @@ def add_event():
             """
             INSERT INTO evenements (
                 famille_id, membre_id, titre, description, date, heure,
-                calendrier, rappel, type_evenement, created_by_admin_id,
+                calendrier, rappel, rappel_delai_minutes, type_evenement, created_by_admin_id,
                 created_by_membre_id, statut_validation, valide_par_admin_id,
                 valide_par_membre_id, concerne_admin, type_agenda
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 famille_id, destinataire_id, titre, description, date, heure,
-                couleur, rappel, "normal", created_by_admin_id,
+                couleur, rappel, rappel_delai_minutes, "normal", created_by_admin_id,
                 created_by_membre_id, statut, valide_admin,
                 valide_membre, concerne_admin, type_agenda
             )
