@@ -1334,7 +1334,10 @@ def init_database():
         "partage_vers_admin_pro": "INTEGER DEFAULT 0",
         "partage_vers_admin_perso": "INTEGER DEFAULT 0",
         "acces_agenda_admin_pro": "INTEGER DEFAULT 0",
-        "acces_agenda_admin_perso": "INTEGER DEFAULT 0"
+        "acces_agenda_admin_perso": "INTEGER DEFAULT 0",
+        "garde_partagee": "INTEGER DEFAULT 0",
+        "frequence_garde": "TEXT",
+        "prochaine_date_garde": "TEXT"
     }
 
     for colonne, definition in colonnes_partage.items():
@@ -1602,7 +1605,8 @@ def register():
 def create_shared_custody_events(
     famille_id,
     prochaine_date,
-    frequence
+    frequence,
+    membre_id=None
 ):
 
     if not prochaine_date:
@@ -1648,11 +1652,13 @@ def create_shared_custody_events(
             WHERE famille_id = ?
             AND date = ?
             AND type_evenement = ?
+            AND membre_id IS ?
             """,
             (
                 famille_id,
                 date_str,
-                "garde_partagee"
+                "garde_partagee",
+                membre_id
             )
         )
 
@@ -1684,7 +1690,7 @@ def create_shared_custody_events(
                 """,
                 (
                     famille_id,
-                    None,
+                    membre_id,
                     "Garde partagée",
                     "Garde chez l'autre personne",
                     date_str,
@@ -2014,24 +2020,64 @@ def edit_member_route(membre_id):
             flash("Cette adresse e-mail est déjà utilisée.")
             return redirect(url_for("members"))
 
-    # Les autorisations de partage d'agenda existantes sont volontairement
-    # conservées : cette modification ne touche qu'aux informations du membre.
+    garde_partagee = request.form.get("garde_partagee") == "oui" and role == "enfant"
+    frequence_garde = request.form.get("frequence_garde", "").strip() if garde_partagee else ""
+    prochaine_date_garde = request.form.get("prochaine_date_garde", "").strip() if garde_partagee else ""
+
+    frequences_autorisees = ("1 semaine sur deux", "Tous les quinze jours", "Tous les mois")
+    if garde_partagee and frequence_garde not in frequences_autorisees:
+        conn.close()
+        flash("Veuillez sélectionner la fréquence de la garde partagée.")
+        return redirect(url_for("members"))
+    if garde_partagee and not prochaine_date_garde:
+        conn.close()
+        flash("Veuillez indiquer la prochaine date de garde.")
+        return redirect(url_for("members"))
+    if garde_partagee:
+        try:
+            datetime.strptime(prochaine_date_garde, "%Y-%m-%d")
+        except ValueError:
+            conn.close()
+            flash("La date de la prochaine garde est invalide.")
+            return redirect(url_for("members"))
+
     cursor.execute(
         """
         UPDATE membres
         SET prenom = ?, nom = ?, email = ?, role = ?, peut_modifier = ?,
-            acces_agenda_admin_pro = ?, acces_agenda_admin_perso = ?
+            acces_agenda_admin_pro = ?, acces_agenda_admin_perso = ?,
+            garde_partagee = ?, frequence_garde = ?, prochaine_date_garde = ?
         WHERE id = ? AND famille_id = ?
         """,
         (
             prenom, nom, email, role, peut_modifier,
             acces_agenda_admin_pro, acces_agenda_admin_perso,
+            1 if garde_partagee else 0, frequence_garde, prochaine_date_garde,
             membre_id, famille_id
         )
     )
-    conn.commit()
     modifie = cursor.rowcount > 0
+
+    if modifie:
+        # Conserver toutes les gardes passées. Seules les gardes futures
+        # générées pour cet enfant sont remplacées.
+        cursor.execute(
+            """
+            DELETE FROM evenements
+            WHERE famille_id = ? AND membre_id = ?
+              AND type_evenement = 'garde_partagee'
+              AND date >= date('now', 'localtime')
+            """,
+            (famille_id, membre_id)
+        )
+        conn.commit()
+
     conn.close()
+
+    if modifie and garde_partagee:
+        create_shared_custody_events(
+            famille_id, prochaine_date_garde, frequence_garde, membre_id=membre_id
+        )
 
     flash("Les informations du membre ont été mises à jour." if modifie else "Aucune modification effectuée.")
     return redirect(url_for("members"))
