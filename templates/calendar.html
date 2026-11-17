@@ -7,11 +7,6 @@
             <h1>Mes calendriers</h1>
             <p>Retrouvez vos rendez-vous dans vos deux agendas personnels.</p>
         </div>
-        {% if est_admin %}
-        <div class="calendar-header-actions">
-            <a href="{{ url_for('members') }}" class="calendar-button">Gestion des membres</a>
-        </div>
-        {% endif %}
     </header>
 
     {% with messages = get_flashed_messages() %}
@@ -118,133 +113,11 @@
         </p>
     </section>
 
-    <section class="calendar-card">
-        <h2>Ajouter un événement</h2>
-        <div class="voice-command">
-            <h3>🎙️ Ajouter par commande vocale</h3>
-            <p>Exemple : « Rendez-vous chez le dentiste demain à 14 heures »</p>
-            <button type="button" id="voice-button" class="calendar-button">🎙️ Parler</button>
-            <p id="voice-status" role="status"></p>
-            <p id="voice-transcript"></p>
-        </div>
+    <div class="calendar-add-link" style="text-align:center; margin: 0 0 18px;">
+        <a href="{{ url_for('add_event_page') }}" class="calendar-button">Ajouter un événement</a>
+    </div>
 
-        <form method="POST" action="{{ url_for('add_event') }}">
-            <div class="calendar-form-grid">
-                <div>
-                    <label for="titre">Titre</label>
-                    <input type="text" id="titre" name="titre" required>
-                </div>
-                {% if est_admin %}
-                <div>
-                    <label for="membre_id">Ajouter dans</label>
-                    <select id="membre_id" name="membre_id">
-                        <option value="">Mon agenda administrateur</option>
-                        {% for membre in membres %}
-                        <option value="{{ membre['id'] }}">{{ membre['prenom'] }} {{ membre['nom'] }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                {% endif %}
-                <div>
-                    <label for="date">Date</label>
-                    <input type="date" id="date" name="date" required>
-                </div>
-                <div>
-                    <label for="heure">Heure</label>
-                    <input type="time" id="heure" name="heure">
-                </div>
-                <div>
-                    <label for="type_agenda">Agenda de destination</label>
-                    <select id="type_agenda" name="type_agenda" required>
-                        <option value="perso">PERSO</option>
-                        {% if afficher_pro %}
-                        <option value="pro">PRO</option>
-                        {% endif %}
-                    </select>
-                </div>
-                <div>
-                    <label for="couleur_evenement">Couleur de l'événement</label>
-                    <select id="couleur_evenement" name="couleur_evenement">
-                        <option value="#4f8fc9">Bleu</option>
-                        <option value="#d94f9b">Fuchsia</option>
-                        <option value="#54a66b">Vert</option>
-                        <option value="#e2a43b">Doré</option>
-                    </select>
-                </div>
-            </div>
-            <div class="calendar-description">
-                <label for="description">Description</label>
-                <textarea id="description" name="description" rows="3"></textarea>
-            </div>
-            <label class="calendar-checkbox">
-                <input type="checkbox" name="rappel" value="oui"> Activer un rappel
-            </label>
-            <button type="submit" class="calendar-button">Ajouter l'événement</button>
-        </form>
-    </section>
 
-    <section class="calendar-card">
-        <h2>Événements de l'agenda <span id="events-agenda-label">PERSO</span></h2>
-        <div id="agenda-events-list">
-            {% for evenement in evenements_perso %}
-            <article class="event-item agenda-event" data-agenda="perso" data-date="{{ evenement['date'] }}">
-                <span class="event-color" style="background:{{ evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b' }}"></span>
-                <div class="event-details">
-                    <h3>{{ evenement['titre'] }}</h3>
-                    <p><strong>Date :</strong> {{ evenement['date'] }}{% if evenement['heure'] %} à {{ evenement['heure'] }}{% endif %}</p>
-                    {% if evenement['prenom'] %}<p><strong>Membre :</strong> {{ evenement['prenom'] }} {{ evenement['nom'] }}</p>{% endif %}
-                    {% if evenement['description'] %}<p>{{ evenement['description'] }}</p>{% endif %}
-                </div>
-                {% if evenement['type_evenement'] != 'garde_partagee' %}
-                <div class="event-actions">
-                    <details>
-                        <summary>Modifier</summary>
-                        <form method="POST" action="{{ url_for('edit_event', event_id=evenement['id']) }}">
-                            <label>Titre</label><input type="text" name="titre" value="{{ evenement['titre'] }}" required>
-                            <label>Description</label><textarea name="description" rows="2">{{ evenement['description'] or '' }}</textarea>
-                            <label>Date</label><input type="date" name="date" value="{{ evenement['date'] }}" required>
-                            <label>Heure</label><input type="time" name="heure" value="{{ evenement['heure'] or '' }}">
-                            <button type="submit" class="calendar-button">Enregistrer</button>
-                        </form>
-                    </details>
-                    <form method="POST" action="{{ url_for('delete_event', event_id=evenement['id']) }}" onsubmit="return confirm('Supprimer cet événement ?');">
-                        <button type="submit" class="calendar-delete">Supprimer</button>
-                    </form>
-                </div>
-                {% endif %}
-            </article>
-            {% endfor %}
-            {% for evenement in evenements_pro %}
-            <article class="event-item agenda-event" data-agenda="pro" data-date="{{ evenement['date'] }}" hidden>
-                <span class="event-color" style="background:{{ evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9' }}"></span>
-                <div class="event-details">
-                    <h3>{{ evenement['titre'] }}</h3>
-                    <p><strong>Date :</strong> {{ evenement['date'] }}{% if evenement['heure'] %} à {{ evenement['heure'] }}{% endif %}</p>
-                    {% if evenement['prenom'] %}<p><strong>Membre :</strong> {{ evenement['prenom'] }} {{ evenement['nom'] }}</p>{% endif %}
-                    {% if evenement['description'] %}<p>{{ evenement['description'] }}</p>{% endif %}
-                </div>
-                {% if evenement['type_evenement'] != 'garde_partagee' %}
-                <div class="event-actions">
-                    <details>
-                        <summary>Modifier</summary>
-                        <form method="POST" action="{{ url_for('edit_event', event_id=evenement['id']) }}">
-                            <label>Titre</label><input type="text" name="titre" value="{{ evenement['titre'] }}" required>
-                            <label>Description</label><textarea name="description" rows="2">{{ evenement['description'] or '' }}</textarea>
-                            <label>Date</label><input type="date" name="date" value="{{ evenement['date'] }}" required>
-                            <label>Heure</label><input type="time" name="heure" value="{{ evenement['heure'] or '' }}">
-                            <button type="submit" class="calendar-button">Enregistrer</button>
-                        </form>
-                    </details>
-                    <form method="POST" action="{{ url_for('delete_event', event_id=evenement['id']) }}" onsubmit="return confirm('Supprimer cet événement ?');">
-                        <button type="submit" class="calendar-delete">Supprimer</button>
-                    </form>
-                </div>
-                {% endif %}
-            </article>
-            {% endfor %}
-            <p id="no-agenda-events" {% if evenements_perso or evenements_pro %}hidden{% endif %}>Aucun événement dans cet agenda pour le moment.</p>
-        </div>
-    </section>
 
     {% if not est_admin %}
     <section class="member-account-delete" id="delete-account">
@@ -362,9 +235,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const viewSelect = document.getElementById("calendar-view");
     const tabs = document.querySelectorAll(".agenda-tab");
     const viewCard = document.getElementById("calendar-view-card");
-    const eventCards = document.querySelectorAll(".agenda-event");
-    const eventLabel = document.getElementById("events-agenda-label");
-    const noEvents = document.getElementById("no-agenda-events");
     let activeAgenda = "perso";
     let current = new Date();
     current.setHours(12,0,0,0);
@@ -407,10 +277,6 @@ document.addEventListener("DOMContentLoaded", function () {
             });
             grid.appendChild(cell);
         }
-        eventCards.forEach(card => card.hidden = card.dataset.agenda !== activeAgenda);
-        const hasEvents = Array.from(eventCards).some(card=>card.dataset.agenda===activeAgenda);
-        noEvents.hidden = hasEvents;
-        eventLabel.textContent = activeAgenda.toUpperCase();
         viewCard.classList.toggle("pro-mode",activeAgenda==="pro");
         document.querySelectorAll(".agenda-tab").forEach(tab=>tab.classList.toggle("active",tab.dataset.agenda===activeAgenda));
         const agendaSelect=document.getElementById("type_agenda");
