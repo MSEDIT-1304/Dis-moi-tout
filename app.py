@@ -2508,14 +2508,17 @@ def edit_event(event_id):
         flash("Les gardes partagées sont générées automatiquement.")
         return redirect(url_for("calendar"))
 
-    autorise = False
-
+    # Un utilisateur peut gérer les événements présents dans son propre
+    # agenda. Les agendas consultés uniquement par partage restent en lecture seule.
     if admin_logged:
-        autorise = evenement["created_by_admin_id"] == admin_id
+        autorise = (
+            evenement["concerne_admin"] == 1
+            or evenement["created_by_admin_id"] == admin_id
+        )
     else:
         autorise = (
-            evenement["membre_id"] == membre_id
-            and evenement["created_by_membre_id"] == membre_id
+            evenement["concerne_admin"] == 0
+            and evenement["membre_id"] == membre_id
         )
 
     if not autorise:
@@ -2601,14 +2604,17 @@ def delete_event(event_id):
         flash("Les gardes partagées automatiques ne peuvent pas être supprimées ici.")
         return redirect(url_for("calendar"))
 
-    autorise = False
-
+    # Un utilisateur peut gérer les événements présents dans son propre
+    # agenda. Les agendas consultés uniquement par partage restent en lecture seule.
     if admin_logged:
-        autorise = evenement["created_by_admin_id"] == admin_id
+        autorise = (
+            evenement["concerne_admin"] == 1
+            or evenement["created_by_admin_id"] == admin_id
+        )
     else:
         autorise = (
-            evenement["membre_id"] == membre_id
-            and evenement["created_by_membre_id"] == membre_id
+            evenement["concerne_admin"] == 0
+            and evenement["membre_id"] == membre_id
         )
 
     if not autorise:
@@ -2842,6 +2848,16 @@ def calendar():
     for ev in tous_evenements:
         ev_dict = dict(ev)
         owner_type = (ev_dict.get("type_agenda") or "legacy").lower()
+        if est_admin:
+            ev_dict["peut_gerer"] = bool(
+                ev_dict.get("concerne_admin") == 1
+                or ev_dict.get("created_by_admin_id") == admin_id
+            )
+        else:
+            ev_dict["peut_gerer"] = bool(
+                ev_dict.get("concerne_admin") == 0
+                and ev_dict.get("membre_id") == membre_id
+            )
 
         if est_admin:
             # Ses propres rendez-vous et uniquement ceux qu'elle a créés
@@ -3779,15 +3795,43 @@ def calendar_import():
                 app.logger.exception("Erreur import agenda Google %s", calendar_name)
                 errors.append(f"{calendar_name}: {exc}")
 
+        # Déconnexion automatique du compte Google utilisé. Seuls les jetons
+        # de connexion sont retirés : les événements déjà importés restent
+        # enregistrés dans la table evenements.
+        try:
+            jeton_a_revoquer = refresh_token or access_token
+            if jeton_a_revoquer:
+                requests.post(
+                    "https://oauth2.googleapis.com/revoke",
+                    params={"token": jeton_a_revoquer},
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    timeout=8
+                )
+        except Exception:
+            app.logger.exception("Révocation Google impossible après import")
+
+        cleanup_conn = get_connection()
+        cleanup_conn.execute(
+            """
+            DELETE FROM google_connections_users
+            WHERE id = ? AND famille_id = ? AND owner_type = ? AND owner_id = ?
+            """,
+            (connection["id"], famille_id, owner_type, owner_id)
+        )
+        cleanup_conn.commit()
+        cleanup_conn.close()
+
         if errors:
             flash(
                 f"Import partiel : {total_imported} événement(s) ajouté(s), "
-                f"{total_skipped} déjà présent(s). Erreurs : {' | '.join(errors)}"
+                f"{total_skipped} déjà présent(s). Le compte Google a été déconnecté. "
+                f"Erreurs : {' | '.join(errors)}"
             )
         else:
             flash(
                 f"Import Google terminé : {total_imported} événement(s) ajouté(s), "
-                f"{total_skipped} déjà présent(s), sur {len(calendars)} agenda(s)."
+                f"{total_skipped} déjà présent(s), sur {len(calendars)} agenda(s). "
+                "Le compte Google a été déconnecté. Vos événements restent dans Dis-moi tout."
             )
 
         return redirect(url_for("calendar"))
