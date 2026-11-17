@@ -22,17 +22,35 @@
                     <label for="titre">Titre</label>
                     <input type="text" id="titre" name="titre" required>
                 </div>
-                {% if est_admin %}
-                <div>
-                    <label for="membre_id">Ajouter dans</label>
-                    <select id="membre_id" name="membre_ids" multiple size="1">
-                        <option value="admin" selected>Mon agenda administrateur</option>
+                <div class="destinataires-field">
+                    <label>Proposer l'événement dans les agendas de :</label>
+                    <div class="destinataires-list">
+                        {% if est_admin %}
+                        <label class="destinataire-option">
+                            <input type="checkbox" name="destinataire_ids" value="admin" {% if destinataire_par_defaut == 'admin' %}checked{% endif %}>
+                            Mon agenda administrateur
+                        </label>
+                        {% else %}
+                        <label class="destinataire-option">
+                            <input type="checkbox" name="destinataire_ids" value="{{ membre_connecte_id }}" {% if destinataire_par_defaut == membre_connecte_id|string %}checked{% endif %}>
+                            Mon agenda
+                        </label>
+                        <label class="destinataire-option">
+                            <input type="checkbox" name="destinataire_ids" value="admin">
+                            Agenda de l'administratrice
+                        </label>
+                        {% endif %}
                         {% for membre in membres %}
-                        <option value="{{ membre['id'] }}">{{ membre['prenom'] }} {{ membre['nom'] }}</option>
+                            {% if est_admin or membre['id'] != membre_connecte_id %}
+                            <label class="destinataire-option">
+                                <input type="checkbox" name="destinataire_ids" value="{{ membre['id'] }}" {% if not est_admin and membre['id'] == membre_connecte_id %}checked{% endif %}>
+                                {{ membre['prenom'] }} {{ membre['nom'] }}{% if not est_admin and membre['id'] == membre_connecte_id %} (moi){% endif %}
+                            </label>
+                            {% endif %}
                         {% endfor %}
-                    </select>
+                    </div>
+                    <p class="destinataires-help">Chaque personne sélectionnée devra accepter la proposition avant que l'événement apparaisse dans son agenda.</p>
                 </div>
-                {% endif %}
                 <div>
                     <label for="date">Date</label>
                     <input type="date" id="date" name="date" required>
@@ -100,6 +118,11 @@
 .calendar-legend { display:flex; gap:16px; flex-wrap:wrap; margin:14px 0 0; }
 .calendar-legend span { display:flex; align-items:center; gap:6px; color:white; }
 .legend-dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+.destinataires-field { grid-column:1 / -1; }
+.destinataires-list { display:flex; flex-wrap:wrap; gap:10px 18px; padding:12px; background:rgba(255,255,255,.10); border-radius:8px; }
+.destinataire-option { display:flex !important; align-items:center; gap:8px; margin:0; }
+.destinataire-option input { width:auto !important; margin:0 !important; }
+.destinataires-help { margin:8px 0 0; font-size:13px; opacity:.9; }
 .calendar-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
 .calendar-form-grid label,.calendar-description label { display:block; margin-bottom:7px; }
 .calendar-form-grid input,.calendar-form-grid select,.calendar-description textarea,.event-actions input,.event-actions textarea,.event-actions select { width:100%; box-sizing:border-box; padding:11px; border:1px solid #ccc; border-radius:6px; margin-bottom:12px; }
