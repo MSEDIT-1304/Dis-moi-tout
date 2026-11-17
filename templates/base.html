@@ -36,7 +36,7 @@
         <div class="site-name">Dis-moi tout</div>
     </header>
 
-    {% if session.get("logged") and request.endpoint in ["calendar", "members", "profile"] %}
+    {% if session.get("logged") and request.endpoint in ["calendar", "members", "profile", "add_event_page"] %}
         <nav class="navigation" aria-label="Navigation principale">
             <a href="{{ url_for('calendar') }}" class="{{ 'active' if request.endpoint == 'calendar' else '' }}">Calendrier</a>
             {% if session.get("admin_logged") %}
