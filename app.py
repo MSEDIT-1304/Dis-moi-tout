@@ -427,12 +427,13 @@ def login():
         f"{admin['prenom']} {admin['nom']}"
     )
 
-    return redirect(
-        url_for("dashboard")
-    )
+    famille_id = get_family_id(admin["id"])
+    if famille_id is not None:
+        session["famille_id"] = famille_id
+        return redirect(url_for("calendar"))
 
-    
-# ==========================================================
+    # Première connexion : l'administrateur doit encore créer sa famille.
+    return redirect(url_for("dashboard"))# ==========================================================
 # DÉCONNEXION
 # ==========================================================
 
@@ -2031,22 +2032,12 @@ def dashboard():
     )
 
     if famille:
-
         session["famille_id"] = famille["id"]
+        return redirect(url_for("calendar"))
 
-        membres = get_members(
-            famille["id"]
-        )
-
-        total_membres = count_members(
-            famille["id"]
-        )
-
-    else:
-
-        membres = []
-
-        total_membres = 0
+    # Première utilisation uniquement : écran de création de la famille.
+    membres = []
+    total_membres = 0
 
     return render_template(
         "dashboard_admin.html",
@@ -2095,6 +2086,32 @@ def member_login():
 
     membre = candidats[0]
 
+    # L'accès des membres dépend de l'abonnement de l'administrateur familial.
+    famille = get_member_family(membre["id"])
+    if famille is None:
+        conn.close()
+        flash("Famille introuvable. Veuillez contacter l'administrateur.")
+        return redirect(url_for("login"))
+
+    admin_abonnement = conn.execute(
+        "SELECT email FROM admin WHERE id = ?",
+        (famille["admin_id"],)
+    ).fetchone()
+
+    if admin_abonnement is None:
+        conn.close()
+        flash("Compte administrateur introuvable.")
+        return redirect(url_for("login"))
+
+    statut_abonnement = check_login(admin_abonnement["email"])
+    if statut_abonnement != "ok":
+        conn.close()
+        if statut_abonnement == "trial_expired":
+            flash("L'essai gratuit de la famille est terminé. L'administrateur doit choisir un abonnement.")
+        else:
+            flash("L'abonnement de la famille est expiré. L'administrateur doit le renouveler.")
+        return redirect(url_for("login", abonnement="expire"))
+
     # Première connexion : le membre choisit son mot de passe
     if not membre["password"]:
 
@@ -2141,7 +2158,7 @@ def member_login():
         f"{membre['prenom']} {membre['nom']}"
     )
 
-    return redirect(url_for("member_dashboard"))
+    return redirect(url_for("calendar"))
 
 
 # ==========================================================
@@ -2154,76 +2171,16 @@ def member_dashboard():
         return redirect(url_for("home"))
 
     membre_id = session.get("membre_id")
-
     if membre_id is None:
         return redirect(url_for("home"))
 
     membre = get_member_by_id(membre_id)
-
-    if membre is None:
+    if membre is None or membre["famille_id"] != session.get("famille_id"):
         session.clear()
         return redirect(url_for("home"))
 
-    if membre["famille_id"] != session.get("famille_id"):
-        session.clear()
-        return redirect(url_for("home"))
+    return redirect(url_for("calendar"))
 
-    famille = get_member_family(membre_id)
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    autorise_admin_pro = (
-        membre["role"] == "conjoint"
-        and membre["acces_agenda_admin_pro"] == 1
-    )
-
-    autorise_admin_perso = (
-        membre["role"] == "conjoint"
-        and membre["acces_agenda_admin_perso"] == 1
-    )
-
-    cursor.execute(
-        """
-        SELECT *
-        FROM evenements
-        WHERE famille_id = ?
-        AND statut_validation = 'accepte'
-        ORDER BY date, heure
-        """,
-        (membre["famille_id"],)
-    )
-
-    tous_evenements = cursor.fetchall()
-    evenements = []
-
-    for evenement in tous_evenements:
-
-        if evenement["concerne_admin"] == 1:
-
-            if (
-                evenement["type_agenda"] == "admin_pro"
-                and autorise_admin_pro
-            ) or (
-                evenement["type_agenda"] == "admin_perso"
-                and autorise_admin_perso
-            ):
-                evenements.append(evenement)
-
-            continue
-
-        # Un membre voit uniquement les événements de son propre agenda.
-        if evenement["membre_id"] == membre_id:
-            evenements.append(evenement)
-
-    conn.close()
-
-    return render_template(
-        "member_dashboard.html",
-        membre=membre,
-        famille=famille,
-        evenements=evenements
-    )
 
 # ==========================================================
 # ESPACE FAMILLE
@@ -2763,6 +2720,75 @@ def refuse_event(event_id):
     flash("Proposition refusée.")
     return redirect(url_for("calendar"))
     
+# ==========================================================
+# VÉRIFICATION AUTOMATIQUE DE L'ABONNEMENT
+# Appelée par base.html toutes les heures lorsque la session est ouverte.
+# ==========================================================
+
+@app.route("/subscription/check", methods=["GET"])
+def subscription_check():
+
+    if not session.get("logged"):
+        return jsonify({
+            "success": False,
+            "redirect": url_for("login")
+        }), 401
+
+    email = None
+
+    if session.get("admin_logged") is True:
+        conn = get_connection()
+        admin = conn.execute(
+            "SELECT email FROM admin WHERE id = ?",
+            (session.get("admin_id"),)
+        ).fetchone()
+        conn.close()
+
+        if admin is not None:
+            email = admin["email"]
+
+    else:
+        membre_id = session.get("membre_id")
+        if membre_id is not None:
+            membre_famille = get_member_family(membre_id)
+            if membre_famille is not None:
+                conn = get_connection()
+                admin = conn.execute(
+                    "SELECT email FROM admin WHERE id = ?",
+                    (membre_famille["admin_id"],)
+                ).fetchone()
+                conn.close()
+
+                if admin is not None:
+                    email = admin["email"]
+
+    if not email:
+        session.clear()
+        return jsonify({
+            "success": False,
+            "redirect": url_for("login")
+        }), 401
+
+    statut = check_login(email)
+
+    if statut == "ok":
+        return jsonify({"success": True, "status": "ok"}), 200
+
+    if statut == "trial_expired":
+        flash("Votre essai gratuit est terminé. Choisissez votre abonnement pour continuer.")
+    elif statut == "subscription_expired":
+        flash("Votre abonnement est expiré. Choisissez votre formule pour renouveler votre accès.")
+    else:
+        flash("Votre compte doit être vérifié. Veuillez vous reconnecter.")
+
+    session.clear()
+    return jsonify({
+        "success": False,
+        "status": statut,
+        "redirect": url_for("login", abonnement="expire")
+    }), 403
+
+
 # ==========================================================
 # CALENDRIER
 # ==========================================================
