@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Ajouter un événement – Dis-moi tout{% endblock %}
+{% block content %}
+<div class="calendar-page">
+    <header class="calendar-header">
+        <div><h1>Ajouter un événement</h1><p>Ajoutez un rendez-vous dans votre agenda.</p></div>
+        <a href="{{ url_for('calendar') }}" class="calendar-button">Retour au calendrier</a>
+    </header>
+    <section class="calendar-card">
+        <h2>Ajouter un événement</h2>
+        <div class="voice-command">
+            <h3>🎙️ Ajouter par commande vocale</h3>
+            <p>Exemple : « Rendez-vous chez le dentiste demain à 14 heures »</p>
+            <button type="button" id="voice-button" class="calendar-button">🎙️ Parler</button>
+            <p id="voice-status" role="status"></p>
+            <p id="voice-transcript"></p>
+        </div>
+
+        <form method="POST" action="{{ url_for('add_event') }}">
+            <div class="calendar-form-grid">
+                <div>
+                    <label for="titre">Titre</label>
+                    <input type="text" id="titre" name="titre" required>
+                </div>
+                {% if est_admin %}
+                <div>
+                    <label for="membre_id">Ajouter dans</label>
+                    <select id="membre_id" name="membre_id">
+                        <option value="">Mon agenda administrateur</option>
+                        {% for membre in membres %}
+                        <option value="{{ membre['id'] }}">{{ membre['prenom'] }} {{ membre['nom'] }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div>
+                    <label for="date">Date</label>
+                    <input type="date" id="date" name="date" required>
+                </div>
+                <div>
+                    <label for="heure">Heure</label>
+                    <input type="time" id="heure" name="heure">
+                </div>
+                <div>
+                    <label for="type_agenda">Agenda de destination</label>
+                    <select id="type_agenda" name="type_agenda" required>
+                        <option value="perso">PERSO</option>
+                        {% if afficher_pro %}
+                        <option value="pro">PRO</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div>
+                    <label for="couleur_evenement">Couleur de l'événement</label>
+                    <select id="couleur_evenement" name="couleur_evenement">
+                        <option value="#4f8fc9">Bleu</option>
+                        <option value="#d94f9b">Fuchsia</option>
+                        <option value="#54a66b">Vert</option>
+                        <option value="#e2a43b">Doré</option>
+                    </select>
+                </div>
+            </div>
+            <div class="calendar-description">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="3"></textarea>
+            </div>
+            <label class="calendar-checkbox">
+                <input type="checkbox" name="rappel" value="oui"> Activer un rappel
+            </label>
+            <button type="submit" class="calendar-button">Ajouter l'événement</button>
+        </form>
+    </section>
+</div>
+<style>
+.calendar-page { max-width:1000px; margin:0 auto; padding:25px 15px; }
+.calendar-header { margin-bottom:25px; display:flex; justify-content:space-between; align-items:center; gap:15px; }
+.calendar-card, .calendar-view-card { background:var(--bleu-fonce,#17324d); color:white; padding:25px; border-radius:12px; margin-bottom:22px; }
+.calendar-card h2,.calendar-card h3,.calendar-card p,.calendar-card label,.calendar-view-card h2 { color:white; }
+.calendar-button { display:inline-block; background:#c5a15b; color:#172b40; padding:12px 20px; border:0; border-radius:7px; text-decoration:none; font-weight:bold; cursor:pointer; }
+.calendar-button:hover { background:#dfbd78; }
+.calendar-small { padding:8px 13px; }
+.calendar-switcher { display:flex; gap:12px; margin:0 0 18px; }
+.agenda-tab { flex:1; border:2px solid #d94f9b; border-radius:10px; padding:15px; font-weight:bold; cursor:pointer; background:#d94f9b; color:white; }
+.agenda-tab[data-agenda="pro"] { background:#4f8fc9; border-color:#d94f9b; }
+.agenda-tab.active { outline:3px solid #c5a15b; outline-offset:2px; }
+.calendar-view-card { background:#d94f9b; }
+.calendar-view-card.pro-mode { background:#4f8fc9; }
+.calendar-toolbar,.calendar-toolbar-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.calendar-toolbar { justify-content:space-between; margin-bottom:18px; }
+.calendar-toolbar h2 { margin:0; }
+.view-picker { display:flex; align-items:center; gap:8px; color:white; }
+.view-picker select { padding:8px; border-radius:6px; border:1px solid #ccc; }
+.calendar-weekdays,.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+.calendar-weekdays span { text-align:center; font-weight:bold; padding:8px 2px; color:white; }
+.calendar-day { min-height:88px; background:rgba(255,255,255,.94); color:#17324d; border-radius:6px; padding:7px; overflow:hidden; }
+.calendar-day.outside { opacity:.48; }
+.calendar-day.today { outline:3px solid #c5a15b; }
+.calendar-day-number { font-weight:bold; margin-bottom:5px; }
+.calendar-day-event { display:block; font-size:12px; line-height:1.3; color:white; padding:3px 5px; margin:3px 0; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.calendar-legend { display:flex; gap:16px; flex-wrap:wrap; margin:14px 0 0; }
+.calendar-legend span { display:flex; align-items:center; gap:6px; color:white; }
+.legend-dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+.calendar-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
+.calendar-form-grid label,.calendar-description label { display:block; margin-bottom:7px; }
+.calendar-form-grid input,.calendar-form-grid select,.calendar-description textarea,.event-actions input,.event-actions textarea,.event-actions select { width:100%; box-sizing:border-box; padding:11px; border:1px solid #ccc; border-radius:6px; margin-bottom:12px; }
+.calendar-checkbox { display:flex; align-items:center; gap:10px; margin:15px 0; }
+.calendar-checkbox input { width:auto; }
+.voice-command { background:rgba(255,255,255,.88); color:#17324d; padding:14px; border-radius:8px; margin-bottom:16px; }
+.voice-command h3,.voice-command p { color:#17324d; }
+.event-item { display:flex; gap:13px; align-items:flex-start; padding:18px 0; border-bottom:1px solid rgba(255,255,255,.2); }
+.event-item:last-child { border-bottom:none; }
+.event-color { flex:0 0 10px; width:10px; min-height:55px; border-radius:6px; }
+.event-details { flex:1; min-width:0; }
+.event-item h3 { margin-top:0; }
+.event-actions { display:flex; flex-wrap:wrap; align-items:flex-start; gap:15px; margin-top:12px; }
+.event-actions details { flex:1; min-width:150px; }
+.event-actions summary { cursor:pointer; color:#dfbd78; margin-bottom:12px; }
+.event-actions form { margin-top:10px; }
+.calendar-delete { background:#a94442; color:white; border:0; border-radius:6px; padding:10px 15px; cursor:pointer; }
+.member-account-delete { margin:24px 0 10px; text-align:center; }
+.member-delete-link { color:#a93226; font-weight:bold; text-decoration:underline; }
+#delete-account-form { max-width:420px; margin:16px auto 0; text-align:left; }
+#delete-account-form label { display:block; margin-bottom:7px; }
+#delete-account-form input { width:100%; box-sizing:border-box; padding:10px; border:1px solid #bbb; border-radius:6px; margin-bottom:10px; }
+.calendar-messages { margin-bottom:15px; }
+.calendar-import-links { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:10px; margin:0 0 18px; padding:0; color:#17324d; font-size:15px; }
+.calendar-import-link { color:#17324d; font-weight:bold; text-decoration:underline; text-decoration-color:#c5a15b; text-underline-offset:4px; cursor:pointer; }
+.calendar-import-link:hover { color:#a8792f; }
+.calendar-import-separator { color:#c5a15b; }
+.calendar-import-panel { background:rgba(23,50,77,.08); border:1px solid rgba(23,50,77,.18); border-radius:8px; padding:16px 20px; margin:0 0 18px; color:#17324d; }
+.calendar-import-panel[hidden] { display:none; }
+.calendar-import-panel h3,.calendar-import-panel p,.calendar-import-panel label { color:#17324d; }
+.calendar-import-panel form { max-width:560px; }
+.calendar-import-panel input:not([type="checkbox"]),.calendar-import-panel select { width:100%; box-sizing:border-box; padding:10px; border:1px solid #b8cce0; border-radius:6px; margin:5px 0 12px; }
+.calendar-import-panel .calendar-checkbox { justify-content:flex-start; }
+@media(max-width:650px) {
+ .calendar-page { padding:15px 10px; }
+ .calendar-card,.calendar-view-card { padding:18px; }
+ .calendar-form-grid { grid-template-columns:1fr; }
+ .calendar-day { min-height:65px; padding:4px; }
+ .calendar-day-event { font-size:10px; }
+ .calendar-toolbar { align-items:flex-start; }
+ .event-item { flex-wrap:wrap; }
+ .event-actions { width:100%; }
+}
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const button=document.getElementById("voice-button");
+    const status=document.getElementById("voice-status");
+    const transcript=document.getElementById("voice-transcript");
+    const titre=document.getElementById("titre");
+    const date=document.getElementById("date");
+    const heure=document.getElementById("heure");
+    if(!button||!status||!transcript)return;
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SpeechRecognition){button.disabled=true;status.textContent="La reconnaissance vocale nécessite Chrome ou Edge à jour.";return;}
+    const recognition=new SpeechRecognition();
+    recognition.lang="fr-FR";recognition.continuous=false;recognition.interimResults=false;recognition.maxAlternatives=1;
+    const ymd=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    button.addEventListener("click",function(){transcript.textContent="";status.textContent="Je vous écoute...";button.disabled=true;recognition.start();});
+    recognition.onresult=function(event){
+        const phrase=event.results[0][0].transcript.trim();transcript.textContent="Vous avez dit : "+phrase;
+        let texte=phrase.toLowerCase();const maintenant=new Date();let dateTrouvee=false;
+        if(texte.includes("après-demain")||texte.includes("apres-demain")){maintenant.setDate(maintenant.getDate()+2);dateTrouvee=true;texte=texte.replace(/après-demain|apres-demain/,"");}
+        else if(texte.includes("demain")){maintenant.setDate(maintenant.getDate()+1);dateTrouvee=true;texte=texte.replace("demain","");}
+        else if(texte.includes("aujourd'hui")||texte.includes("aujourd’hui")){dateTrouvee=true;texte=texte.replace(/aujourd'hui|aujourd’hui/,"");}
+        const dm=texte.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?\b/);
+        if(dm){date.value=`${dm[3]||maintenant.getFullYear()}-${dm[2].padStart(2,"0")}-${dm[1].padStart(2,"0")}`;texte=texte.replace(dm[0],"");}
+        else if(dateTrouvee){date.value=ymd(maintenant);}
+        const hm=texte.match(/\b(\d{1,2})\s*(?:h|heures?)(?:\s*(\d{1,2}))?\b|\b(\d{1,2}):(\d{2})\b/);
+        if(hm){const h=hm[1]||hm[3],m=hm[2]||hm[4]||"00";heure.value=`${h.padStart(2,"0")}:${m}`;texte=texte.replace(hm[0],"");}
+        texte=texte.replace(/\b(rendez-vous|rdv|prévois|prevois|planifie|ajoute|ajouter|crée|cree|un|une|le|la|pour)\b/gi,"").replace(/\s+/g," ").trim();
+        if(texte&&titre)titre.value=texte.charAt(0).toUpperCase()+texte.slice(1);
+        status.textContent="Champs remplis. Vérifiez les informations avant d'ajouter l'événement.";
+    };
+    recognition.onerror=function(event){status.textContent=event.error==="not-allowed"?"Autorisez l'accès au microphone dans votre navigateur.":"Je n'ai pas réussi à comprendre. Vous pouvez réessayer.";};
+    recognition.onend=function(){button.disabled=false;};
+});
+</script>
+{% endblock %}
