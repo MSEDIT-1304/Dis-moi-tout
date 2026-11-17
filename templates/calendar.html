@@ -132,9 +132,31 @@
         </p>
     </section>
 
-
-
-
+    {% if propositions %}
+    <section class="calendar-card proposals-card">
+        <h2>Demandes d'ajout à valider</h2>
+        <p>Ces événements ne seront ajoutés à votre agenda que si vous les acceptez.</p>
+        {% for proposition in propositions %}
+        <article class="proposal-item">
+            <div class="proposal-details">
+                <h3>{{ proposition['titre'] }}</h3>
+                <p><strong>Proposé par :</strong> {{ proposition['proposeur'] or 'Un membre de la famille' }}</p>
+                <p><strong>Date :</strong> {{ proposition['date'] }}{% if proposition['heure'] %} à {{ proposition['heure'] }}{% endif %}</p>
+                {% if proposition['description'] %}<p>{{ proposition['description'] }}</p>{% endif %}
+                <p><strong>Agenda :</strong> {{ 'PRO' if proposition['type_agenda'].endswith('_pro') else 'PERSO' }}</p>
+            </div>
+            <div class="proposal-actions">
+                <form method="POST" action="{{ url_for('validate_event', event_id=proposition['id']) }}">
+                    <button type="submit" class="calendar-button">Accepter</button>
+                </form>
+                <form method="POST" action="{{ url_for('refuse_event', event_id=proposition['id']) }}" onsubmit="return confirm('Refuser cette proposition ? Rien ne sera ajouté à votre agenda.');">
+                    <button type="submit" class="calendar-delete">Refuser</button>
+                </form>
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+    {% endif %}
 
     {% if not est_admin %}
     <section class="member-account-delete" id="delete-account">
@@ -203,6 +225,13 @@
 #delete-account-form label { display:block; margin-bottom:7px; }
 #delete-account-form input { width:100%; box-sizing:border-box; padding:10px; border:1px solid #bbb; border-radius:6px; margin-bottom:10px; }
 .calendar-messages { margin-bottom:15px; }
+.proposal-item { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.25); }
+.proposal-item:last-child { border-bottom:0; }
+.proposal-details { min-width:0; flex:1; }
+.proposal-details h3 { margin:0 0 8px; }
+.proposal-details p { margin:5px 0; }
+.proposal-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.proposal-actions form { margin:0; }
 .calendar-import-links { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:10px; margin:0 0 18px; padding:0; color:#17324d; font-size:15px; }
 .calendar-import-link { color:#17324d; font-weight:bold; text-decoration:underline; text-decoration-color:#c5a15b; text-underline-offset:4px; cursor:pointer; }
 .calendar-import-link:hover { color:#a8792f; }
@@ -226,6 +255,8 @@
  .calendar-day-event { font-size:10px; }
  .calendar-toolbar { align-items:flex-start; }
  .event-item { flex-wrap:wrap; }
+ .proposal-item { flex-direction:column; }
+ .proposal-actions { width:100%; }
  .event-actions { width:100%; }
 }
 </style>
