@@ -25,11 +25,11 @@
         <a href="#apple-import-panel" class="calendar-import-link" data-import-panel="apple-import-panel">Apple / iCloud</a>
     </div>
 
-    <section class="calendar-import-panel" id="google-import-panel" hidden>
+    <section class="calendar-import-panel" id="google-import-panel" {% if not google_email %}hidden{% endif %}>
         <h3>Google Agenda</h3>
         {% if google_email %}
             <p>Compte connecté : <strong>{{ google_email }}</strong></p>
-            <form method="POST" action="{{ url_for('google_disconnect') }}" onsubmit="return confirm('Déconnecter ce compte Google et supprimer ses événements importés de Dis-moi tout ?');">
+            <form method="POST" action="{{ url_for('google_disconnect') }}" onsubmit="return confirm('Déconnecter ce compte Google ? Les événements déjà importés resteront dans Dis-moi tout.');">
                 <button type="submit" class="calendar-button">Déconnecter ce compte Google</button>
             </form>
             {% if google_error %}<p>{{ google_error }}</p>{% endif %}
