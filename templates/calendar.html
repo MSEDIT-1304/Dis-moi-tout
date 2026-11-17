@@ -7,6 +7,7 @@
             <h1>Mes calendriers</h1>
             <p>Retrouvez vos rendez-vous dans vos deux agendas personnels.</p>
         </div>
+        <a href="{{ url_for('add_event_page') }}" class="calendar-button">Ajouter un événement</a>
     </header>
 
     {% with messages = get_flashed_messages() %}
@@ -113,9 +114,7 @@
         </p>
     </section>
 
-    <div class="calendar-add-link" style="text-align:center; margin: 0 0 18px;">
-        <a href="{{ url_for('add_event_page') }}" class="calendar-button">Ajouter un événement</a>
-    </div>
+
 
 
 
