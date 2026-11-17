@@ -33,6 +33,9 @@
         <h3>Google Agenda</h3>
         {% if google_email %}
             <p>Compte connecté : <strong>{{ google_email }}</strong></p>
+            <form method="POST" action="{{ url_for('google_disconnect') }}" onsubmit="return confirm('Déconnecter ce compte Google et supprimer ses événements importés de Dis-moi tout ?');">
+                <button type="submit" class="calendar-button">Déconnecter ce compte Google</button>
+            </form>
             {% if google_error %}<p>{{ google_error }}</p>{% endif %}
             <form method="POST" action="{{ url_for('calendar_import') }}">
                 <label for="google-type-agenda">Importer dans</label>
