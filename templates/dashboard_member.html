@@ -147,18 +147,42 @@
                                             Autoriser l'accès à mon agenda PERSO
                                         </label>
                                     </div>
+                                    <div id="garde-partagee-{{ membre['id'] }}" class="member-custody-settings" style="display: none;">
+                                        <label class="members-checkbox">
+                                            <input type="checkbox" name="garde_partagee" value="oui" {% if membre['garde_partagee'] %}checked{% endif %}>
+                                            Activer la garde partagée pour cet enfant
+                                        </label>
+                                        <div class="members-form-grid">
+                                            <div>
+                                                <label for="frequence-garde-{{ membre['id'] }}">Fréquence de la garde</label>
+                                                <select id="frequence-garde-{{ membre['id'] }}" name="frequence_garde">
+                                                    <option value="">Choisir une fréquence</option>
+                                                    <option value="1 semaine sur deux" {% if membre['frequence_garde'] == '1 semaine sur deux' %}selected{% endif %}>1 semaine sur deux</option>
+                                                    <option value="Tous les quinze jours" {% if membre['frequence_garde'] == 'Tous les quinze jours' %}selected{% endif %}>Tous les quinze jours</option>
+                                                    <option value="Tous les mois" {% if membre['frequence_garde'] == 'Tous les mois' %}selected{% endif %}>Tous les mois</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label for="prochaine-date-garde-{{ membre['id'] }}">Prochaine date de garde</label>
+                                                <input type="date" id="prochaine-date-garde-{{ membre['id'] }}" name="prochaine_date_garde" value="{{ membre['prochaine_date_garde'] or '' }}">
+                                            </div>
+                                        </div>
+                                        <p class="member-custody-note">Les gardes passées seront conservées. Seules les prochaines gardes seront recalculées.</p>
+                                    </div>
                                     <script>
                                         (function () {
                                             const roleSelect = document.getElementById("role-{{ membre['id'] }}");
                                             const partageAgendas = document.getElementById("partage-agendas-{{ membre['id'] }}");
-                                            function afficherPartageAgendas() {
+                                            const gardePartagee = document.getElementById("garde-partagee-{{ membre['id'] }}");
+                                            function actualiserOptionsMembre() {
                                                 partageAgendas.style.display =
                                                     ["conjoint", "ex-conjoint"].includes(roleSelect.value)
                                                     ? "block"
                                                     : "none";
+                                                gardePartagee.style.display = roleSelect.value === "enfant" ? "block" : "none";
                                             }
-                                            roleSelect.addEventListener("change", afficherPartageAgendas);
-                                            afficherPartageAgendas();
+                                            roleSelect.addEventListener("change", actualiserOptionsMembre);
+                                            actualiserOptionsMembre();
                                         })();
                                     </script>
                                     <label class="members-checkbox">
@@ -254,6 +278,19 @@
 
 .members-checkbox input {
     width: auto;
+}
+
+.member-custody-settings {
+    margin: 14px 0;
+    padding: 12px;
+    border: 1px solid rgba(23, 50, 77, 0.2);
+    border-radius: 7px;
+}
+
+.member-custody-note {
+    color: #17324d !important;
+    font-size: 13px;
+    margin: 6px 0 0;
 }
 
 .members-button {
