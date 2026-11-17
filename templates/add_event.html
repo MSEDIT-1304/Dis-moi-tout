@@ -25,8 +25,8 @@
                 {% if est_admin %}
                 <div>
                     <label for="membre_id">Ajouter dans</label>
-                    <select id="membre_id" name="membre_id">
-                        <option value="">Mon agenda administrateur</option>
+                    <select id="membre_id" name="membre_ids" multiple size="1">
+                        <option value="admin" selected>Mon agenda administrateur</option>
                         {% for membre in membres %}
                         <option value="{{ membre['id'] }}">{{ membre['prenom'] }} {{ membre['nom'] }}</option>
                         {% endfor %}
