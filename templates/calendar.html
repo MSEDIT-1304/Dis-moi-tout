@@ -25,15 +25,32 @@
         <a href="#apple-import-panel" class="calendar-import-link" data-import-panel="apple-import-panel">Apple / iCloud</a>
     </div>
 
-    <section class="calendar-import-panel" id="google-import-panel" {% if not google_email %}hidden{% endif %}>
+    <section class="calendar-import-panel" id="google-import-panel" {% if not google_connections %}hidden{% endif %}>
+        <button type="button" class="calendar-import-close" data-close-panel="google-import-panel" aria-label="Fermer">×</button>
         <h3>Google Agenda</h3>
-        {% if google_email %}
-            <p>Compte connecté : <strong>{{ google_email }}</strong></p>
-            <form method="POST" action="{{ url_for('google_disconnect') }}" onsubmit="return confirm('Déconnecter ce compte Google ? Les événements déjà importés resteront dans Dis-moi tout.');">
-                <button type="submit" class="calendar-button">Déconnecter ce compte Google</button>
+
+        {% if google_connections %}
+            <p>Comptes Google connectés :</p>
+            <ul class="google-account-list">
+                {% for account in google_connections %}
+                <li>{{ account['google_email'] }}</li>
+                {% endfor %}
+            </ul>
+
+            <form method="POST" action="{{ url_for('google_connect') }}" class="google-add-account-form">
+                <label for="google_email">Ajouter un autre compte Google</label>
+                <input type="email" id="google_email" name="google_email" autocomplete="email" placeholder="nouveau.compte@gmail.com" required>
+                <button type="submit" class="calendar-button">Connecter un autre compte</button>
             </form>
+
             {% if google_error %}<p>{{ google_error }}</p>{% endif %}
             <form method="POST" action="{{ url_for('calendar_import') }}">
+                <label for="google-connection-select">Compte Google à importer</label>
+                <select id="google-connection-select" name="google_connection_id" onchange="window.location.href='{{ url_for('calendar') }}?google_account_id='+this.value">
+                    {% for account in google_connections %}
+                    <option value="{{ account['id'] }}" {% if account['id'] == google_connection_id %}selected{% endif %}>{{ account['google_email'] }}</option>
+                    {% endfor %}
+                </select>
                 <label for="google-type-agenda">Importer dans</label>
                 <select id="google-type-agenda" name="type_agenda">
                     <option value="perso">Mon agenda PERSO</option>
@@ -46,7 +63,7 @@
                     {{ google_cal['nom'] or 'Agenda sans nom' }}{% if google_cal['principal'] %} (principal){% endif %}
                 </label>
                 {% else %}
-                <p>Aucun agenda Google disponible pour le moment.</p>
+                <p>Aucun agenda Google disponible pour ce compte.</p>
                 {% endfor %}
                 <button type="submit" class="calendar-button" {% if not google_calendars %}disabled{% endif %}>Importer les agendas sélectionnés</button>
             </form>
@@ -62,6 +79,7 @@
     </section>
 
     <section class="calendar-import-panel" id="apple-import-panel" hidden>
+        <button type="button" class="calendar-import-close" data-close-panel="apple-import-panel" aria-label="Fermer">×</button>
         <h3>Apple / iCloud</h3>
         <p>Apple nécessite un mot de passe spécifique d’application. Il n'est pas enregistré dans Dis-moi tout.</p>
         <form method="POST" action="{{ url_for('apple_import') }}">
@@ -191,6 +209,11 @@
 .calendar-import-separator { color:#c5a15b; }
 .calendar-import-panel { background:rgba(23,50,77,.08); border:1px solid rgba(23,50,77,.18); border-radius:8px; padding:16px 20px; margin:0 0 18px; color:#17324d; }
 .calendar-import-panel[hidden] { display:none; }
+.calendar-import-panel { position:relative; padding-top:42px; }
+.calendar-import-close { position:absolute; top:10px; right:12px; width:34px; height:34px; border:0; border-radius:50%; background:#087bd5; color:#fff; font-size:26px; line-height:1; font-weight:bold; cursor:pointer; }
+.google-account-list { margin:6px 0 16px; padding-left:22px; }
+.google-account-list li { margin:5px 0; }
+.google-add-account-form { padding:12px; margin:12px 0 18px; background:rgba(255,255,255,.72); border-radius:8px; }
 .calendar-import-panel h3,.calendar-import-panel p,.calendar-import-panel label { color:#17324d; }
 .calendar-import-panel form { max-width:560px; }
 .calendar-import-panel input:not([type="checkbox"]),.calendar-import-panel select { width:100%; box-sizing:border-box; padding:10px; border:1px solid #b8cce0; border-radius:6px; margin:5px 0 12px; }
@@ -221,6 +244,13 @@ document.addEventListener("DOMContentLoaded", function () {
             if (!target.hidden) target.scrollIntoView({ behavior: "smooth", block: "nearest" });
         });
     });
+    document.querySelectorAll("[data-close-panel]").forEach(button => {
+        button.addEventListener("click", function () {
+            const panel = document.getElementById(this.dataset.closePanel);
+            if (panel) panel.hidden = true;
+        });
+    });
+
     const events = [
         {% for evenement in evenements_perso %}
         {date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
