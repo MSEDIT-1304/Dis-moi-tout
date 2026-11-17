@@ -3680,34 +3680,6 @@ def google_disconnect():
         except Exception:
             app.logger.exception("Révocation Google impossible lors de la déconnexion")
 
-    # Ne supprimer que les événements Google importés par ce propriétaire.
-    # Les événements saisis manuellement et les imports Apple sont conservés.
-    if owner_type == "admin":
-        cursor.execute(
-            """
-            DELETE FROM evenements
-            WHERE famille_id = ?
-              AND membre_id IS NULL
-              AND created_by_admin_id = ?
-              AND calendrier LIKE 'Google | %'
-              AND type_agenda IN ('admin_pro', 'admin_perso')
-            """,
-            (famille_id, owner_id)
-        )
-    else:
-        cursor.execute(
-            """
-            DELETE FROM evenements
-            WHERE famille_id = ?
-              AND membre_id = ?
-              AND created_by_membre_id = ?
-              AND calendrier LIKE 'Google | %'
-              AND type_agenda IN ('membre_pro', 'membre_perso')
-            """,
-            (famille_id, owner_id, owner_id)
-        )
-
-    deleted_events = cursor.rowcount
     cursor.execute(
         """
         DELETE FROM google_connections_users
@@ -3718,7 +3690,7 @@ def google_disconnect():
     conn.commit()
     conn.close()
 
-    flash(f"Compte Google déconnecté. {deleted_events} événement(s) Google importé(s) supprimé(s).")
+    flash("Compte Google déconnecté. Vos événements déjà importés restent dans Dis-moi tout.")
     return redirect(url_for("calendar"))
 
 
