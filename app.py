@@ -2298,23 +2298,19 @@ def add_event_page():
         return redirect(url_for("dashboard"))
 
     est_admin = session.get("admin_logged") is True
-    membres = []
-    afficher_pro = est_admin
+    membre_id = session.get("membre_id")
     conn = get_connection()
     cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, prenom, nom, role FROM membres WHERE famille_id = ? ORDER BY prenom, nom",
+        (famille_id,)
+    )
+    membres = cursor.fetchall()
 
-    if est_admin:
-        cursor.execute(
-            "SELECT id, prenom, nom, role FROM membres WHERE famille_id = ? ORDER BY prenom, nom",
-            (famille_id,)
-        )
-        membres = cursor.fetchall()
-    else:
-        cursor.execute(
-            "SELECT role FROM membres WHERE id = ? AND famille_id = ?",
-            (session.get("membre_id"), famille_id)
-        )
-        membre = cursor.fetchone()
+    afficher_pro = est_admin
+    destinataire_par_defaut = "admin" if est_admin else str(membre_id)
+    if not est_admin:
+        membre = next((m for m in membres if m["id"] == membre_id), None)
         if membre is None:
             conn.close()
             session.clear()
@@ -2326,7 +2322,9 @@ def add_event_page():
         "add_event.html",
         est_admin=est_admin,
         afficher_pro=afficher_pro,
-        membres=membres
+        membres=membres,
+        membre_connecte_id=membre_id,
+        destinataire_par_defaut=destinataire_par_defaut
     )
 
 
@@ -2345,166 +2343,125 @@ def add_event():
     date = request.form.get("date", "").strip()
     heure = request.form.get("heure", "").strip()
     couleur = request.form.get("couleur_evenement", "#4f8fc9").strip()
-    couleurs = {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}
-    if couleur not in couleurs:
+    if couleur not in {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}:
         couleur = "#4f8fc9"
     if not titre or not date:
         flash("Veuillez saisir un titre et une date.")
-        return redirect(url_for("calendar"))
+        return redirect(url_for("add_event_page"))
 
     rappel = 1 if request.form.get("rappel") == "oui" else 0
     est_admin = session.get("admin_logged") is True
     admin_id = session.get("admin_id")
-    membre_connecte_id = session.get("membre_id")
+    auteur_membre_id = session.get("membre_id")
     agenda = request.form.get("type_agenda", "perso").strip().lower()
     if agenda not in ("pro", "perso"):
         flash("Agenda invalide.")
-        return redirect(url_for("calendar"))
+        return redirect(url_for("add_event_page"))
+
+    destinataires = list(dict.fromkeys(request.form.getlist("destinataire_ids")))
+    if not destinataires:
+        flash("Sélectionnez au moins un agenda destinataire.")
+        return redirect(url_for("add_event_page"))
 
     conn = get_connection()
     cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, role FROM membres WHERE famille_id = ?",
+        (famille_id,)
+    )
+    membres_famille = {str(row["id"]): row for row in cursor.fetchall()}
+
+    # Contrôle strict des destinataires : seuls l'administrateur et les
+    # membres de la famille peuvent recevoir une proposition.
+    membres_cibles = []
+    cible_admin = "admin" in destinataires
+    for valeur in destinataires:
+        if valeur == "admin":
+            continue
+        if not valeur.isdigit() or valeur not in membres_famille:
+            conn.close()
+            flash("Un destinataire sélectionné n'appartient pas à votre famille.")
+            return redirect(url_for("add_event_page"))
+        if int(valeur) not in membres_cibles:
+            membres_cibles.append(int(valeur))
 
     if est_admin:
-        # Le formulaire permet de choisir l'administratrice et/ou plusieurs
-        # membres. L'ancien champ membre_id reste accepté pour compatibilité.
-        destinataires = request.form.getlist("membre_ids")
-        if not destinataires:
-            ancien_destinataire = request.form.get("membre_id", "").strip()
-            destinataires = [ancien_destinataire or "admin"]
-
-        ajouter_admin = "admin" in destinataires or "" in destinataires
-        membre_ids = []
-        for valeur in destinataires:
-            if valeur in ("", "admin"):
-                continue
-            try:
-                membre_id = int(valeur)
-            except (TypeError, ValueError):
-                conn.close()
-                flash("Un membre sélectionné est invalide.")
-                return redirect(url_for("calendar"))
-            if membre_id not in membre_ids:
-                membre_ids.append(membre_id)
-
-        membres_valides = []
-        if membre_ids:
-            placeholders = ",".join("?" for _ in membre_ids)
-            cursor.execute(
-                f"""
-                SELECT id
-                FROM membres
-                WHERE famille_id = ? AND id IN ({placeholders})
-                """,
-                [famille_id] + membre_ids
-            )
-            membres_valides = [row["id"] for row in cursor.fetchall()]
-
-            if len(membres_valides) != len(membre_ids):
-                conn.close()
-                flash("Un des membres sélectionnés n'appartient pas à votre famille.")
-                return redirect(url_for("calendar"))
-
-            if agenda != "perso":
-                conn.close()
-                flash("L'administratrice peut ajouter des rendez-vous uniquement dans les agendas PERSO des membres.")
-                return redirect(url_for("calendar"))
-
-        if not ajouter_admin and not membres_valides:
+        if agenda == "pro" and membres_cibles:
             conn.close()
-            flash("Sélectionnez au moins un destinataire.")
-            return redirect(url_for("calendar"))
+            flash("L'agenda PRO de l'administratrice ne peut pas être proposé dans l'agenda d'un membre.")
+            return redirect(url_for("add_event_page"))
+        auteur_role = None
+        auteur_id = admin_id
+    else:
+        auteur = membres_famille.get(str(auteur_membre_id))
+        if auteur is None:
+            conn.close()
+            session.clear()
+            return redirect(url_for("home"))
+        auteur_role = (auteur["role"] or "enfant").lower()
+        auteur_id = auteur_membre_id
+        if agenda == "pro" and auteur_role != "conjoint":
+            conn.close()
+            flash("Seul le conjoint actuel dispose d'un agenda PRO.")
+            return redirect(url_for("add_event_page"))
+        if agenda == "pro" and any(mid != auteur_membre_id for mid in membres_cibles):
+            conn.close()
+            flash("Un membre peut proposer un rendez-vous PRO uniquement dans son propre agenda ou celui de l'administratrice.")
+            return redirect(url_for("add_event_page"))
 
-        created_by_admin_id = admin_id
-        created_by_membre_id = None
-        statut_validation = "accepte"
+    if not cible_admin and not membres_cibles:
+        conn.close()
+        flash("Sélectionnez au moins un destinataire.")
+        return redirect(url_for("add_event_page"))
 
-        # L'événement est inséré dans l'agenda de chaque destinataire choisi.
-        if ajouter_admin:
-            cursor.execute(
-                """
-                INSERT INTO evenements (
-                    famille_id, membre_id, titre, description, date, heure,
-                    calendrier, rappel, type_evenement, created_by_admin_id,
-                    created_by_membre_id, statut_validation, valide_par_admin_id,
-                    valide_par_membre_id, concerne_admin, type_agenda
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    famille_id, None, titre, description, date, heure,
-                    couleur, rappel, "normal", created_by_admin_id,
-                    created_by_membre_id, statut_validation, admin_id,
-                    None, 1, f"admin_{agenda}"
-                )
+    created_by_admin_id = admin_id if est_admin else None
+    created_by_membre_id = None if est_admin else auteur_membre_id
+    rappel = 1 if request.form.get("rappel") == "oui" else 0
+    nombre_attente = 0
+
+    # Une ligne indépendante par agenda destinataire : chaque personne
+    # accepte ou refuse uniquement sa propre demande.
+    cibles = []
+    if cible_admin:
+        cibles.append(("admin", None, 1, f"admin_{agenda}"))
+    for mid in membres_cibles:
+        cibles.append(("membre", mid, 0, "membre_perso"))
+
+    for type_cible, destinataire_id, concerne_admin, type_agenda in cibles:
+        est_son_propre_agenda = (
+            (est_admin and type_cible == "admin")
+            or (not est_admin and type_cible == "membre" and destinataire_id == auteur_membre_id)
+        )
+        statut = "accepte" if est_son_propre_agenda else "en_attente"
+        valide_admin = admin_id if (est_admin and est_son_propre_agenda) else None
+        valide_membre = auteur_membre_id if (not est_admin and est_son_propre_agenda) else None
+
+        cursor.execute(
+            """
+            INSERT INTO evenements (
+                famille_id, membre_id, titre, description, date, heure,
+                calendrier, rappel, type_evenement, created_by_admin_id,
+                created_by_membre_id, statut_validation, valide_par_admin_id,
+                valide_par_membre_id, concerne_admin, type_agenda
             )
-
-        for destinataire_id in membres_valides:
-            cursor.execute(
-                """
-                INSERT INTO evenements (
-                    famille_id, membre_id, titre, description, date, heure,
-                    calendrier, rappel, type_evenement, created_by_admin_id,
-                    created_by_membre_id, statut_validation, valide_par_admin_id,
-                    valide_par_membre_id, concerne_admin, type_agenda
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    famille_id, destinataire_id, titre, description, date, heure,
-                    couleur, rappel, "normal", created_by_admin_id,
-                    created_by_membre_id, statut_validation, admin_id,
-                    None, 0, "membre_perso"
-                )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                famille_id, destinataire_id, titre, description, date, heure,
+                couleur, rappel, "normal", created_by_admin_id,
+                created_by_membre_id, statut, valide_admin,
+                valide_membre, concerne_admin, type_agenda
             )
-
-        nombre_destinataires = len(membres_valides) + (1 if ajouter_admin else 0)
-        conn.commit()
-        conn.close()
-        flash(
-            "Événement ajouté."
-            if nombre_destinataires == 1
-            else f"Événement ajouté dans les agendas de {nombre_destinataires} destinataires."
         )
-        return redirect(url_for("calendar"))
+        if statut == "en_attente":
+            nombre_attente += 1
 
-    # Fonctionnement inchangé pour les membres : chacun ajoute uniquement
-    # dans son propre agenda, selon ses droits actuels.
-    cursor.execute(
-        "SELECT id, role FROM membres WHERE id = ? AND famille_id = ?",
-        (membre_connecte_id, famille_id)
-    )
-    auteur = cursor.fetchone()
-    if auteur is None:
-        conn.close()
-        session.clear()
-        return redirect(url_for("home"))
-
-    role_auteur = (auteur["role"] or "enfant").lower()
-    if role_auteur != "conjoint" and agenda == "pro":
-        conn.close()
-        flash("Seul le conjoint actuel dispose d'un agenda PRO.")
-        return redirect(url_for("calendar"))
-
-    cursor.execute(
-        """
-        INSERT INTO evenements (
-            famille_id, membre_id, titre, description, date, heure,
-            calendrier, rappel, type_evenement, created_by_admin_id,
-            created_by_membre_id, statut_validation, valide_par_admin_id,
-            valide_par_membre_id, concerne_admin, type_agenda
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            famille_id, membre_connecte_id, titre, description, date, heure,
-            couleur, rappel, "normal", None,
-            membre_connecte_id, "accepte", None,
-            membre_connecte_id, 0, f"membre_{agenda}"
-        )
-    )
     conn.commit()
     conn.close()
-    flash("Événement ajouté.")
+    if nombre_attente:
+        flash(f"Proposition envoyée. {nombre_attente} destinataire(s) doivent accepter l'événement.")
+    else:
+        flash("Événement ajouté dans votre agenda.")
     return redirect(url_for("calendar"))
 
 
@@ -2678,192 +2635,94 @@ def delete_event(event_id):
 # VALIDATION DES RENDEZ-VOUS PROPOSÉS
 # ==========================================================
 
-@app.route(
-    "/validate_event/<int:event_id>",
-    methods=["POST"]
-)
+@app.route("/validate_event/<int:event_id>", methods=["POST"])
 def validate_event(event_id):
-
     if not session.get("logged"):
         return redirect(url_for("home"))
 
     famille_id = session.get("famille_id")
-    admin_logged = session.get("admin_logged") is True
+    est_admin = session.get("admin_logged") is True
     membre_id = session.get("membre_id")
-
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute(
-        """
-        SELECT *
-        FROM evenements
-        WHERE id = ?
-        AND famille_id = ?
-        AND statut_validation = 'en_attente'
-        """,
+        "SELECT * FROM evenements WHERE id = ? AND famille_id = ? AND statut_validation = 'en_attente'",
         (event_id, famille_id)
     )
-
     evenement = cursor.fetchone()
-
     if evenement is None:
         conn.close()
         flash("Cette proposition est introuvable ou déjà traitée.")
         return redirect(url_for("calendar"))
 
-    autorise = False
-
-    # L'administrateur peut valider toutes les propositions
-    if admin_logged:
-
-        autorise = True
-
-    # Le membre concerné peut accepter sa propre proposition
-    elif membre_id is not None:
-
-        cursor.execute(
-            """
-            SELECT id
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
-            (membre_id, famille_id)
-        )
-
-        membre = cursor.fetchone()
-
-        if (
-            membre
-            and evenement["concerne_admin"] == 0
-            and evenement["membre_id"] == membre_id
-        ):
-            autorise = True
-
+    # Seul le destinataire de CETTE ligne peut répondre.
+    autorise = (
+        (est_admin and evenement["concerne_admin"] == 1)
+        or (not est_admin and evenement["concerne_admin"] == 0 and evenement["membre_id"] == membre_id)
+    )
     if not autorise:
         conn.close()
-        flash("Vous n'êtes pas autorisé à valider cette proposition.")
+        flash("Vous n'êtes pas le destinataire de cette proposition.")
         return redirect(url_for("calendar"))
 
-    if admin_logged:
-
+    if est_admin:
         cursor.execute(
-            """
-            UPDATE evenements
-            SET statut_validation = 'accepte',
-                valide_par_admin_id = ?
-            WHERE id = ?
-            AND famille_id = ?
-            AND statut_validation = 'en_attente'
-            """,
+            "UPDATE evenements SET statut_validation = 'accepte', valide_par_admin_id = ? WHERE id = ? AND famille_id = ? AND statut_validation = 'en_attente' AND concerne_admin = 1",
             (session.get("admin_id"), event_id, famille_id)
         )
-
     else:
-
         cursor.execute(
-            """
-            UPDATE evenements
-            SET statut_validation = 'accepte',
-                valide_par_membre_id = ?
-            WHERE id = ?
-            AND famille_id = ?
-            AND statut_validation = 'en_attente'
-            """,
-            (membre_id, event_id, famille_id)
+            "UPDATE evenements SET statut_validation = 'accepte', valide_par_membre_id = ? WHERE id = ? AND famille_id = ? AND statut_validation = 'en_attente' AND concerne_admin = 0 AND membre_id = ?",
+            (membre_id, event_id, famille_id, membre_id)
         )
-
     conn.commit()
     conn.close()
-
-    flash("Rendez-vous accepté.")
+    flash("Événement accepté : il est maintenant ajouté à votre agenda.")
     return redirect(url_for("calendar"))
 
 
-@app.route(
-    "/refuse_event/<int:event_id>",
-    methods=["POST"]
-)
+@app.route("/refuse_event/<int:event_id>", methods=["POST"])
 def refuse_event(event_id):
-
     if not session.get("logged"):
         return redirect(url_for("home"))
 
     famille_id = session.get("famille_id")
-    admin_logged = session.get("admin_logged") is True
+    est_admin = session.get("admin_logged") is True
     membre_id = session.get("membre_id")
-
     conn = get_connection()
     cursor = conn.cursor()
-
     cursor.execute(
-        """
-        SELECT *
-        FROM evenements
-        WHERE id = ?
-        AND famille_id = ?
-        AND statut_validation = 'en_attente'
-        """,
+        "SELECT * FROM evenements WHERE id = ? AND famille_id = ? AND statut_validation = 'en_attente'",
         (event_id, famille_id)
     )
-
     evenement = cursor.fetchone()
-
     if evenement is None:
         conn.close()
         flash("Cette proposition est introuvable ou déjà traitée.")
         return redirect(url_for("calendar"))
 
-    autorise = False
-
-    # L'administrateur peut refuser toutes les propositions
-    if admin_logged:
-
-        autorise = True
-
-    # Le membre concerné peut refuser sa propre proposition
-    elif membre_id is not None:
-
-        cursor.execute(
-            """
-            SELECT id
-            FROM membres
-            WHERE id = ?
-            AND famille_id = ?
-            """,
-            (membre_id, famille_id)
-        )
-
-        membre = cursor.fetchone()
-
-        if (
-            membre
-            and evenement["concerne_admin"] == 0
-            and evenement["membre_id"] == membre_id
-        ):
-            autorise = True
-
+    autorise = (
+        (est_admin and evenement["concerne_admin"] == 1)
+        or (not est_admin and evenement["concerne_admin"] == 0 and evenement["membre_id"] == membre_id)
+    )
     if not autorise:
         conn.close()
-        flash("Vous n'êtes pas autorisé à refuser cette proposition.")
+        flash("Vous n'êtes pas le destinataire de cette proposition.")
         return redirect(url_for("calendar"))
 
-    cursor.execute(
-        """
-        UPDATE evenements
-        SET statut_validation = 'refuse'
-        WHERE id = ?
-        AND famille_id = ?
-        AND statut_validation = 'en_attente'
-        """,
-        (event_id, famille_id)
-    )
-
+    if est_admin:
+        cursor.execute(
+            "UPDATE evenements SET statut_validation = 'refuse' WHERE id = ? AND famille_id = ? AND statut_validation = 'en_attente' AND concerne_admin = 1",
+            (event_id, famille_id)
+        )
+    else:
+        cursor.execute(
+            "UPDATE evenements SET statut_validation = 'refuse' WHERE id = ? AND famille_id = ? AND statut_validation = 'en_attente' AND concerne_admin = 0 AND membre_id = ?",
+            (event_id, famille_id, membre_id)
+        )
     conn.commit()
     conn.close()
-
-    flash("Proposition refusée.")
+    flash("Proposition refusée. Rien n'a été ajouté à votre agenda.")
     return redirect(url_for("calendar"))
     
 # ==========================================================
@@ -2987,7 +2846,9 @@ def calendar():
         if est_admin:
             # Ses propres rendez-vous et uniquement ceux qu'elle a créés
             # dans les agendas des membres.
-            if ev_dict.get("concerne_admin") == 1 and ev_dict.get("created_by_admin_id") == admin_id:
+            if ev_dict.get("concerne_admin") == 1:
+                # Agenda de l'administratrice : ses événements personnels
+                # et les propositions qu'elle a elle-même acceptées.
                 evenements.append(ev_dict)
                 continue
 
@@ -3025,27 +2886,39 @@ def calendar():
             ):
                 evenements.append(ev_dict)
 
-    # Propositions en attente : chaque membre voit les siennes;
-    # l'administratrice voit les propositions qui lui sont adressées.
+    # Demandes reçues : chaque destinataire ne voit que les propositions
+    # qui concernent son propre agenda.
     if est_admin:
         cursor.execute(
             """
-            SELECT e.*, m.prenom, m.nom
-            FROM evenements e LEFT JOIN membres m ON e.membre_id = m.id
+            SELECT e.*,
+                   CASE
+                     WHEN e.created_by_membre_id IS NOT NULL THEN
+                       (SELECT m.prenom || ' ' || m.nom FROM membres m WHERE m.id = e.created_by_membre_id)
+                     ELSE
+                       (SELECT a.prenom || ' ' || a.nom FROM admin a WHERE a.id = e.created_by_admin_id)
+                   END AS proposeur
+            FROM evenements e
             WHERE e.famille_id = ? AND e.statut_validation = 'en_attente'
               AND e.concerne_admin = 1
-            ORDER BY e.date, e.heure
+            ORDER BY e.date, e.heure, e.id
             """,
             (famille_id,)
         )
     else:
         cursor.execute(
             """
-            SELECT e.*, m.prenom, m.nom
-            FROM evenements e LEFT JOIN membres m ON e.membre_id = m.id
+            SELECT e.*,
+                   CASE
+                     WHEN e.created_by_membre_id IS NOT NULL THEN
+                       (SELECT m.prenom || ' ' || m.nom FROM membres m WHERE m.id = e.created_by_membre_id)
+                     ELSE
+                       (SELECT a.prenom || ' ' || a.nom FROM admin a WHERE a.id = e.created_by_admin_id)
+                   END AS proposeur
+            FROM evenements e
             WHERE e.famille_id = ? AND e.statut_validation = 'en_attente'
-              AND e.membre_id = ?
-            ORDER BY e.date, e.heure
+              AND e.concerne_admin = 0 AND e.membre_id = ?
+            ORDER BY e.date, e.heure, e.id
             """,
             (famille_id, membre_id)
         )
