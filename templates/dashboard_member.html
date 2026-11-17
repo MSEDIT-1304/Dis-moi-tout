@@ -137,6 +137,30 @@
                                             </select>
                                         </div>
                                     </div>
+                                    <div id="partage-agendas-{{ membre['id'] }}" class="member-agenda-permissions" style="display: none;">
+                                        <label class="members-checkbox">
+                                            <input type="checkbox" name="partage_agenda_pro" value="oui" {% if membre['acces_agenda_admin_pro'] %}checked{% endif %}>
+                                            Autoriser l'accès à mon agenda PRO
+                                        </label>
+                                        <label class="members-checkbox">
+                                            <input type="checkbox" name="partage_agenda_perso" value="oui" {% if membre['acces_agenda_admin_perso'] %}checked{% endif %}>
+                                            Autoriser l'accès à mon agenda PERSO
+                                        </label>
+                                    </div>
+                                    <script>
+                                        (function () {
+                                            const roleSelect = document.getElementById("role-{{ membre['id'] }}");
+                                            const partageAgendas = document.getElementById("partage-agendas-{{ membre['id'] }}");
+                                            function afficherPartageAgendas() {
+                                                partageAgendas.style.display =
+                                                    ["conjoint", "ex-conjoint"].includes(roleSelect.value)
+                                                    ? "block"
+                                                    : "none";
+                                            }
+                                            roleSelect.addEventListener("change", afficherPartageAgendas);
+                                            afficherPartageAgendas();
+                                        })();
+                                    </script>
                                     <label class="members-checkbox">
                                         <input type="checkbox" name="peut_modifier" value="oui" {% if membre['peut_modifier'] %}checked{% endif %}>
                                         Autoriser ce membre à modifier les informations
