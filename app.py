@@ -1126,9 +1126,50 @@ def init_database():
             refresh_token TEXT,
             expires_at TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(owner_type, owner_id)
+            UNIQUE(owner_type, owner_id, google_email COLLATE NOCASE)
         )
     """)
+    # Migration non destructive : autoriser plusieurs comptes Google par propriétaire.
+    index_rows = cursor.execute("PRAGMA index_list(google_connections_users)").fetchall()
+    old_constraint = False
+    for index_row in index_rows:
+        if index_row[2]:
+            index_name = index_row[1].replace('"', '""')
+            index_columns = [
+                info[2] for info in cursor.execute(
+                    f'PRAGMA index_info("{index_name}")'
+                ).fetchall()
+            ]
+            if index_columns == ["owner_type", "owner_id"]:
+                old_constraint = True
+                break
+
+    if old_constraint:
+        cursor.execute("ALTER TABLE google_connections_users RENAME TO google_connections_users_old")
+        cursor.execute("""
+            CREATE TABLE google_connections_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                famille_id INTEGER NOT NULL,
+                owner_type TEXT NOT NULL CHECK(owner_type IN ('admin', 'membre')),
+                owner_id INTEGER NOT NULL,
+                google_email TEXT,
+                access_token TEXT,
+                refresh_token TEXT,
+                expires_at TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(owner_type, owner_id, google_email COLLATE NOCASE)
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO google_connections_users
+                (id, famille_id, owner_type, owner_id, google_email,
+                 access_token, refresh_token, expires_at, created_at)
+            SELECT id, famille_id, owner_type, owner_id, google_email,
+                   access_token, refresh_token, expires_at, created_at
+            FROM google_connections_users_old
+        """)
+        cursor.execute("DROP TABLE google_connections_users_old")
+
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_google_connections_family
         ON google_connections_users(famille_id)
@@ -2979,7 +3020,7 @@ def calendar():
     # Un enfant et un ex-conjoint n'ont qu'un agenda PERSO.
     afficher_pro = est_admin or (membre and membre["role"] == "conjoint")
 
-    # Connexion Google propre à chaque propriétaire (admin ou membre).
+    # Plusieurs comptes Google peuvent rester connectés pour un même propriétaire.
     owner_type, owner_id = get_calendar_owner()
     google_email = None
     google_calendars = []
@@ -2988,30 +3029,43 @@ def calendar():
     google_cursor = google_conn.cursor()
     google_cursor.execute(
         """
-        SELECT google_email, access_token, refresh_token, expires_at
+        SELECT id, google_email, access_token, refresh_token, expires_at
         FROM google_connections_users
         WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+        ORDER BY id
         """,
         (famille_id, owner_type, owner_id)
     )
-    google_connection = google_cursor.fetchone()
+    google_connections = [dict(row) for row in google_cursor.fetchall()]
     google_conn.close()
 
-    if google_connection:
-        google_email = google_connection["google_email"]
-        google_access_token = google_connection["access_token"]
+    requested_google_id = request.args.get("google_account_id", type=int)
+    selected_google_connection = next(
+        (item for item in google_connections if item["id"] == requested_google_id),
+        None
+    )
+    if selected_google_connection is None and google_connections:
+        selected_google_connection = google_connections[0]
+
+    google_connection_id = (
+        selected_google_connection["id"] if selected_google_connection else None
+    )
+
+    if selected_google_connection:
+        google_email = selected_google_connection["google_email"]
+        google_access_token = selected_google_connection["access_token"]
         try:
-            expiry = datetime.fromisoformat(google_connection["expires_at"])
+            expiry = datetime.fromisoformat(selected_google_connection["expires_at"])
         except (TypeError, ValueError):
             expiry = datetime.min
 
         if expiry.timestamp() <= datetime.now().timestamp() + 120:
-            if google_connection["refresh_token"]:
+            if selected_google_connection["refresh_token"]:
                 try:
                     refreshed = refresh_google_token(
                         GOOGLE_CLIENT_ID,
                         GOOGLE_CLIENT_SECRET,
-                        google_connection["refresh_token"]
+                        selected_google_connection["refresh_token"]
                     )
                     if refreshed and refreshed.get("access_token"):
                         google_access_token = refreshed["access_token"]
@@ -3021,12 +3075,12 @@ def calendar():
                             """
                             UPDATE google_connections_users
                             SET access_token = ?, expires_at = ?
-                            WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+                            WHERE id = ? AND famille_id = ? AND owner_type = ? AND owner_id = ?
                             """,
                             (
                                 google_access_token,
                                 datetime.fromtimestamp(new_expiry).isoformat(),
-                                famille_id, owner_type, owner_id
+                                google_connection_id, famille_id, owner_type, owner_id
                             )
                         )
                         update_conn.commit()
@@ -3035,7 +3089,7 @@ def calendar():
                         google_error = "La connexion Google doit être renouvelée."
                 except Exception:
                     app.logger.exception("Renouvellement Google depuis le calendrier impossible")
-                    google_error = "Impossible de renouveler Google. Reconnectez votre compte."
+                    google_error = "Impossible de renouveler Google. Reconnectez ce compte."
             else:
                 google_error = "La connexion Google doit être renouvelée."
 
@@ -3057,7 +3111,9 @@ def calendar():
         afficher_pro=afficher_pro,
         google_email=google_email,
         google_calendars=google_calendars,
-        google_error=google_error
+        google_error=google_error,
+        google_connections=google_connections,
+        google_connection_id=google_connection_id
     )
 
 
@@ -3598,12 +3654,13 @@ def google_callback():
         """
         SELECT refresh_token
         FROM google_connections_users
-        WHERE owner_type = ? AND owner_id = ?
+        WHERE owner_type = ? AND owner_id = ? AND LOWER(google_email) = LOWER(?)
         """,
-        (owner_type, owner_id)
+        (owner_type, owner_id, google_email)
     )
     ancienne_connexion = cursor.fetchone()
 
+    # Conserver le refresh_token du même compte si Google ne le renvoie pas.
     if not refresh_token and ancienne_connexion:
         refresh_token = ancienne_connexion["refresh_token"]
 
@@ -3613,11 +3670,10 @@ def google_callback():
             (famille_id, owner_type, owner_id, google_email,
              access_token, refresh_token, expires_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(owner_type, owner_id) DO UPDATE SET
+        ON CONFLICT(owner_type, owner_id, google_email COLLATE NOCASE) DO UPDATE SET
             famille_id = excluded.famille_id,
-            google_email = excluded.google_email,
             access_token = excluded.access_token,
-            refresh_token = excluded.refresh_token,
+            refresh_token = COALESCE(excluded.refresh_token, google_connections_users.refresh_token),
             expires_at = excluded.expires_at
         """,
         (
@@ -3631,67 +3687,6 @@ def google_callback():
 
     flash("Compte Google connecté avec succès.")
     return redirect(url_for("calendar_import"))
-
-
-# ==========================================================
-# DÉCONNECTER LE COMPTE GOOGLE DU PROPRIÉTAIRE CONNECTÉ
-# ==========================================================
-
-@app.route("/google/disconnect", methods=["POST"])
-def google_disconnect():
-    if not calendar_access_required():
-        return redirect(url_for("home"))
-
-    famille_id = session.get("famille_id")
-    owner_type, owner_id = get_calendar_owner()
-    if not famille_id or not owner_id or owner_type not in ("admin", "membre"):
-        flash("Impossible d'identifier le propriétaire de cette connexion Google.")
-        return redirect(url_for("calendar"))
-
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT access_token, refresh_token
-        FROM google_connections_users
-        WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
-        """,
-        (famille_id, owner_type, owner_id)
-    )
-    google_connection = cursor.fetchone()
-
-    if not google_connection:
-        conn.close()
-        flash("Aucun compte Google n'est actuellement connecté.")
-        return redirect(url_for("calendar"))
-
-    # Révocation côté Google : un échec réseau ne doit pas empêcher
-    # la suppression locale de la connexion appartenant à cet utilisateur.
-    token_to_revoke = (google_connection["refresh_token"]
-                       or google_connection["access_token"])
-    if token_to_revoke:
-        try:
-            requests.post(
-                "https://oauth2.googleapis.com/revoke",
-                params={"token": token_to_revoke},
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=15
-            )
-        except Exception:
-            app.logger.exception("Révocation Google impossible lors de la déconnexion")
-
-    cursor.execute(
-        """
-        DELETE FROM google_connections_users
-        WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
-        """,
-        (famille_id, owner_type, owner_id)
-    )
-    conn.commit()
-    conn.close()
-
-    flash("Compte Google déconnecté. Vos événements déjà importés restent dans Dis-moi tout.")
-    return redirect(url_for("calendar"))
 
 
 # ==========================================================
@@ -3718,16 +3713,28 @@ def calendar_import():
                 type_choisi = "perso"
         type_agenda = f"{owner_type}_{type_choisi}"
 
+        selected_connection_id = request.form.get("google_connection_id", type=int)
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT google_email, access_token, refresh_token, expires_at
-            FROM google_connections_users
-            WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
-            """,
-            (famille_id, owner_type, owner_id)
-        )
+        if selected_connection_id:
+            cursor.execute(
+                """
+                SELECT id, google_email, access_token, refresh_token, expires_at
+                FROM google_connections_users
+                WHERE id = ? AND famille_id = ? AND owner_type = ? AND owner_id = ?
+                """,
+                (selected_connection_id, famille_id, owner_type, owner_id)
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT id, google_email, access_token, refresh_token, expires_at
+                FROM google_connections_users
+                WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+                ORDER BY id LIMIT 1
+                """,
+                (famille_id, owner_type, owner_id)
+            )
         connection = cursor.fetchone()
         conn.close()
 
@@ -3771,12 +3778,12 @@ def calendar_import():
                 """
                 UPDATE google_connections_users
                 SET access_token = ?, expires_at = ?
-                WHERE owner_type = ? AND owner_id = ? AND famille_id = ?
+                WHERE id = ? AND owner_type = ? AND owner_id = ? AND famille_id = ?
                 """,
                 (
                     access_token,
                     datetime.fromtimestamp(new_expiry).isoformat(),
-                    owner_type, owner_id, famille_id
+                    connection["id"], owner_type, owner_id, famille_id
                 )
             )
             conn.commit()
