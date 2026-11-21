@@ -104,14 +104,20 @@ app = Flask(__name__)
 
 app.secret_key = SECRET_KEY
 
-# Connexion persistante : le navigateur conserve le cookie après fermeture.
-# La durée est glissante : elle est renouvelée à chaque utilisation.
-app.config["SESSION_PERMANENT"] = True
+# Connexion persistante : cookie sécurisé, valable 365 jours.
+# La durée est renouvelée à chaque utilisation d'une session connectée.
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_PATH"] = "/"
+
+@app.before_request
+def keep_authenticated_session_permanent():
+    # Garantit le caractère permanent à chaque requête authentifiée.
+    if session.get("logged"):
+        session.permanent = True
 
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
@@ -331,6 +337,12 @@ def conditions_utilisation():
 
 @app.route("/")
 def home():
+    # Un utilisateur déjà connecté retrouve directement son espace.
+    if session.get("logged"):
+        if session.get("admin_logged") is True and not session.get("famille_id"):
+            return redirect(url_for("dashboard"))
+        return redirect(url_for("calendar"))
+
     return render_template(
         "index.html",
         trial_link=TRIAL_LINK,
