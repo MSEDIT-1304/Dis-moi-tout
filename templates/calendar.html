@@ -277,12 +277,27 @@
 .calendar-event-dialog-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
 /* ORDINATEUR — calendrier légèrement plus compact pour mieux voir les semaines */
 @media (min-width: 651px) {
- .calendar-view-card { padding:18px; }
- .calendar-toolbar { margin-bottom:12px; }
- .calendar-weekdays span { padding:5px 2px; }
+ .calendar-page { padding:10px 15px 25px; }
+ .calendar-header { margin-bottom:12px; gap:12px; }
+ .calendar-header h1 { font-size:28px; margin:0 0 6px; }
+ .calendar-header p { font-size:14px; margin:0; }
+ .calendar-messages { margin-bottom:8px; font-size:14px; }
+ .calendar-import-links { font-size:14px; gap:8px; margin-bottom:12px; }
+ .calendar-button { padding:9px 15px; font-size:14px; }
+ .calendar-small { padding:6px 10px; font-size:13px; }
+ .calendar-switcher { gap:10px; margin:0 0 13px; }
+ .agenda-tab { padding:11px 12px; font-size:14px; }
+ .calendar-view-card { padding:16px; margin-bottom:18px; }
+ .calendar-toolbar { margin-bottom:10px; gap:9px; }
+ .calendar-toolbar-left { gap:9px; }
+ .calendar-toolbar h2 { font-size:22px; }
+ .view-picker { font-size:14px; }
+ .view-picker select { padding:6px; font-size:14px; }
+ .calendar-weekdays span { padding:5px 2px; font-size:14px; }
  .calendar-day { min-height:70px; padding:5px; }
- .calendar-day-number { margin-bottom:3px; }
+ .calendar-day-number { margin-bottom:3px; font-size:13px; }
  .calendar-day-event { font-size:11px; line-height:1.2; padding:2px 4px; margin:2px 0; }
+ .calendar-legend { font-size:12px; margin-top:10px; }
 }
 
 @media(max-width:650px) {
