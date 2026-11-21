@@ -275,6 +275,16 @@
 .calendar-event-dialog label { display:block; margin:12px 0 5px; font-weight:bold; }
 .calendar-event-dialog input,.calendar-event-dialog textarea { width:100%; box-sizing:border-box; padding:10px; border:1px solid #b8cce0; border-radius:6px; }
 .calendar-event-dialog-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+/* ORDINATEUR — calendrier légèrement plus compact pour mieux voir les semaines */
+@media (min-width: 651px) {
+ .calendar-view-card { padding:18px; }
+ .calendar-toolbar { margin-bottom:12px; }
+ .calendar-weekdays span { padding:5px 2px; }
+ .calendar-day { min-height:70px; padding:5px; }
+ .calendar-day-number { margin-bottom:3px; }
+ .calendar-day-event { font-size:11px; line-height:1.2; padding:2px 4px; margin:2px 0; }
+}
+
 @media(max-width:650px) {
  .calendar-page { padding:15px 10px; }
  .calendar-card,.calendar-view-card { padding:18px; }
