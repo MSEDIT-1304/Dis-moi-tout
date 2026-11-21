@@ -212,7 +212,8 @@
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
         navigator.serviceWorker.register(
-            "{{ url_for('static', filename='service-worker.js') }}"
+            "/service-worker.js",
+            { scope: "/", updateViaCache: "none" }
         ).catch(function (error) {
             console.warn("Enregistrement du service worker impossible", error);
         });
