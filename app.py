@@ -114,6 +114,15 @@ app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_PATH"] = "/"
 
+
+# Service worker à la racine : nécessaire pour couvrir toute l’application.
+@app.route("/service-worker.js")
+def service_worker_file():
+    response = app.send_static_file("service-worker.js")
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
 @app.before_request
 def keep_authenticated_session_permanent():
     # Garantit le caractère permanent à chaque requête authentifiée.
