@@ -23,7 +23,7 @@ import secrets
 import base64
 import tempfile
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 from config import (
@@ -104,7 +104,14 @@ app = Flask(__name__)
 
 app.secret_key = SECRET_KEY
 
-app.config["SESSION_PERMANENT"] = False
+# Connexion persistante : le navigateur conserve le cookie après fermeture.
+# La durée est glissante : elle est renouvelée à chaque utilisation.
+app.config["SESSION_PERMANENT"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
@@ -417,6 +424,7 @@ def login():
         return redirect(url_for("home"))
 
     session["logged"] = True
+    session.permanent = True
 
     session["admin_logged"] = True
 
@@ -2350,6 +2358,7 @@ def member_login():
     conn.close()
 
     session.clear()
+    session.permanent = True
 
     session["logged"] = True
     session["admin_logged"] = False
