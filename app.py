@@ -1359,6 +1359,41 @@ def init_database():
         """
     )
 
+    # ======================================================
+    # MESSAGERIE INTERNE
+    # ======================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversation_participants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            user_type TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            last_read_at TIMESTAMP,
+            UNIQUE(conversation_id, user_type, user_id),
+            FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            sender_type TEXT NOT NULL,
+            sender_id INTEGER NOT NULL,
+            contenu TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_participants_user ON conversation_participants(user_type, user_id)")
+
     conn.commit()
     conn.close()
 
@@ -2406,6 +2441,132 @@ def family():
         total_membres=total_membres,
         est_admin=est_admin
     )
+
+# ==========================================================
+# MESSAGERIE INTERNE
+# ==========================================================
+def current_messaging_identity():
+    if not session.get("logged"):
+        return None
+    if session.get("admin_logged"):
+        return ("admin", session.get("admin_id"), session.get("famille_id"))
+    if session.get("membre_id"):
+        return ("membre", session.get("membre_id"), session.get("famille_id"))
+    return None
+
+
+def conversation_is_accessible(conn, conversation_id, identity):
+    kind, user_id, family_id = identity
+    return conn.execute("""
+        SELECT c.id FROM conversations c
+        JOIN conversation_participants p ON p.conversation_id = c.id
+        WHERE c.id = ? AND c.famille_id = ?
+          AND p.user_type = ? AND p.user_id = ?
+    """, (conversation_id, family_id, kind, user_id)).fetchone() is not None
+
+
+@app.route("/messagerie", methods=["GET", "POST"])
+def messagerie():
+    identity = current_messaging_identity()
+    if identity is None:
+        return redirect(url_for("login"))
+    kind, user_id, family_id = identity
+    conn = get_connection()
+
+    if request.method == "POST":
+        action = request.form.get("action", "create")
+        if action == "create":
+            selected = request.form.getlist("participants")
+            all_members = request.form.get("all_members") == "1"
+            family_members = conn.execute(
+                "SELECT id FROM membres WHERE famille_id = ? ORDER BY prenom, nom", (family_id,)
+            ).fetchall()
+            allowed_ids = {str(row["id"]) for row in family_members}
+            if all_members:
+                selected = list(allowed_ids)
+            selected = list(dict.fromkeys(x for x in selected if x in allowed_ids))
+            if kind == "membre":
+                selected = [x for x in selected if x != str(user_id)]
+            if not selected:
+                flash("Choisissez au moins un autre membre.")
+                conn.close()
+                return redirect(url_for("messagerie"))
+            conn.execute("INSERT INTO conversations (famille_id) VALUES (?)", (family_id,))
+            conversation_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("INSERT INTO conversation_participants (conversation_id,user_type,user_id) VALUES (?,?,?)", (conversation_id, kind, user_id))
+            for member_id in selected:
+                conn.execute("INSERT OR IGNORE INTO conversation_participants (conversation_id,user_type,user_id) VALUES (?,?,?)", (conversation_id, "membre", int(member_id)))
+            conn.commit()
+            conn.close()
+            return redirect(url_for("messagerie", conversation=conversation_id))
+        elif action == "send":
+            conversation_id = request.form.get("conversation_id", type=int)
+            contenu = request.form.get("contenu", "").strip()
+            if not conversation_id or not contenu:
+                flash("Écrivez un message avant de l'envoyer.")
+            elif len(contenu) > 5000:
+                flash("Le message est trop long (5 000 caractères maximum).")
+            elif conversation_is_accessible(conn, conversation_id, identity):
+                conn.execute("INSERT INTO messages (conversation_id,sender_type,sender_id,contenu) VALUES (?,?,?,?)", (conversation_id, kind, user_id, contenu))
+                conn.commit()
+                conn.execute("UPDATE conversation_participants SET last_read_at = CURRENT_TIMESTAMP WHERE conversation_id = ? AND user_type = ? AND user_id = ?", (conversation_id, kind, user_id))
+                conn.commit()
+            else:
+                flash("Cette conversation n'est pas accessible.")
+            conn.close()
+            return redirect(url_for("messagerie", conversation=conversation_id))
+
+    # Conversations strictement limitées aux participants connectés.
+    conversations = conn.execute("""
+        SELECT c.id, c.created_at,
+               (SELECT m.contenu FROM messages m WHERE m.conversation_id=c.id ORDER BY m.id DESC LIMIT 1) AS dernier_message,
+               (SELECT COUNT(*) FROM messages m
+                WHERE m.conversation_id=c.id
+                  AND (p.last_read_at IS NULL OR m.created_at > p.last_read_at)
+                  AND NOT (m.sender_type=? AND m.sender_id=?)) AS non_lus
+        FROM conversations c JOIN conversation_participants p ON p.conversation_id=c.id
+        WHERE c.famille_id=? AND p.user_type=? AND p.user_id=?
+        ORDER BY COALESCE((SELECT MAX(m2.id) FROM messages m2 WHERE m2.conversation_id=c.id),0) DESC, c.id DESC
+    """, (kind, user_id, family_id, kind, user_id)).fetchall()
+
+    active_id = request.args.get("conversation", type=int)
+    active = None
+    messages = []
+    if active_id and conversation_is_accessible(conn, active_id, identity):
+        active = conn.execute("SELECT id FROM conversations WHERE id=? AND famille_id=?", (active_id, family_id)).fetchone()
+        messages = conn.execute("""
+            SELECT m.*, CASE WHEN m.sender_type='admin' THEN
+                (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
+            ELSE (SELECT prenom || ' ' || nom FROM membres WHERE id=m.sender_id) END AS sender_name
+            FROM messages m WHERE m.conversation_id=? ORDER BY m.id
+        """, (active_id,)).fetchall()
+        conn.execute("UPDATE conversation_participants SET last_read_at=CURRENT_TIMESTAMP WHERE conversation_id=? AND user_type=? AND user_id=?", (active_id, kind, user_id))
+        conn.commit()
+
+    members = conn.execute("SELECT id, prenom, nom FROM membres WHERE famille_id=? ORDER BY prenom, nom", (family_id,)).fetchall()
+    conn.close()
+    return render_template("messagerie.html", conversations=conversations, active=active,
+                           messages=messages, members=members, active_id=active_id)
+
+
+@app.route("/messagerie/non-lus")
+def messagerie_non_lus():
+    identity = current_messaging_identity()
+    if identity is None:
+        return jsonify({"count": 0}), 401
+    kind, user_id, family_id = identity
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT COUNT(*) AS total FROM messages m
+        JOIN conversation_participants p ON p.conversation_id=m.conversation_id
+        JOIN conversations c ON c.id=m.conversation_id
+        WHERE c.famille_id=? AND p.user_type=? AND p.user_id=?
+          AND (p.last_read_at IS NULL OR m.created_at > p.last_read_at)
+          AND NOT (m.sender_type=? AND m.sender_id=?)
+    """, (family_id, kind, user_id, kind, user_id)).fetchone()
+    conn.close()
+    return jsonify({"count": row["total"] if row else 0})
+
 
 # ==========================================================
 # AJOUT D'UN ÉVÉNEMENT
