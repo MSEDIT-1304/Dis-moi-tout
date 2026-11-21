@@ -15,6 +15,7 @@ from flask import (
     
 
 import os
+import json
 import sqlite3
 import pandas as pd
 import requests
@@ -1414,6 +1415,25 @@ def init_database():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_participants_user ON conversation_participants(user_type, user_id)")
 
+    # Appareils autorisés à recevoir les notifications Web Push.
+    # Une ligne par navigateur/appareil ; les conversations restent privées.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            endpoint TEXT NOT NULL UNIQUE,
+            subscription_json TEXT NOT NULL,
+            user_type TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            famille_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+        ON push_subscriptions(user_type, user_id, famille_id)
+    """)
+
     conn.commit()
     conn.close()
 
@@ -2486,6 +2506,130 @@ def conversation_is_accessible(conn, conversation_id, identity):
     """, (conversation_id, family_id, kind, user_id)).fetchone() is not None
 
 
+def send_message_push_notifications(conn, conversation_id, sender_identity):
+    """Envoie une notification générique aux autres participants équipés."""
+    public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+    private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+    if not public_key or not private_key:
+        app.logger.info("Notifications Push non configurées : clés VAPID absentes.")
+        return
+
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        app.logger.exception("Dépendance pywebpush absente.")
+        return
+
+    sender_type, sender_id, family_id = sender_identity
+    rows = conn.execute("""
+        SELECT s.id, s.endpoint, s.subscription_json
+        FROM push_subscriptions s
+        JOIN conversation_participants p
+          ON p.user_type = s.user_type
+         AND p.user_id = s.user_id
+         AND p.conversation_id = ?
+        WHERE s.famille_id = ?
+          AND NOT (s.user_type = ? AND s.user_id = ?)
+    """, (conversation_id, family_id, sender_type, sender_id)).fetchall()
+
+    payload = json.dumps({
+        "title": "Dis-moi tout",
+        "body": "Vous avez reçu un nouveau message.",
+        "url": url_for("messagerie", conversation=conversation_id)
+    })
+
+    for row in rows:
+        try:
+            webpush(
+                subscription_info=json.loads(row["subscription_json"]),
+                data=payload,
+                vapid_private_key=private_key,
+                vapid_claims={
+                    "sub": os.environ.get(
+                        "VAPID_SUBJECT", "https://dismoi-tout.fr"
+                    ).strip()
+                }
+            )
+        except WebPushException as exc:
+            status_code = getattr(
+                getattr(exc, "response", None), "status_code", None
+            )
+            app.logger.warning("Échec Web Push (HTTP %s).", status_code)
+            if status_code in (404, 410):
+                conn.execute(
+                    "DELETE FROM push_subscriptions WHERE id = ?",
+                    (row["id"],)
+                )
+                conn.commit()
+        except Exception:
+            app.logger.exception("Erreur lors de l'envoi d'une notification Push.")
+
+
+@app.route("/push/vapid-public-key", methods=["GET"])
+def push_vapid_public_key():
+    if not session.get("logged"):
+        return jsonify({"error": "Authentification requise"}), 401
+    public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+    if not public_key:
+        return jsonify({"error": "Notifications Push non configurées"}), 503
+    return jsonify({"publicKey": public_key})
+
+
+@app.route("/push/subscribe", methods=["POST"])
+def push_subscribe():
+    identity = current_messaging_identity()
+    if identity is None:
+        return jsonify({"success": False}), 401
+
+    subscription = request.get_json(silent=True)
+    if not isinstance(subscription, dict):
+        return jsonify({"success": False, "error": "Données invalides"}), 400
+
+    endpoint = subscription.get("endpoint")
+    keys = subscription.get("keys")
+    if not isinstance(endpoint, str) or not endpoint.startswith("https://"):
+        return jsonify({"success": False, "error": "Adresse invalide"}), 400
+    if not isinstance(keys, dict) or not keys.get("p256dh") or not keys.get("auth"):
+        return jsonify({"success": False, "error": "Clés de notification manquantes"}), 400
+
+    kind, user_id, family_id = identity
+    conn = get_connection()
+    conn.execute("""
+        INSERT INTO push_subscriptions
+            (endpoint, subscription_json, user_type, user_id, famille_id, updated_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(endpoint) DO UPDATE SET
+            subscription_json = excluded.subscription_json,
+            user_type = excluded.user_type,
+            user_id = excluded.user_id,
+            famille_id = excluded.famille_id,
+            updated_at = CURRENT_TIMESTAMP
+    """, (endpoint, json.dumps(subscription), kind, user_id, family_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    identity = current_messaging_identity()
+    if identity is None:
+        return jsonify({"success": False}), 401
+    payload = request.get_json(silent=True) or {}
+    endpoint = payload.get("endpoint")
+    if not isinstance(endpoint, str):
+        return jsonify({"success": False}), 400
+    kind, user_id, family_id = identity
+    conn = get_connection()
+    conn.execute("""
+        DELETE FROM push_subscriptions
+        WHERE endpoint = ? AND user_type = ? AND user_id = ? AND famille_id = ?
+    """, (endpoint, kind, user_id, family_id))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
 @app.route("/messagerie", methods=["GET", "POST"])
 def messagerie():
     identity = current_messaging_identity()
@@ -2532,6 +2676,7 @@ def messagerie():
                 conn.commit()
                 conn.execute("UPDATE conversation_participants SET last_read_at = CURRENT_TIMESTAMP WHERE conversation_id = ? AND user_type = ? AND user_id = ?", (conversation_id, kind, user_id))
                 conn.commit()
+                send_message_push_notifications(conn, conversation_id, identity)
             else:
                 flash("Cette conversation n'est pas accessible.")
             conn.close()
