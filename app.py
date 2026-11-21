@@ -2547,7 +2547,7 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
 
     sender_type, sender_id, family_id = sender_identity
     rows = conn.execute("""
-        SELECT DISTINCT s.id, s.endpoint, s.subscription_json
+        SELECT DISTINCT s.id, s.user_type, s.user_id, s.endpoint, s.subscription_json
         FROM push_subscriptions s
         JOIN conversation_participants p
           ON p.user_type = s.user_type
@@ -2557,14 +2557,26 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
           AND NOT (s.user_type = ? AND s.user_id = ?)
     """, (conversation_id, family_id, sender_type, sender_id)).fetchall()
 
-    payload = json.dumps({
-        "title": "Dis-moi tout",
-        "body": "Vous avez reçu un nouveau message.",
-        "url": url_for("messagerie", conversation=conversation_id)
-    })
-
     for row in rows:
         try:
+            # Le compteur est calculé pour le destinataire de CET appareil,
+            # sur toutes ses conversations, et non pour l'expéditeur.
+            unread = conn.execute("""
+                SELECT COUNT(*) AS total
+                FROM messages m
+                JOIN conversation_participants p ON p.conversation_id=m.conversation_id
+                JOIN conversations c ON c.id=m.conversation_id
+                WHERE c.famille_id=? AND p.user_type=? AND p.user_id=?
+                  AND (p.last_read_at IS NULL OR m.created_at > p.last_read_at)
+                  AND NOT (m.sender_type=? AND m.sender_id=?)
+            """, (family_id, row["user_type"], row["user_id"],
+                  row["user_type"], row["user_id"])).fetchone()
+            payload = json.dumps({
+                "title": "Dis-moi tout",
+                "body": "Vous avez reçu un nouveau message.",
+                "url": url_for("messagerie", conversation=conversation_id),
+                "badgeCount": int(unread["total"] if unread else 1)
+            })
             webpush(
                 subscription_info=json.loads(row["subscription_json"]),
                 data=payload,
@@ -2766,6 +2778,24 @@ def messagerie():
 
             conn.close()
             return redirect(url_for("messagerie", conversation=conversation_id))
+
+        elif action == "delete_conversation":
+            conversation_id = request.form.get("conversation_id", type=int)
+            if conversation_id and conversation_is_accessible(conn, conversation_id, identity):
+                # Suppression globale : messages (et pièces jointes stockées),
+                # participants, puis conversation. Vérification famille incluse.
+                conn.execute("DELETE FROM messages WHERE conversation_id=?", (conversation_id,))
+                conn.execute("DELETE FROM conversation_participants WHERE conversation_id=?", (conversation_id,))
+                conn.execute(
+                    "DELETE FROM conversations WHERE id=? AND famille_id=?",
+                    (conversation_id, family_id)
+                )
+                conn.commit()
+                flash("La conversation et tous ses messages ont été supprimés.")
+            else:
+                flash("Cette conversation n'est pas accessible.")
+            conn.close()
+            return redirect(url_for("messagerie"))
 
         elif action == "delete":
             message_id = request.form.get("message_id", type=int)
