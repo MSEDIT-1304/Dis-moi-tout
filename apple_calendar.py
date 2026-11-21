@@ -61,10 +61,16 @@ def _propfind(url, username, password, body, depth="0"):
 
 def _first_href(xml_text, property_name):
     root = ET.fromstring(xml_text)
-    node = root.find(
-        f".//{{{DAV_NS}}}{property_name}/{{{DAV_NS}}}href"
-    )
-    return node.text.strip() if node is not None and node.text else None
+    # Les propriétés DAV et CalDAV n'utilisent pas toujours le même
+    # espace de noms. On recherche donc la propriété par son nom local,
+    # puis son élément href dans l'espace de noms DAV.
+    for property_node in root.iter():
+        if property_node.tag.rsplit("}", 1)[-1] != property_name:
+            continue
+        href_node = property_node.find(f"{{{DAV_NS}}}href")
+        if href_node is not None and href_node.text:
+            return href_node.text.strip()
+    return None
 
 
 def _discover_calendar_home(username, password):
