@@ -1,3 +1,4 @@
+
 const CACHE_NAME = "dis-moi-tout-v1";
 
 self.addEventListener("install", (event) => {
