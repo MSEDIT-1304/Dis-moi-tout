@@ -11,3 +11,4 @@ python-dateutil
 pandas
 recurring-ical-events
 gunicorn
+pywebpush
