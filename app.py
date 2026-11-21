@@ -10,7 +10,8 @@ from flask import (
     url_for,
     session,
     flash,
-    jsonify
+    jsonify,
+    send_file
 )
     
 
@@ -23,6 +24,9 @@ import bcrypt
 import secrets
 import base64
 import tempfile
+import uuid
+import io
+from werkzeug.utils import secure_filename
 
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
@@ -102,6 +106,7 @@ STRIPE_LINK_YEARLY = "https://buy.stripe.com/dRmaEY6Mye7Xcmngms9fW14"
 # ==========================================================
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 12 * 1024 * 1024  # formulaire + pièce jointe (10 Mo max)
 
 app.secret_key = SECRET_KEY
 
@@ -1421,6 +1426,17 @@ def init_database():
             FOREIGN KEY(conversation_id) REFERENCES conversations(id)
         )
     """)
+    # Champs facultatifs pour les pièces jointes de la messagerie (migration sans perte).
+    message_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(messages)").fetchall()
+    }
+    if "fichier_nom" not in message_columns:
+        cursor.execute("ALTER TABLE messages ADD COLUMN fichier_nom TEXT")
+    if "fichier_stockage" not in message_columns:
+        cursor.execute("ALTER TABLE messages ADD COLUMN fichier_stockage TEXT")
+    if "fichier_data" not in message_columns:
+        cursor.execute("ALTER TABLE messages ADD COLUMN fichier_data BLOB")
+
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_participants_user ON conversation_participants(user_type, user_id)")
 
@@ -2516,7 +2532,7 @@ def conversation_is_accessible(conn, conversation_id, identity):
 
 
 def send_message_push_notifications(conn, conversation_id, sender_identity):
-    """Envoie une notification générique aux autres participants équipés."""
+    """Notifie uniquement les participants de la conversation, sauf l'expéditeur."""
     public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
     private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
     if not public_key or not private_key:
@@ -2531,7 +2547,7 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
 
     sender_type, sender_id, family_id = sender_identity
     rows = conn.execute("""
-        SELECT s.id, s.endpoint, s.subscription_json
+        SELECT DISTINCT s.id, s.endpoint, s.subscription_json
         FROM push_subscriptions s
         JOIN conversation_participants p
           ON p.user_type = s.user_type
@@ -2565,10 +2581,7 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
             )
             app.logger.warning("Échec Web Push (HTTP %s).", status_code)
             if status_code in (404, 410):
-                conn.execute(
-                    "DELETE FROM push_subscriptions WHERE id = ?",
-                    (row["id"],)
-                )
+                conn.execute("DELETE FROM push_subscriptions WHERE id = ?", (row["id"],))
                 conn.commit()
         except Exception:
             app.logger.exception("Erreur lors de l'envoi d'une notification Push.")
@@ -2649,49 +2662,129 @@ def messagerie():
 
     if request.method == "POST":
         action = request.form.get("action", "create")
+
         if action == "create":
             selected = request.form.getlist("participants")
             all_members = request.form.get("all_members") == "1"
+
             family_members = conn.execute(
-                "SELECT id FROM membres WHERE famille_id = ? ORDER BY prenom, nom", (family_id,)
+                "SELECT id FROM membres WHERE famille_id = ? ORDER BY prenom, nom",
+                (family_id,)
             ).fetchall()
-            allowed_ids = {str(row["id"]) for row in family_members}
+            allowed_member_ids = {str(row["id"]) for row in family_members}
+            family_row = conn.execute(
+                "SELECT admin_id FROM famille WHERE id = ?", (family_id,)
+            ).fetchone()
+            admin_id = int(family_row["admin_id"]) if family_row and family_row["admin_id"] else None
+
+            # L'expéditeur est ajouté automatiquement. Un membre peut choisir
+            # l'administrateur et/ou les autres membres, jamais lui-même.
             if all_members:
-                selected = list(allowed_ids)
-            selected = list(dict.fromkeys(x for x in selected if x in allowed_ids))
-            if kind == "membre":
-                selected = [x for x in selected if x != str(user_id)]
-            if not selected:
-                flash("Choisissez au moins un autre membre.")
+                selected = list(allowed_member_ids)
+                if kind == "membre" and admin_id is not None:
+                    selected.append("admin")
+            valid_selected = []
+            for value in selected:
+                if value == "admin":
+                    if admin_id is not None and kind != "admin":
+                        valid_selected.append(("admin", admin_id))
+                elif value in allowed_member_ids and not (kind == "membre" and value == str(user_id)):
+                    valid_selected.append(("membre", int(value)))
+
+            # Retire les doublons tout en conservant l'ordre.
+            valid_selected = list(dict.fromkeys(valid_selected))
+            if not valid_selected:
+                flash("Choisissez au moins un destinataire.")
                 conn.close()
                 return redirect(url_for("messagerie"))
+
             conn.execute("INSERT INTO conversations (famille_id) VALUES (?)", (family_id,))
             conversation_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            conn.execute("INSERT INTO conversation_participants (conversation_id,user_type,user_id) VALUES (?,?,?)", (conversation_id, kind, user_id))
-            for member_id in selected:
-                conn.execute("INSERT OR IGNORE INTO conversation_participants (conversation_id,user_type,user_id) VALUES (?,?,?)", (conversation_id, "membre", int(member_id)))
+            conn.execute(
+                "INSERT INTO conversation_participants (conversation_id,user_type,user_id) VALUES (?,?,?)",
+                (conversation_id, kind, user_id)
+            )
+            for participant_type, participant_id in valid_selected:
+                conn.execute(
+                    "INSERT OR IGNORE INTO conversation_participants (conversation_id,user_type,user_id) VALUES (?,?,?)",
+                    (conversation_id, participant_type, participant_id)
+                )
             conn.commit()
             conn.close()
             return redirect(url_for("messagerie", conversation=conversation_id))
+
         elif action == "send":
             conversation_id = request.form.get("conversation_id", type=int)
             contenu = request.form.get("contenu", "").strip()
-            if not conversation_id or not contenu:
-                flash("Écrivez un message avant de l'envoyer.")
+            uploaded = request.files.get("fichier")
+            has_file = uploaded is not None and bool(uploaded.filename)
+
+            if not conversation_id or (not contenu and not has_file):
+                flash("Écrivez un message ou choisissez un fichier.")
             elif len(contenu) > 5000:
                 flash("Le message est trop long (5 000 caractères maximum).")
-            elif conversation_is_accessible(conn, conversation_id, identity):
-                conn.execute("INSERT INTO messages (conversation_id,sender_type,sender_id,contenu) VALUES (?,?,?,?)", (conversation_id, kind, user_id, contenu))
+            elif request.content_length and request.content_length > 12 * 1024 * 1024:
+                flash("La pièce jointe dépasse la limite autorisée de 10 Mo.")
+                conn.close()
+                return redirect(url_for("messagerie", conversation=conversation_id))
+            elif not conversation_is_accessible(conn, conversation_id, identity):
+                flash("Cette conversation n'est pas accessible.")
+            else:
+                fichier_nom = None
+                fichier_stockage = None
+                if has_file:
+                    original_name = secure_filename(uploaded.filename) or "piece_jointe"
+                    extension = os.path.splitext(original_name)[1].lower()
+                    if uploaded.content_length and uploaded.content_length > 10 * 1024 * 1024:
+                        flash("Le fichier dépasse la limite de 10 Mo.")
+                        conn.close()
+                        return redirect(url_for("messagerie", conversation=conversation_id))
+                    fichier_nom = original_name[:200]
+                    fichier_stockage = f"{uuid.uuid4().hex}{extension}"
+                    fichier_data = uploaded.read()
+                    if len(fichier_data) > 10 * 1024 * 1024:
+                        flash("Le fichier dépasse la limite de 10 Mo.")
+                        conn.close()
+                        return redirect(url_for("messagerie", conversation=conversation_id))
+
+                else:
+                    fichier_data = None
+
+                conn.execute("""
+                    INSERT INTO messages
+                    (conversation_id,sender_type,sender_id,contenu,fichier_nom,fichier_stockage,fichier_data)
+                    VALUES (?,?,?,?,?,?,?)
+                """, (conversation_id, kind, user_id, contenu, fichier_nom, fichier_stockage, fichier_data))
                 conn.commit()
-                conn.execute("UPDATE conversation_participants SET last_read_at = CURRENT_TIMESTAMP WHERE conversation_id = ? AND user_type = ? AND user_id = ?", (conversation_id, kind, user_id))
+                conn.execute("""
+                    UPDATE conversation_participants
+                    SET last_read_at = CURRENT_TIMESTAMP
+                    WHERE conversation_id = ? AND user_type = ? AND user_id = ?
+                """, (conversation_id, kind, user_id))
                 conn.commit()
                 send_message_push_notifications(conn, conversation_id, identity)
-            else:
-                flash("Cette conversation n'est pas accessible.")
+
             conn.close()
             return redirect(url_for("messagerie", conversation=conversation_id))
 
-    # Conversations strictement limitées aux participants connectés.
+        elif action == "delete":
+            message_id = request.form.get("message_id", type=int)
+            conversation_id = request.form.get("conversation_id", type=int)
+            if message_id and conversation_id and conversation_is_accessible(conn, conversation_id, identity):
+                msg = conn.execute("""
+                    SELECT id, sender_type, sender_id, fichier_stockage
+                    FROM messages WHERE id=? AND conversation_id=?
+                """, (message_id, conversation_id)).fetchone()
+                # Un utilisateur peut supprimer uniquement ses propres messages.
+                if msg and msg["sender_type"] == kind and msg["sender_id"] == user_id:
+                    conn.execute("DELETE FROM messages WHERE id=?", (message_id,))
+                    conn.commit()
+                else:
+                    flash("Vous ne pouvez supprimer que vos propres messages.")
+            conn.close()
+            return redirect(url_for("messagerie", conversation=conversation_id))
+
+    # Liste des conversations accessibles à l'utilisateur connecté.
     conversations = conn.execute("""
         SELECT c.id, c.created_at,
                (SELECT m.contenu FROM messages m WHERE m.conversation_id=c.id ORDER BY m.id DESC LIMIT 1) AS dernier_message,
@@ -2699,29 +2792,118 @@ def messagerie():
                 WHERE m.conversation_id=c.id
                   AND (p.last_read_at IS NULL OR m.created_at > p.last_read_at)
                   AND NOT (m.sender_type=? AND m.sender_id=?)) AS non_lus
-        FROM conversations c JOIN conversation_participants p ON p.conversation_id=c.id
+        FROM conversations c
+        JOIN conversation_participants p ON p.conversation_id=c.id
         WHERE c.famille_id=? AND p.user_type=? AND p.user_id=?
         ORDER BY COALESCE((SELECT MAX(m2.id) FROM messages m2 WHERE m2.conversation_id=c.id),0) DESC, c.id DESC
     """, (kind, user_id, family_id, kind, user_id)).fetchall()
 
+    # Nommer chaque conversation par les correspondants (pas par un numéro).
+    conversations_named = []
+    for conv in conversations:
+        others = conn.execute("""
+            SELECT p.user_type, p.user_id,
+                   CASE WHEN p.user_type='admin'
+                        THEN (SELECT prenom || ' ' || nom FROM admin WHERE id=p.user_id)
+                        ELSE (SELECT prenom || ' ' || nom FROM membres WHERE id=p.user_id)
+                   END AS participant_name
+            FROM conversation_participants p
+            WHERE p.conversation_id=?
+              AND NOT (p.user_type=? AND p.user_id=?)
+            ORDER BY participant_name
+        """, (conv["id"], kind, user_id)).fetchall()
+        conv_dict = dict(conv)
+        names = [row["participant_name"] for row in others if row["participant_name"]]
+        conv_dict["titre"] = "Conversation avec " + (", ".join(names) if names else "correspondant")
+        conversations_named.append(conv_dict)
+
     active_id = request.args.get("conversation", type=int)
     active = None
     messages = []
+    active_title = None
     if active_id and conversation_is_accessible(conn, active_id, identity):
-        active = conn.execute("SELECT id FROM conversations WHERE id=? AND famille_id=?", (active_id, family_id)).fetchone()
+        active = conn.execute(
+            "SELECT id FROM conversations WHERE id=? AND famille_id=?",
+            (active_id, family_id)
+        ).fetchone()
+        participants = conn.execute("""
+            SELECT CASE WHEN p.user_type='admin'
+                        THEN (SELECT prenom || ' ' || nom FROM admin WHERE id=p.user_id)
+                        ELSE (SELECT prenom || ' ' || nom FROM membres WHERE id=p.user_id)
+                   END AS participant_name
+            FROM conversation_participants p
+            WHERE p.conversation_id=?
+              AND NOT (p.user_type=? AND p.user_id=?)
+            ORDER BY participant_name
+        """, (active_id, kind, user_id)).fetchall()
+        active_names = [row["participant_name"] for row in participants if row["participant_name"]]
+        active_title = "Conversation avec " + (", ".join(active_names) if active_names else "correspondant")
+
         messages = conn.execute("""
             SELECT m.*, CASE WHEN m.sender_type='admin' THEN
                 (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
             ELSE (SELECT prenom || ' ' || nom FROM membres WHERE id=m.sender_id) END AS sender_name
             FROM messages m WHERE m.conversation_id=? ORDER BY m.id
         """, (active_id,)).fetchall()
-        conn.execute("UPDATE conversation_participants SET last_read_at=CURRENT_TIMESTAMP WHERE conversation_id=? AND user_type=? AND user_id=?", (active_id, kind, user_id))
+        conn.execute("""
+            UPDATE conversation_participants SET last_read_at=CURRENT_TIMESTAMP
+            WHERE conversation_id=? AND user_type=? AND user_id=?
+        """, (active_id, kind, user_id))
         conn.commit()
 
-    members = conn.execute("SELECT id, prenom, nom FROM membres WHERE famille_id=? ORDER BY prenom, nom", (family_id,)).fetchall()
+    # Les membres voient les autres membres et l'administrateur comme destinataires.
+    members = conn.execute(
+        "SELECT id, prenom, nom FROM membres WHERE famille_id=? ORDER BY prenom, nom",
+        (family_id,)
+    ).fetchall()
+    admin_contact = None
+    if kind == "membre":
+        admin_contact = conn.execute(
+            "SELECT id, prenom, nom FROM admin WHERE id=(SELECT admin_id FROM famille WHERE id=?)",
+            (family_id,)
+        ).fetchone()
+
     conn.close()
-    return render_template("messagerie.html", conversations=conversations, active=active,
-                           messages=messages, members=members, active_id=active_id)
+    return render_template(
+        "messagerie.html",
+        conversations=conversations_named,
+        active=active,
+        active_title=active_title,
+        messages=messages,
+        members=members,
+        admin_contact=admin_contact,
+        active_id=active_id,
+        current_kind=kind,
+        current_user_id=user_id
+    )
+
+
+@app.route("/messagerie/fichier/<int:message_id>")
+def messagerie_fichier(message_id):
+    identity = current_messaging_identity()
+    if identity is None:
+        return redirect(url_for("login"))
+    kind, user_id, family_id = identity
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT m.fichier_nom, m.fichier_stockage, m.fichier_data, m.conversation_id
+        FROM messages m
+        JOIN conversations c ON c.id=m.conversation_id
+        WHERE m.id=? AND c.famille_id=?
+    """, (message_id, family_id)).fetchone()
+    if not row or not row["fichier_stockage"] or not conversation_is_accessible(conn, row["conversation_id"], identity):
+        conn.close()
+        return "Fichier introuvable", 404
+    file_data = row["fichier_data"]
+    download_name = row["fichier_nom"] or row["fichier_stockage"] or "piece_jointe"
+    conn.close()
+    if file_data is None:
+        return "Fichier introuvable", 404
+    return send_file(
+        io.BytesIO(file_data),
+        as_attachment=True,
+        download_name=download_name
+    )
 
 
 @app.route("/messagerie/non-lus")
