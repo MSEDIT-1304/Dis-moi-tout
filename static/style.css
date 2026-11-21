@@ -1534,3 +1534,27 @@ html body .member-item form {
         font-size: 17px !important;
     }
 }
+
+
+/* ======================================================
+   MOBILE UNIQUEMENT — BANDEAU PLUS COMPACT
+   ====================================================== */
+@media (max-width: 768px) {
+    html body .site-header {
+        padding: 5px 10px !important;
+        gap: 2px !important;
+        min-height: 0 !important;
+    }
+
+    html body .site-header .logo img {
+        width: 64px !important;
+        height: 64px !important;
+        object-fit: contain !important;
+    }
+
+    html body .site-header .site-name {
+        margin: 0 !important;
+        font-size: 23px !important;
+        line-height: 1 !important;
+    }
+}
