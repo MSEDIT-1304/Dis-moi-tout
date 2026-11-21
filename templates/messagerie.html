@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Messagerie — Dis-moi tout{% endblock %}
+{% block content %}
+<style>
+.messaging-wrap{max-width:1050px;margin:18px auto;padding:0 12px;display:grid;grid-template-columns:minmax(230px,310px) 1fr;gap:16px}
+.messaging-panel{background:#fff;border:1px solid #ead5e0;border-radius:14px;padding:16px;min-width:0}
+.messaging-panel h2,.messaging-panel h3{margin:0 0 12px;color:#a52d68}
+.member-list{max-height:260px;overflow:auto;border:1px solid #eee;border-radius:9px;padding:8px;margin:10px 0}
+.member-choice{display:flex;align-items:center;gap:8px;padding:7px 3px}
+.member-choice input{width:18px;height:18px;accent-color:#a52d68}
+.messaging-button{background:#a52d68;color:#fff;border:0;border-radius:9px;padding:10px 15px;cursor:pointer;font-weight:600}
+.conversation-list{display:flex;flex-direction:column;gap:7px;margin-top:14px}
+.conversation-link{display:block;text-decoration:none;color:#333;border:1px solid #eee;border-radius:9px;padding:10px}
+.conversation-link.active{border-color:#a52d68;background:#fff4f8}
+.unread-pill{float:right;background:#a52d68;color:#fff;border-radius:20px;padding:2px 8px;font-size:12px}
+.message-area{display:flex;flex-direction:column;min-height:440px}
+.message-list{flex:1;max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 2px}
+.message{max-width:82%;padding:10px 12px;border-radius:12px;background:#f4f4f7;overflow-wrap:anywhere}
+.message.mine{align-self:flex-end;background:#fce8f1}
+.message small{display:block;color:#777;font-size:11px;margin-bottom:4px}
+.send-form{display:flex;gap:8px;margin-top:12px}
+.send-form textarea{flex:1;min-width:0;resize:vertical;border:1px solid #ddd;border-radius:9px;padding:10px;font:inherit}
+@media(max-width:700px){.messaging-wrap{grid-template-columns:1fr;margin:8px auto;gap:10px}.message-area{min-height:350px}.message-list{max-height:400px}.messaging-panel{padding:12px}}
+</style>
+<div class="messaging-wrap">
+  <section class="messaging-panel">
+    <h2>Messagerie</h2>
+    <h3>Nouvelle conversation</h3>
+    <form method="post">
+      <input type="hidden" name="action" value="create">
+      <div class="member-list">
+        <label class="member-choice"><input type="checkbox" id="all-members" name="all_members" value="1"> <strong>Tous les membres</strong></label>
+        <hr>
+        {% for member in members %}
+        <label class="member-choice"><input type="checkbox" class="member-checkbox" name="participants" value="{{ member.id }}"> {{ member.prenom }} {{ member.nom }}</label>
+        {% endfor %}
+      </div>
+      <button class="messaging-button" type="submit">Créer la conversation</button>
+    </form>
+    <div class="conversation-list">
+      <h3>Mes conversations</h3>
+      {% for conv in conversations %}
+        <a class="conversation-link {{ 'active' if active_id == conv.id else '' }}" href="{{ url_for('messagerie', conversation=conv.id) }}">
+          Conversation #{{ loop.index }}
+          {% if conv.non_lus %}<span class="unread-pill">{{ conv.non_lus }}</span>{% endif %}
+          <div style="font-size:12px;color:#777;margin-top:4px">{{ (conv.dernier_message or 'Aucun message')[:65] }}</div>
+        </a>
+      {% else %}
+        <p style="color:#777">Aucune conversation pour le moment.</p>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="messaging-panel message-area">
+    {% if active %}
+      <h2>Conversation</h2>
+      <div class="message-list" id="message-list">
+        {% for message in messages %}
+          <div class="message {{ 'mine' if (session.get('admin_logged') and message.sender_type == 'admin' and message.sender_id == session.get('admin_id')) or (not session.get('admin_logged') and message.sender_type == 'membre' and message.sender_id == session.get('membre_id')) else '' }}">
+            <small>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</small>
+            {{ message.contenu }}
+          </div>
+        {% endfor %}
+      </div>
+      <form method="post" class="send-form">
+        <input type="hidden" name="action" value="send">
+        <input type="hidden" name="conversation_id" value="{{ active.id }}">
+        <textarea name="contenu" rows="2" maxlength="5000" placeholder="Écrire un message…" required></textarea>
+        <button class="messaging-button" type="submit">Envoyer</button>
+      </form>
+    {% else %}
+      <h2>Vos messages</h2>
+      <p style="color:#777">Choisissez une conversation ou créez-en une nouvelle.</p>
+    {% endif %}
+  </section>
+</div>
+<script>
+(function(){
+ const all=document.getElementById('all-members');
+ const checks=Array.from(document.querySelectorAll('.member-checkbox'));
+ if(all){all.addEventListener('change',()=>checks.forEach(c=>{c.checked=all.checked;}));}
+ checks.forEach(c=>c.addEventListener('change',()=>{if(all) all.checked=checks.length>0 && checks.every(x=>x.checked);}));
+ const list=document.getElementById('message-list'); if(list) list.scrollTop=list.scrollHeight;
+})();
+</script>
+{% endblock %}
