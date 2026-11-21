@@ -100,7 +100,7 @@
             console.warn("Vérification abonnement reportée :", error);
         }
     }
-    window.setInterval(verifySubscription, 5 * 60 * 1000);
+    window.setInterval(verifySubscription, 15 * 60 * 1000);
     const badge = document.getElementById("message-unread-badge");
     async function updateMessageBadge() {
         if (!badge) return;
