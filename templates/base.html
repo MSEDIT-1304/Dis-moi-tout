@@ -45,13 +45,20 @@
             {% endif %}
             <a href="{{ url_for('messagerie') }}" class="{{ 'active' if request.endpoint == 'messagerie' else '' }}">Messagerie <span id="message-unread-badge" style="display:none;background:#a52d68;color:#fff;border-radius:12px;padding:1px 6px;font-size:11px;margin-left:3px"></span></a>
             <a href="{{ url_for('profile') }}" class="{{ 'active' if request.endpoint == 'profile' else '' }}">Profil</a>
+        </nav>
+    {% endif %}
+
+    {% if session.get("logged") %}
+        <section id="push-notification-banner" role="region" aria-label="Notifications"
+                 style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:12px auto;padding:12px 16px;max-width:1000px;background:#fff0f6;border:1px solid #e6a4c2;border-radius:10px;text-align:center;">
+            <span style="color:#71304f;font-weight:600;">Recevez une alerte lorsque vous avez un nouveau message.</span>
             <button type="button" id="enable-push-notifications"
-                    style="border:0;border-radius:8px;padding:7px 10px;background:#a52d68;color:#fff;font-weight:600;cursor:pointer;">
+                    style="border:0;border-radius:8px;padding:9px 14px;background:#a52d68;color:#fff;font-weight:600;cursor:pointer;">
                 Activer les notifications
             </button>
             <span id="push-notification-status" role="status" aria-live="polite"
-                  style="font-size:12px;color:#a52d68;"></span>
-        </nav>
+                  style="font-size:13px;color:#71304f;"></span>
+        </section>
     {% endif %}
 
     <main class="page-content">
