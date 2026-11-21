@@ -123,6 +123,11 @@
             const data = await response.json();
             badge.textContent = data.count > 99 ? "99+" : data.count;
             badge.style.display = data.count > 0 ? "inline-block" : "none";
+            // Badge sur l'icône de l'application installée (si pris en charge).
+            if ("setAppBadge" in navigator) {
+                if (data.count > 0) await navigator.setAppBadge(data.count);
+                else if ("clearAppBadge" in navigator) await navigator.clearAppBadge();
+            }
         } catch (error) { console.warn("Notification messagerie indisponible", error); }
     }
     updateMessageBadge();
@@ -150,8 +155,8 @@
             const registration = await navigator.serviceWorker.ready;
             const subscription = await registration.pushManager.getSubscription();
             if (subscription) {
-                pushButton.textContent = "Notifications activées";
-                if (pushStatus) pushStatus.textContent = "Sur cet appareil";
+                const banner = document.getElementById("push-notification-banner");
+                if (banner) banner.style.display = "none";
             }
         } catch (error) {
             console.warn("État des notifications indisponible", error);
@@ -202,8 +207,9 @@
                     throw new Error("Impossible d'enregistrer cet appareil.");
                 }
 
-                pushButton.textContent = "Notifications activées";
-                if (pushStatus) pushStatus.textContent = "Sur cet appareil";
+                // L'activation est confirmée : le bandeau disparaît entièrement.
+                const banner = document.getElementById("push-notification-banner");
+                if (banner) banner.style.display = "none";
             } catch (error) {
                 if (pushStatus) pushStatus.textContent = error.message || "Activation impossible.";
                 console.warn("Activation des notifications impossible", error);
