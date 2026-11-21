@@ -18,8 +18,12 @@
 .message{max-width:82%;padding:10px 12px;border-radius:12px;background:#f4f4f7;overflow-wrap:anywhere}
 .message.mine{align-self:flex-end;background:#fce8f1}
 .message small{display:block;color:#777;font-size:11px;margin-bottom:4px}
-.send-form{display:flex;gap:8px;margin-top:12px}
-.send-form textarea{flex:1;min-width:0;resize:vertical;border:1px solid #ddd;border-radius:9px;padding:10px;font:inherit}
+.send-form{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:flex-end}
+.send-form textarea{flex:1 1 70%;min-width:0;resize:vertical;border:1px solid #ddd;border-radius:9px;padding:10px;font:inherit}
+.attachment-row{flex:1 1 100%;font-size:13px;color:#555}
+.message-file{display:block;margin-top:8px;color:#245d91;text-decoration:underline;overflow-wrap:anywhere}
+.delete-message-form{margin-top:7px;text-align:right}
+.delete-message-button{border:0;background:transparent;color:#a52d68;text-decoration:underline;cursor:pointer;font-size:12px;padding:2px}
 @media(max-width:700px){.messaging-wrap{grid-template-columns:1fr;margin:8px auto;gap:10px}.message-area{min-height:350px}.message-list{max-height:400px}.messaging-panel{padding:12px}}
 </style>
 <div class="messaging-wrap">
@@ -31,8 +35,13 @@
       <div class="member-list">
         <label class="member-choice"><input type="checkbox" id="all-members" name="all_members" value="1"> <strong>Tous les membres</strong></label>
         <hr>
+        {% if admin_contact %}
+        <label class="member-choice"><input type="checkbox" class="recipient-checkbox" name="participants" value="admin"> <strong>Administrateur</strong> — {{ admin_contact.prenom }} {{ admin_contact.nom }}</label>
+        {% endif %}
         {% for member in members %}
-        <label class="member-choice"><input type="checkbox" class="member-checkbox" name="participants" value="{{ member.id }}"> {{ member.prenom }} {{ member.nom }}</label>
+          {% if not (current_kind == 'membre' and member.id == current_user_id) %}
+          <label class="member-choice"><input type="checkbox" class="recipient-checkbox" name="participants" value="{{ member.id }}"> {{ member.prenom }} {{ member.nom }}</label>
+          {% endif %}
         {% endfor %}
       </div>
       <button class="messaging-button" type="submit">Créer la conversation</button>
@@ -41,7 +50,7 @@
       <h3>Mes conversations</h3>
       {% for conv in conversations %}
         <a class="conversation-link {{ 'active' if active_id == conv.id else '' }}" href="{{ url_for('messagerie', conversation=conv.id) }}">
-          Conversation #{{ loop.index }}
+          {{ conv.titre }}
           {% if conv.non_lus %}<span class="unread-pill">{{ conv.non_lus }}</span>{% endif %}
           <div style="font-size:12px;color:#777;margin-top:4px">{{ (conv.dernier_message or 'Aucun message')[:65] }}</div>
         </a>
@@ -52,19 +61,36 @@
   </section>
   <section class="messaging-panel message-area">
     {% if active %}
-      <h2>Conversation</h2>
+      <h2>{{ active_title }}</h2>
       <div class="message-list" id="message-list">
         {% for message in messages %}
-          <div class="message {{ 'mine' if (session.get('admin_logged') and message.sender_type == 'admin' and message.sender_id == session.get('admin_id')) or (not session.get('admin_logged') and message.sender_type == 'membre' and message.sender_id == session.get('membre_id')) else '' }}">
+          {% set mine = (message.sender_type == current_kind and message.sender_id == current_user_id) %}
+          <div class="message {{ 'mine' if mine else '' }}">
             <small>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</small>
-            {{ message.contenu }}
+            {% if message.contenu %}{{ message.contenu }}{% endif %}
+            {% if message.fichier_stockage %}
+              <a class="message-file" href="{{ url_for('messagerie_fichier', message_id=message.id) }}">📎 {{ message.fichier_nom or 'Télécharger le fichier' }}</a>
+            {% endif %}
+            {% if mine %}
+            <form method="post" class="delete-message-form" onsubmit="return confirm('Supprimer définitivement ce message ?');">
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="conversation_id" value="{{ active.id }}">
+              <input type="hidden" name="message_id" value="{{ message.id }}">
+              <button type="submit" class="delete-message-button">Supprimer le message</button>
+            </form>
+            {% endif %}
           </div>
         {% endfor %}
       </div>
-      <form method="post" class="send-form">
+      <form method="post" class="send-form" enctype="multipart/form-data">
         <input type="hidden" name="action" value="send">
         <input type="hidden" name="conversation_id" value="{{ active.id }}">
-        <textarea name="contenu" rows="2" maxlength="5000" placeholder="Écrire un message…" required></textarea>
+        <textarea name="contenu" rows="2" maxlength="5000" placeholder="Écrire un message…"></textarea>
+        <div class="attachment-row">
+          <label>Joindre un fichier (10 Mo maximum) :
+            <input type="file" name="fichier">
+          </label>
+        </div>
         <button class="messaging-button" type="submit">Envoyer</button>
       </form>
     {% else %}
@@ -76,7 +102,7 @@
 <script>
 (function(){
  const all=document.getElementById('all-members');
- const checks=Array.from(document.querySelectorAll('.member-checkbox'));
+ const checks=Array.from(document.querySelectorAll('.recipient-checkbox'));
  if(all){all.addEventListener('change',()=>checks.forEach(c=>{c.checked=all.checked;}));}
  checks.forEach(c=>c.addEventListener('change',()=>{if(all) all.checked=checks.length>0 && checks.every(x=>x.checked);}));
  const list=document.getElementById('message-list'); if(list) list.scrollTop=list.scrollHeight;
