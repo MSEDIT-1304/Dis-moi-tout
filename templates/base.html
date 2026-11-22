@@ -172,8 +172,36 @@
         return keyData.publicKey;
     }
 
+    const pushBannerPreferenceKey = "dis-moi-tout-push-activated-v1";
+
+    function hidePushBanner() {
+        const banner = document.getElementById("push-notification-banner");
+        if (banner) banner.style.display = "none";
+    }
+
+    function showPushBanner() {
+        const banner = document.getElementById("push-notification-banner");
+        if (banner) banner.style.display = "flex";
+    }
+
     async function refreshPushButton() {
         if (!pushButton) return;
+
+        // Après une activation réussie sur cet appareil, ne plus redemander
+        // à chaque actualisation. Si l'autorisation a été retirée, réafficher.
+        try {
+            const wasActivated = localStorage.getItem(pushBannerPreferenceKey) === "1";
+            if (wasActivated && Notification.permission === "granted") {
+                hidePushBanner();
+            } else {
+                if (wasActivated) localStorage.removeItem(pushBannerPreferenceKey);
+                showPushBanner();
+            }
+        } catch (storageError) {
+            console.warn("Préférence d'affichage des notifications inaccessible :", storageError);
+            showPushBanner();
+        }
+
         if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
             pushButton.disabled = true;
             pushButton.textContent = "Notifications non disponibles";
@@ -183,9 +211,8 @@
             const registration = await navigator.serviceWorker.ready;
             let subscription = await registration.pushManager.getSubscription();
 
-            // Si le client a déjà autorisé les notifications, on répare
-            // automatiquement l'enregistrement serveur à chaque connexion.
-            // Le client n'a aucune nouvelle manipulation à effectuer.
+            // Si les notifications sont déjà autorisées, resynchroniser
+            // l'abonnement avec le serveur sans redemander une activation.
             if (Notification.permission === "granted") {
                 if (!subscription) {
                     const publicKey = await getVapidPublicKey();
@@ -195,15 +222,12 @@
                     });
                 }
                 await savePushSubscription(subscription);
-                // La synchronisation automatique ne masque plus le bandeau.
-                // Le client peut ainsi cliquer volontairement sur le bouton après F5.
                 return;
             }
 
             // Un abonnement local existant est également resynchronisé.
             if (subscription) {
                 await savePushSubscription(subscription);
-                // Ne pas masquer le bandeau lors de la synchronisation automatique.
             }
         } catch (error) {
             console.warn("Synchronisation automatique des notifications impossible :", error);
@@ -247,9 +271,10 @@
 
                 await savePushSubscription(subscription);
 
-                // L'activation est confirmée : le bandeau disparaît entièrement.
-                const banner = document.getElementById("push-notification-banner");
-                if (banner) banner.style.display = "none";
+                // Mémoriser l'activation sur cet appareil pour ne plus
+                // réafficher le bandeau à chaque F5.
+                localStorage.setItem(pushBannerPreferenceKey, "1");
+                hidePushBanner();
             } catch (error) {
                 if (pushStatus) pushStatus.textContent = error.message || "Activation impossible.";
                 console.warn("Activation des notifications impossible", error);
