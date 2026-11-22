@@ -2572,6 +2572,18 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
           AND NOT (s.user_type = ? AND s.user_id = ?)
     """, (conversation_id, family_id, sender_type, sender_id)).fetchall()
 
+    if not rows:
+        app.logger.warning(
+            "Push : aucun appareil enregistré pour les destinataires de la conversation %s (famille %s).",
+            conversation_id, family_id
+        )
+        return
+
+    app.logger.info(
+        "Push : tentative d'envoi pour %s appareil(s), conversation %s.",
+        len(rows), conversation_id
+    )
+
     for row in rows:
         try:
             # Le compteur est calculé pour le destinataire de CET appareil,
@@ -2598,20 +2610,29 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
                 vapid_private_key=private_key,
                 vapid_claims={
                     "sub": os.environ.get(
-                        "VAPID_SUBJECT", "https://dismoi-tout.fr"
+                        "VAPID_SUBJECT", "mailto:contact@dismoi-tout.fr"
                     ).strip()
                 }
+            )
+            app.logger.info(
+                "Push : notification envoyée à un appareil (type %s, utilisateur %s).",
+                row["user_type"], row["user_id"]
             )
         except WebPushException as exc:
             status_code = getattr(
                 getattr(exc, "response", None), "status_code", None
             )
-            app.logger.warning("Échec Web Push (HTTP %s).", status_code)
+            app.logger.warning(
+                "Échec Web Push pour l'abonnement %s (HTTP %s) : %s",
+                row["id"], status_code, exc
+            )
             if status_code in (404, 410):
                 conn.execute("DELETE FROM push_subscriptions WHERE id = ?", (row["id"],))
                 conn.commit()
         except Exception:
-            app.logger.exception("Erreur lors de l'envoi d'une notification Push.")
+            app.logger.exception(
+                "Erreur lors de l'envoi Push pour l'abonnement %s.", row["id"]
+            )
 
 
 @app.route("/push/vapid-public-key", methods=["GET"])
@@ -2643,20 +2664,30 @@ def push_subscribe():
 
     kind, user_id, family_id = identity
     conn = get_connection()
-    conn.execute("""
-        INSERT INTO push_subscriptions
-            (endpoint, subscription_json, user_type, user_id, famille_id, updated_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(endpoint) DO UPDATE SET
-            subscription_json = excluded.subscription_json,
-            user_type = excluded.user_type,
-            user_id = excluded.user_id,
-            famille_id = excluded.famille_id,
-            updated_at = CURRENT_TIMESTAMP
-    """, (endpoint, json.dumps(subscription), kind, user_id, family_id))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
+    try:
+        conn.execute("""
+            INSERT INTO push_subscriptions
+                (endpoint, subscription_json, user_type, user_id, famille_id, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(endpoint) DO UPDATE SET
+                subscription_json = excluded.subscription_json,
+                user_type = excluded.user_type,
+                user_id = excluded.user_id,
+                famille_id = excluded.famille_id,
+                updated_at = CURRENT_TIMESTAMP
+        """, (endpoint, json.dumps(subscription), kind, user_id, family_id))
+        conn.commit()
+        app.logger.info(
+            "Push : appareil enregistré/actualisé pour %s %s (famille %s).",
+            kind, user_id, family_id
+        )
+        return jsonify({"success": True})
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Push : impossible d'enregistrer l'appareil.")
+        return jsonify({"success": False, "error": "Enregistrement impossible"}), 500
+    finally:
+        conn.close()
 
 
 @app.route("/push/unsubscribe", methods=["POST"])
