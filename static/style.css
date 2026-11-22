@@ -1558,3 +1558,35 @@ html body .member-item form {
         line-height: 1 !important;
     }
 }
+
+
+/* AJUSTEMENTS CIBLÉS — FORMULAIRE AJOUT ÉVÉNEMENT ET CALENDRIER */
+html body .calendar-page:has(form[action*="add_event"]) .calendar-card {
+    padding: 10px 14px !important;
+    margin-bottom: 10px !important;
+}
+html body .calendar-page:has(form[action*="add_event"]) .calendar-card > h2 {
+    margin: 0 0 6px !important;
+}
+html body .calendar-page:has(form[action*="add_event"]) .voice-command {
+    padding: 6px 10px !important;
+    margin: 5px 0 7px !important;
+}
+html body .calendar-page:has(form[action*="add_event"]) .voice-command h3 {
+    margin: 0 0 3px !important;
+}
+html body .calendar-page:has(form[action*="add_event"]) .voice-command p {
+    margin: 2px 0 4px !important;
+}
+html body .calendar-page:has(form[action*="add_event"]) .destinataires-list {
+    padding: 7px 9px !important;
+    gap: 6px 14px !important;
+}
+html body .calendar-page:has(form[action*="add_event"]) .calendar-description textarea {
+    min-height: 48px !important;
+}
+/* Calendrier légèrement moins haut, sans modifier sa palette ni ses polices. */
+html body .calendar-page:not(:has(form[action*="add_event"])) .calendar-day {
+    min-height: 68px !important;
+    padding: 5px !important;
+}
