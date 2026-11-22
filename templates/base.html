@@ -52,7 +52,7 @@
     {% if session.get("logged") %}
         <section id="push-notification-banner" role="region" aria-label="Notifications"
                  style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:12px auto;padding:12px 16px;max-width:1000px;background:#fff0f6;border:1px solid #e6a4c2;border-radius:10px;text-align:center;">
-            <span style="color:#71304f;font-weight:600;">Recevez une alerte lorsque vous avez un nouveau message.</span>
+            <span style="color:#71304f;font-weight:600;">Activez les notifications pour recevoir une alerte lors d’un nouveau message.</span>
             <button type="button" id="enable-push-notifications"
                     style="border:0;border-radius:8px;padding:9px 14px;background:#a52d68;color:#fff;font-weight:600;cursor:pointer;">
                 Activer les notifications
@@ -188,38 +188,27 @@
     async function refreshPushButton() {
         if (!pushButton) return;
 
-        // Après un rechargement manuel (F5), réafficher le bandeau
-        // pour permettre de réactiver les notifications après un déploiement.
-        // À l'ouverture normale, ne l'afficher que si elles ne sont pas activées.
-        try {
-            const navigationEntry = performance.getEntriesByType("navigation")[0];
-            const pageReloaded = navigationEntry && navigationEntry.type === "reload";
-            const wasActivated = localStorage.getItem(pushBannerPreferenceKey) === "1";
-
-            if (pageReloaded) {
-                showPushBanner();
-            } else if (wasActivated && Notification.permission === "granted") {
-                hidePushBanner();
-            } else {
-                if (wasActivated) localStorage.removeItem(pushBannerPreferenceKey);
-                showPushBanner();
-            }
-        } catch (storageError) {
-            console.warn("Préférence d'affichage des notifications inaccessible :", storageError);
-            showPushBanner();
-        }
-
         if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
             pushButton.disabled = true;
             pushButton.textContent = "Notifications non disponibles";
             return;
         }
+
         try {
             const registration = await navigator.serviceWorker.ready;
             let subscription = await registration.pushManager.getSubscription();
 
-            // Si les notifications sont déjà autorisées, resynchroniser
-            // l'abonnement avec le serveur sans redemander une activation.
+            // À chaque ouverture, tenter automatiquement l'autorisation si
+            // elle n'a jamais été demandée. Le navigateur peut exiger un geste
+            // utilisateur : le bouton reste alors disponible comme solution de repli.
+            if (Notification.permission === "default") {
+                try {
+                    await Notification.requestPermission();
+                } catch (permissionError) {
+                    console.info("Le navigateur attend une action de l'utilisateur pour autoriser les notifications.");
+                }
+            }
+
             if (Notification.permission === "granted") {
                 if (!subscription) {
                     const publicKey = await getVapidPublicKey();
@@ -229,16 +218,20 @@
                     });
                 }
                 await savePushSubscription(subscription);
+                localStorage.setItem(pushBannerPreferenceKey, "1");
+                hidePushBanner();
                 return;
             }
 
-            // Un abonnement local existant est également resynchronisé.
-            if (subscription) {
-                await savePushSubscription(subscription);
+            // Si l'autorisation n'est pas accordée, conserver le bouton manuel.
+            showPushBanner();
+            if (pushStatus && Notification.permission === "denied") {
+                pushStatus.textContent = "Les notifications sont bloquées par le navigateur ou le téléphone.";
             }
         } catch (error) {
-            console.warn("Synchronisation automatique des notifications impossible :", error);
-            if (pushStatus) pushStatus.textContent = "La synchronisation des notifications sera retentée automatiquement.";
+            console.warn("Activation/synchronisation automatique des notifications impossible :", error);
+            if (pushStatus) pushStatus.textContent = "L'activation automatique sera retentée à la prochaine ouverture.";
+            showPushBanner();
         }
     }
 
@@ -291,6 +284,60 @@
         });
     }
 })();
+
+    // Contrôle de version une seule fois par jour à 03 h (heure locale).
+    // Si l'application est fermée à 03 h, le contrôle est fait à la prochaine ouverture.
+    const versionStorageKey = "dis-moi-tout-render-version-v1";
+    const versionCheckDateKey = "dis-moi-tout-version-check-date-v1";
+
+    async function checkDeployedVersionAtThree() {
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        if (localStorage.getItem(versionCheckDateKey) === today) return;
+
+        try {
+            const response = await fetch("{{ url_for('app_version') }}", {
+                credentials: "same-origin",
+                cache: "no-store"
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!data.version) return;
+
+            const previousVersion = localStorage.getItem(versionStorageKey);
+            localStorage.setItem(versionCheckDateKey, today);
+            localStorage.setItem(versionStorageKey, data.version);
+
+            // Première initialisation : mémoriser la version sans recharger.
+            // Une nouvelle version détectée à 03 h déclenche un seul rechargement.
+            if (previousVersion && previousVersion !== data.version) {
+                if ("serviceWorker" in navigator) {
+                    const registration = await navigator.serviceWorker.getRegistration("/");
+                    if (registration) await registration.update().catch(() => {});
+                }
+                window.location.reload();
+            }
+        } catch (error) {
+            console.warn("Contrôle quotidien de version reporté :", error);
+        }
+    }
+
+    function scheduleDailyVersionCheck() {
+        const now = new Date();
+        const nextThree = new Date(now);
+        nextThree.setHours(3, 0, 0, 0);
+        if (now >= nextThree) {
+            // Si 03 h est déjà passé et qu'aucun contrôle n'a été fait aujourd'hui,
+            // le contrôle est effectué maintenant (notamment après une fermeture nocturne).
+            checkDeployedVersionAtThree();
+            nextThree.setDate(nextThree.getDate() + 1);
+        }
+        window.setTimeout(() => {
+            checkDeployedVersionAtThree();
+            scheduleDailyVersionCheck();
+        }, Math.max(1000, nextThree.getTime() - now.getTime()));
+    }
+    scheduleDailyVersionCheck();
 </script>
 {% endif %}
 <script>
