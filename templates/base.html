@@ -279,6 +279,22 @@
 })();
 </script>
 {% endif %}
+{% if request.endpoint == "calendar" %}
+<script>
+(function () {
+    const flashContainer = document.querySelector(".flash-messages");
+    if (!flashContainer) return;
+
+    window.setTimeout(function () {
+        flashContainer.style.transition = "opacity 0.5s ease";
+        flashContainer.style.opacity = "0";
+        window.setTimeout(function () {
+            flashContainer.remove();
+        }, 500);
+    }, 4000);
+})();
+</script>
+{% endif %}
 <script>
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
