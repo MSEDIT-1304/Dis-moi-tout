@@ -1456,6 +1456,20 @@ def init_database():
         CREATE INDEX IF NOT EXISTS idx_conversation_hidden_user
         ON conversation_hidden(user_type, user_id, conversation_id)
     """)
+    # Surnoms privés : chaque membre choisit le nom qu'il donne aux autres.
+    # Ces choix ne modifient jamais le pseudo attribué par l'administratrice.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS messagerie_surnoms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            owner_type TEXT NOT NULL,
+            owner_id INTEGER NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id INTEGER NOT NULL,
+            surnom TEXT NOT NULL,
+            UNIQUE(famille_id, owner_type, owner_id, target_type, target_id)
+        )
+    """)
     # Champs facultatifs pour les pièces jointes de la messagerie (migration sans perte).
     message_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(messages)").fetchall()
@@ -2641,6 +2655,19 @@ def current_messaging_identity():
     return None
 
 
+def messaging_name_for_viewer(conn, viewer_identity, target_type, target_id, fallback):
+    """Retourne le surnom privé choisi par le membre connecté, sinon le nom habituel."""
+    if viewer_identity and viewer_identity[0] == "membre":
+        row = conn.execute("""
+            SELECT surnom FROM messagerie_surnoms
+            WHERE famille_id=? AND owner_type=? AND owner_id=?
+              AND target_type=? AND target_id=?
+        """, (viewer_identity[2], viewer_identity[0], viewer_identity[1], target_type, target_id)).fetchone()
+        if row and row["surnom"]:
+            return row["surnom"]
+    return fallback
+
+
 def conversation_is_accessible(conn, conversation_id, identity):
     kind, user_id, family_id = identity
     return conn.execute("""
@@ -2960,6 +2987,45 @@ def messagerie():
             conn.close()
             return redirect(url_for("messagerie", conversation=conversation_id))
 
+        elif action == "set_nickname":
+            # Fonction réservée aux membres : leurs surnoms restent personnels.
+            if kind != "membre":
+                conn.close()
+                return redirect(url_for("messagerie"))
+            target_type = request.form.get("target_type", "").strip()
+            target_id = request.form.get("target_id", type=int)
+            surnom = request.form.get("surnom", "").strip()[:80]
+            valid_target = False
+            if target_type == "admin":
+                family_row = conn.execute("SELECT admin_id FROM famille WHERE id=?", (family_id,)).fetchone()
+                valid_target = bool(family_row and family_row["admin_id"] and target_id == int(family_row["admin_id"]))
+            elif target_type == "membre" and target_id and target_id != user_id:
+                valid_target = conn.execute(
+                    "SELECT 1 FROM membres WHERE id=? AND famille_id=?", (target_id, family_id)
+                ).fetchone() is not None
+            if valid_target:
+                if surnom:
+                    conn.execute("""
+                        INSERT INTO messagerie_surnoms
+                            (famille_id, owner_type, owner_id, target_type, target_id, surnom)
+                        VALUES (?, 'membre', ?, ?, ?, ?)
+                        ON CONFLICT(famille_id, owner_type, owner_id, target_type, target_id)
+                        DO UPDATE SET surnom=excluded.surnom
+                    """, (family_id, user_id, target_type, target_id, surnom))
+                    flash("Votre surnom a été enregistré.")
+                else:
+                    conn.execute("""
+                        DELETE FROM messagerie_surnoms
+                        WHERE famille_id=? AND owner_type='membre' AND owner_id=?
+                          AND target_type=? AND target_id=?
+                    """, (family_id, user_id, target_type, target_id))
+                    flash("Le surnom personnel a été réinitialisé.")
+                conn.commit()
+            else:
+                flash("Ce membre n'est pas un destinataire valide.")
+            conn.close()
+            return redirect(url_for("messagerie"))
+
         elif action == "delete_conversation":
             conversation_id = request.form.get("conversation_id", type=int)
             if conversation_id and conversation_is_accessible(conn, conversation_id, identity):
@@ -3029,7 +3095,10 @@ def messagerie():
             ORDER BY participant_name
         """, (conv["id"], kind, user_id)).fetchall()
         conv_dict = dict(conv)
-        names = [row["participant_name"] for row in others if row["participant_name"]]
+        names = [
+            messaging_name_for_viewer(conn, identity, row["user_type"], row["user_id"], row["participant_name"])
+            for row in others if row["participant_name"]
+        ]
         conv_dict["titre"] = "Conversation avec " + (", ".join(names) if names else "correspondant")
         conversations_named.append(conv_dict)
 
@@ -3043,7 +3112,8 @@ def messagerie():
             (active_id, family_id)
         ).fetchone()
         participants = conn.execute("""
-            SELECT CASE WHEN p.user_type='admin'
+            SELECT p.user_type, p.user_id,
+                   CASE WHEN p.user_type='admin'
                         THEN (SELECT prenom || ' ' || nom FROM admin WHERE id=p.user_id)
                         ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=p.user_id)
                    END AS participant_name
@@ -3052,10 +3122,13 @@ def messagerie():
               AND NOT (p.user_type=? AND p.user_id=?)
             ORDER BY participant_name
         """, (active_id, kind, user_id)).fetchall()
-        active_names = [row["participant_name"] for row in participants if row["participant_name"]]
+        active_names = [
+            messaging_name_for_viewer(conn, identity, row["user_type"], row["user_id"], row["participant_name"])
+            for row in participants if row["participant_name"]
+        ]
         active_title = "Conversation avec " + (", ".join(active_names) if active_names else "correspondant")
 
-        messages = conn.execute("""
+        messages_raw = conn.execute("""
             SELECT m.*, CASE WHEN m.sender_type='admin' THEN
                 (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
             ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=m.sender_id) END AS sender_name,
@@ -3065,6 +3138,13 @@ def messagerie():
                 (SELECT photo_data IS NOT NULL FROM membres WHERE id=m.sender_id) ELSE 0 END AS sender_has_photo
             FROM messages m WHERE m.conversation_id=? ORDER BY m.id
         """, (active_id,)).fetchall()
+        messages = []
+        for message in messages_raw:
+            message_dict = dict(message)
+            message_dict["sender_name"] = messaging_name_for_viewer(
+                conn, identity, message["sender_type"], message["sender_id"], message["sender_name"]
+            )
+            messages.append(message_dict)
         conn.execute("""
             UPDATE conversation_participants SET last_read_at=CURRENT_TIMESTAMP
             WHERE conversation_id=? AND user_type=? AND user_id=?
@@ -3083,6 +3163,29 @@ def messagerie():
             (family_id,)
         ).fetchone()
 
+    nickname_targets = []
+    if kind == "membre":
+        if admin_contact:
+            alias = conn.execute("""
+                SELECT surnom FROM messagerie_surnoms
+                WHERE famille_id=? AND owner_type='membre' AND owner_id=?
+                  AND target_type='admin' AND target_id=?
+            """, (family_id, user_id, admin_contact["id"])).fetchone()
+            nickname_targets.append({"type": "admin", "id": admin_contact["id"],
+                                     "label": "Administratrice — " + admin_contact["prenom"],
+                                     "surnom": alias["surnom"] if alias else ""})
+        for member in members:
+            if member["id"] == user_id:
+                continue
+            alias = conn.execute("""
+                SELECT surnom FROM messagerie_surnoms
+                WHERE famille_id=? AND owner_type='membre' AND owner_id=?
+                  AND target_type='membre' AND target_id=?
+            """, (family_id, user_id, member["id"])).fetchone()
+            nickname_targets.append({"type": "membre", "id": member["id"],
+                                     "label": member["pseudo"] or member["prenom"],
+                                     "surnom": alias["surnom"] if alias else ""})
+
     conn.close()
     return render_template(
         "messagerie.html",
@@ -3094,7 +3197,8 @@ def messagerie():
         admin_contact=admin_contact,
         active_id=active_id,
         current_kind=kind,
-        current_user_id=user_id
+        current_user_id=user_id,
+        nickname_targets=nickname_targets
     )
 
 
