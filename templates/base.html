@@ -51,7 +51,7 @@
 
     {% if session.get("logged") %}
         <section id="push-notification-banner" role="region" aria-label="Notifications"
-                 style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:12px auto;padding:12px 16px;max-width:1000px;background:#fff0f6;border:1px solid #e6a4c2;border-radius:10px;text-align:center;">
+                 style="display:none;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:12px auto;padding:12px 16px;max-width:1000px;background:#fff0f6;border:1px solid #e6a4c2;border-radius:10px;text-align:center;">
             <span style="color:#71304f;font-weight:600;">Recevez une alerte lorsque vous avez un nouveau message.</span>
             <button type="button" id="enable-push-notifications"
                     style="border:0;border-radius:8px;padding:9px 14px;background:#a52d68;color:#fff;font-weight:600;cursor:pointer;">
@@ -188,57 +188,43 @@
     async function refreshPushButton() {
         if (!pushButton) return;
 
-        // Après un rechargement manuel (F5), réafficher le bandeau
-        // pour permettre de réactiver les notifications après un déploiement.
-        // À l'ouverture normale, ne l'afficher que si elles ne sont pas activées.
-        try {
-            const navigationEntry = performance.getEntriesByType("navigation")[0];
-            const pageReloaded = navigationEntry && navigationEntry.type === "reload";
-            const wasActivated = localStorage.getItem(pushBannerPreferenceKey) === "1";
-
-            if (pageReloaded) {
-                showPushBanner();
-            } else if (wasActivated && Notification.permission === "granted") {
-                hidePushBanner();
-            } else {
-                if (wasActivated) localStorage.removeItem(pushBannerPreferenceKey);
-                showPushBanner();
-            }
-        } catch (storageError) {
-            console.warn("Préférence d'affichage des notifications inaccessible :", storageError);
-            showPushBanner();
-        }
-
         if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
             pushButton.disabled = true;
             pushButton.textContent = "Notifications non disponibles";
+            showPushBanner();
             return;
         }
-        try {
-            const registration = await navigator.serviceWorker.ready;
-            let subscription = await registration.pushManager.getSubscription();
 
-            // Si les notifications sont déjà autorisées, resynchroniser
-            // l'abonnement avec le serveur sans redemander une activation.
-            if (Notification.permission === "granted") {
-                if (!subscription) {
-                    const publicKey = await getVapidPublicKey();
-                    subscription = await registration.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(publicKey)
-                    });
-                }
-                await savePushSubscription(subscription);
+        try {
+            // La demande initiale reste déclenchée par le bouton (geste utilisateur).
+            // Dès que l'autorisation est accordée, le bandeau ne réapparaît plus,
+            // y compris après F5, fermeture ou réouverture de l'application.
+            if (Notification.permission !== "granted") {
+                showPushBanner();
                 return;
             }
 
-            // Un abonnement local existant est également resynchronisé.
-            if (subscription) {
-                await savePushSubscription(subscription);
+            hidePushBanner();
+            localStorage.setItem(pushBannerPreferenceKey, "1");
+
+            // À chaque ouverture, on vérifie et synchronise l'abonnement de cet appareil.
+            const registration = await navigator.serviceWorker.ready;
+            let subscription = await registration.pushManager.getSubscription();
+
+            if (!subscription) {
+                const publicKey = await getVapidPublicKey();
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicKey)
+                });
             }
+
+            await savePushSubscription(subscription);
         } catch (error) {
             console.warn("Synchronisation automatique des notifications impossible :", error);
-            if (pushStatus) pushStatus.textContent = "La synchronisation des notifications sera retentée automatiquement.";
+            // Ne pas réafficher le bandeau si l'autorisation a déjà été accordée.
+            if (Notification.permission === "granted") hidePushBanner();
+            if (pushStatus) pushStatus.textContent = "La synchronisation des notifications sera retentée à la prochaine ouverture.";
         }
     }
 
