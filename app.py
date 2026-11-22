@@ -3310,7 +3310,7 @@ def add_event_page():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, prenom, nom, role FROM membres WHERE famille_id = ? ORDER BY prenom, nom",
+        "SELECT id, prenom, nom, pseudo, role FROM membres WHERE famille_id = ? ORDER BY prenom, nom",
         (famille_id,)
     )
     membres = cursor.fetchall()
@@ -3446,8 +3446,11 @@ def add_event():
             (est_admin and type_cible == "admin")
             or (not est_admin and type_cible == "membre" and destinataire_id == auteur_membre_id)
         )
-        statut = "accepte" if est_son_propre_agenda else "en_attente"
-        valide_admin = admin_id if (est_admin and est_son_propre_agenda) else None
+        # Une création par l'administratrice est immédiatement publiée
+        # dans tous les agendas sélectionnés. Les propositions d'un membre
+        # à un autre utilisateur restent soumises à acceptation.
+        statut = "accepte" if (est_admin or est_son_propre_agenda) else "en_attente"
+        valide_admin = admin_id if est_admin and type_cible == "admin" else None
         valide_membre = auteur_membre_id if (not est_admin and est_son_propre_agenda) else None
 
         cursor.execute(
@@ -3472,7 +3475,9 @@ def add_event():
 
     conn.commit()
     conn.close()
-    if nombre_attente:
+    if est_admin:
+        flash("Événement ajouté dans tous les agendas sélectionnés.")
+    elif nombre_attente:
         flash(f"Proposition envoyée. {nombre_attente} destinataire(s) doivent accepter l'événement.")
     else:
         flash("Événement ajouté dans votre agenda.")
