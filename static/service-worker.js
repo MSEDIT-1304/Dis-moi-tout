@@ -1,5 +1,5 @@
 
-const CACHE_NAME = "dis-moi-tout-v1";
+const CACHE_NAME = "dis-moi-tout-v2";
 
 self.addEventListener("install", (event) => {
     self.skipWaiting();
@@ -33,6 +33,7 @@ self.addEventListener("push", (event) => {
     }
 
     const title = data.title || "Dis-moi tout";
+    const unreadCount = Number(data.badgeCount || data.count || 0);
 
     const options = {
         body: data.body || "Vous avez reçu un nouveau message.",
@@ -45,9 +46,25 @@ self.addEventListener("push", (event) => {
         renotify: true
     };
 
-    event.waitUntil(
-        self.registration.showNotification(title, options)
-    );
+    // Mise à jour du compteur sur l'icône.
+    const updateAppBadge = async () => {
+        try {
+            if (self.navigator && "setAppBadge" in self.navigator) {
+                if (unreadCount > 0) {
+                    await self.navigator.setAppBadge(unreadCount);
+                } else if ("clearAppBadge" in self.navigator) {
+                    await self.navigator.clearAppBadge();
+                }
+            }
+        } catch (error) {
+            console.warn("Mise à jour du badge indisponible :", error);
+        }
+    };
+
+    event.waitUntil(Promise.all([
+        self.registration.showNotification(title, options),
+        updateAppBadge()
+    ]));
 });
 
 // Clic sur la notification : ouverture de la messagerie.
