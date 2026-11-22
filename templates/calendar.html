@@ -482,6 +482,23 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    // Après le retour OAuth Google, ouvrir automatiquement le formulaire
+    // d'importation sans demander un second clic à l'utilisateur.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google_import") === "1") {
+        const googlePanel = document.getElementById("google-import-panel");
+        if (googlePanel) {
+            document.querySelectorAll(".calendar-import-panel").forEach(panel => {
+                panel.hidden = panel !== googlePanel;
+            });
+            googlePanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+        params.delete("google_import");
+        const cleanQuery = params.toString();
+        const cleanUrl = window.location.pathname + (cleanQuery ? "?" + cleanQuery : "") + window.location.hash;
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+
     const events = [
         {% for evenement in evenements_perso %}
         {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
