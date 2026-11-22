@@ -4200,6 +4200,8 @@ def calendar():
         propositions=propositions,
         est_admin=est_admin,
         afficher_pro=afficher_pro,
+        membre_connecte_id=membre_id,
+        destinataire_par_defaut="admin" if est_admin else str(membre_id),
         google_email=google_email,
         google_calendars=google_calendars,
         google_error=google_error,
