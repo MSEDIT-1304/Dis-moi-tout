@@ -75,6 +75,9 @@
       {% endfor %}
     </div>
     {% endif %}
+  </section>
+  <section class="messaging-panel message-area">
+    <h2>Vos messages</h2>
     <div class="conversation-list">
       <h3>Mes conversations</h3>
       {% for conv in conversations %}
@@ -87,8 +90,6 @@
         <p style="color:#777">Aucune conversation pour le moment.</p>
       {% endfor %}
     </div>
-  </section>
-  <section class="messaging-panel message-area">
     {% if active %}
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <h2 style="margin:0">{{ active_title }}</h2>
@@ -146,7 +147,6 @@
       </form>
       </div>
     {% else %}
-      <h2>Vos messages</h2>
       <p style="color:#777">Choisissez une conversation ou créez-en une nouvelle.</p>
     {% endif %}
   </section>
