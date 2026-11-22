@@ -1,5 +1,5 @@
 
-const CACHE_NAME = "dis-moi-tout-v2";
+const CACHE_NAME = "dis-moi-tout-v3";
 
 self.addEventListener("install", (event) => {
     self.skipWaiting();
@@ -9,16 +9,14 @@ self.addEventListener("activate", (event) => {
     event.waitUntil(self.clients.claim());
 });
 
-// Les requêtes restent gérées par le serveur.
-// Aucune page privée ou aucun agenda n'est mis en cache.
+// Les pages et données privées ne sont jamais mises en cache.
 self.addEventListener("fetch", (event) => {
     if (event.request.method === "GET") {
         event.respondWith(fetch(event.request));
     }
 });
 
-// Réception des notifications Push, même lorsque
-// l'application n'est pas ouverte.
+// Réception d'un message même lorsque l'application est fermée.
 self.addEventListener("push", (event) => {
     let data = {};
 
@@ -26,48 +24,43 @@ self.addEventListener("push", (event) => {
         try {
             data = event.data.json();
         } catch (error) {
-            data = {
-                body: event.data.text()
-            };
+            data = { body: event.data.text() };
         }
     }
 
     const title = data.title || "Dis-moi tout";
-    const unreadCount = Number(data.badgeCount || data.count || 0);
 
     const options = {
         body: data.body || "Vous avez reçu un nouveau message.",
         icon: "/static/images/app-icon-192.png",
         badge: "/static/images/favicon-32.png",
+        tag: "dis-moi-tout-message",
+        renotify: true,
         data: {
             url: data.url || "/messagerie"
-        },
-        tag: "dis-moi-tout-message",
-        renotify: true
-    };
-
-    // Mise à jour du compteur sur l'icône.
-    const updateAppBadge = async () => {
-        try {
-            if (self.navigator && "setAppBadge" in self.navigator) {
-                if (unreadCount > 0) {
-                    await self.navigator.setAppBadge(unreadCount);
-                } else if ("clearAppBadge" in self.navigator) {
-                    await self.navigator.clearAppBadge();
-                }
-            }
-        } catch (error) {
-            console.warn("Mise à jour du badge indisponible :", error);
         }
     };
 
-    event.waitUntil(Promise.all([
-        self.registration.showNotification(title, options),
-        updateAppBadge()
-    ]));
+    event.waitUntil((async () => {
+        // Affichage prioritaire de la notification.
+        await self.registration.showNotification(title, options);
+
+        // Mise à jour du compteur si le système le permet.
+        const count = Number(data.badgeCount || data.count || 0);
+
+        try {
+            if (count > 0 && "setAppBadge" in self.navigator) {
+                await self.navigator.setAppBadge(count);
+            } else if (count <= 0 && "clearAppBadge" in self.navigator) {
+                await self.navigator.clearAppBadge();
+            }
+        } catch (error) {
+            console.warn("Compteur d'icône non pris en charge :", error);
+        }
+    })());
 });
 
-// Clic sur la notification : ouverture de la messagerie.
+// Ouverture de la conversation au clic.
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();
 
