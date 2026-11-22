@@ -2604,16 +2604,37 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
                 "url": url_for("messagerie", conversation=conversation_id),
                 "badgeCount": int(unread["total"] if unread else 1)
             })
-            webpush(
-                subscription_info=json.loads(row["subscription_json"]),
-                data=payload,
-                vapid_private_key=private_key,
-                vapid_claims={
-                    "sub": os.environ.get(
-                        "VAPID_SUBJECT", "mailto:contact@dismoi-tout.fr"
-                    ).strip()
-                }
-            )
+            # Render stocke la clé privée dans une variable d'environnement.
+            # pywebpush attend ici un chemin vers un fichier PEM (ou une clé DER
+            # encodée), pas le texte PEM brut passé directement à from_string().
+            # On écrit donc temporairement le PEM dans un fichier sécurisé,
+            # puis on transmet son chemin à pywebpush.
+            private_key_pem = private_key.replace("\\n", "\n").strip()
+            key_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    suffix=".pem",
+                    prefix="dismoitout-vapid-",
+                    delete=False
+                ) as key_file:
+                    key_file.write(private_key_pem)
+                    key_path = key_file.name
+
+                webpush(
+                    subscription_info=json.loads(row["subscription_json"]),
+                    data=payload,
+                    vapid_private_key=key_path,
+                    vapid_claims={
+                        "sub": os.environ.get(
+                            "VAPID_SUBJECT", "mailto:contact@dismoi-tout.fr"
+                        ).strip()
+                    }
+                )
+            finally:
+                if key_path and os.path.exists(key_path):
+                    os.remove(key_path)
             app.logger.info(
                 "Push : notification envoyée à un appareil (type %s, utilisateur %s).",
                 row["user_type"], row["user_id"]
