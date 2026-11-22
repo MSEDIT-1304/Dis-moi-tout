@@ -144,6 +144,34 @@
         return Uint8Array.from([...raw].map(char => char.charCodeAt(0)));
     }
 
+    async function savePushSubscription(subscription) {
+        const saveResponse = await fetch("{{ url_for('push_subscribe') }}", {
+            method: "POST",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(subscription)
+        });
+        if (!saveResponse.ok) {
+            const details = await saveResponse.json().catch(() => ({}));
+            throw new Error(details.error || "Impossible d'enregistrer cet appareil sur le serveur.");
+        }
+        return true;
+    }
+
+    async function getVapidPublicKey() {
+        const keyResponse = await fetch("{{ url_for('push_vapid_public_key') }}", {
+            credentials: "same-origin",
+            cache: "no-store"
+        });
+        if (!keyResponse.ok) {
+            throw new Error("Le service de notifications n'est pas disponible sur le serveur.");
+        }
+        const keyData = await keyResponse.json();
+        if (!keyData.publicKey) throw new Error("Clé publique de notification absente.");
+        return keyData.publicKey;
+    }
+
     async function refreshPushButton() {
         if (!pushButton) return;
         if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
@@ -153,13 +181,34 @@
         }
         try {
             const registration = await navigator.serviceWorker.ready;
-            const subscription = await registration.pushManager.getSubscription();
+            let subscription = await registration.pushManager.getSubscription();
+
+            // Si le client a déjà autorisé les notifications, on répare
+            // automatiquement l'enregistrement serveur à chaque connexion.
+            // Le client n'a aucune nouvelle manipulation à effectuer.
+            if (Notification.permission === "granted") {
+                if (!subscription) {
+                    const publicKey = await getVapidPublicKey();
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(publicKey)
+                    });
+                }
+                await savePushSubscription(subscription);
+                const banner = document.getElementById("push-notification-banner");
+                if (banner) banner.style.display = "none";
+                return;
+            }
+
+            // Un abonnement local existant est également resynchronisé.
             if (subscription) {
+                await savePushSubscription(subscription);
                 const banner = document.getElementById("push-notification-banner");
                 if (banner) banner.style.display = "none";
             }
         } catch (error) {
-            console.warn("État des notifications indisponible", error);
+            console.warn("Synchronisation automatique des notifications impossible :", error);
+            if (pushStatus) pushStatus.textContent = "La synchronisation des notifications sera retentée automatiquement.";
         }
     }
 
@@ -197,15 +246,7 @@
                     });
                 }
 
-                const saveResponse = await fetch("{{ url_for('push_subscribe') }}", {
-                    method: "POST",
-                    credentials: "same-origin",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(subscription)
-                });
-                if (!saveResponse.ok) {
-                    throw new Error("Impossible d'enregistrer cet appareil.");
-                }
+                await savePushSubscription(subscription);
 
                 // L'activation est confirmée : le bandeau disparaît entièrement.
                 const banner = document.getElementById("push-notification-banner");
