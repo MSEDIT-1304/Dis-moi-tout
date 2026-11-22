@@ -2782,16 +2782,27 @@ def messagerie():
         elif action == "delete_conversation":
             conversation_id = request.form.get("conversation_id", type=int)
             if conversation_id and conversation_is_accessible(conn, conversation_id, identity):
-                # Suppression globale : messages (et pièces jointes stockées),
-                # participants, puis conversation. Vérification famille incluse.
-                conn.execute("DELETE FROM messages WHERE conversation_id=?", (conversation_id,))
-                conn.execute("DELETE FROM conversation_participants WHERE conversation_id=?", (conversation_id,))
+                # Suppression personnelle : on retire uniquement le participant
+                # connecté. Les autres participants conservent la conversation,
+                # tous les messages et toutes les pièces jointes.
                 conn.execute(
-                    "DELETE FROM conversations WHERE id=? AND famille_id=?",
-                    (conversation_id, family_id)
+                    "DELETE FROM conversation_participants "
+                    "WHERE conversation_id=? AND user_type=? AND user_id=?",
+                    (conversation_id, kind, user_id)
                 )
+                remaining = conn.execute(
+                    "SELECT COUNT(*) AS total FROM conversation_participants WHERE conversation_id=?",
+                    (conversation_id,)
+                ).fetchone()
+                # Nettoyage uniquement si plus personne ne possède la conversation.
+                if not remaining or remaining["total"] == 0:
+                    conn.execute("DELETE FROM messages WHERE conversation_id=?", (conversation_id,))
+                    conn.execute(
+                        "DELETE FROM conversations WHERE id=? AND famille_id=?",
+                        (conversation_id, family_id)
+                    )
                 conn.commit()
-                flash("La conversation et tous ses messages ont été supprimés.")
+                flash("La conversation a été retirée de votre messagerie. Les autres participants la conservent.")
             else:
                 flash("Cette conversation n'est pas accessible.")
             conn.close()
