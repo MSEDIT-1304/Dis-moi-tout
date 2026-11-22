@@ -1365,6 +1365,10 @@ def init_database():
     }
 
     
+    if "pseudo" not in colonnes_membres:
+        cursor.execute("ALTER TABLE membres ADD COLUMN pseudo TEXT")
+        colonnes_membres.add("pseudo")
+
     colonnes_partage = {
         "partage_vers_admin_pro": "INTEGER DEFAULT 0",
         "partage_vers_admin_perso": "INTEGER DEFAULT 0",
@@ -2031,6 +2035,7 @@ def add_member():
 
     prenom = request.form.get("prenom", "").strip()
     nom = request.form.get("nom", "").strip()
+    pseudo = request.form.get("pseudo", "").strip()
     email = request.form.get("email", "").strip().lower()
     role = request.form.get("role", "enfant").strip().lower()
 
@@ -2072,6 +2077,19 @@ def add_member():
         acces_agenda_admin_perso=acces_agenda_admin_perso
     )
 
+    conn_pseudo = get_connection()
+    nouveau_membre = conn_pseudo.execute(
+        "SELECT id FROM membres WHERE famille_id=? AND email=? ORDER BY id DESC LIMIT 1",
+        (famille_id, email)
+    ).fetchone() if email else conn_pseudo.execute(
+        "SELECT id FROM membres WHERE famille_id=? AND prenom=? AND nom=? ORDER BY id DESC LIMIT 1",
+        (famille_id, prenom, nom)
+    ).fetchone()
+    if nouveau_membre:
+        conn_pseudo.execute("UPDATE membres SET pseudo=? WHERE id=? AND famille_id=?",
+                            (pseudo or None, nouveau_membre["id"], famille_id))
+        conn_pseudo.commit()
+    conn_pseudo.close()
 
     flash(
         "Membre ajouté avec succès. "
@@ -2097,6 +2115,7 @@ def edit_member_route(membre_id):
 
     prenom = request.form.get("prenom", "").strip()
     nom = request.form.get("nom", "").strip()
+    pseudo = request.form.get("pseudo", "").strip()
     email = request.form.get("email", "").strip().lower()
     role = request.form.get("role", "enfant").strip().lower()
     peut_modifier = 1 if request.form.get("peut_modifier") == "oui" else 0
@@ -2159,13 +2178,13 @@ def edit_member_route(membre_id):
     cursor.execute(
         """
         UPDATE membres
-        SET prenom = ?, nom = ?, email = ?, role = ?, peut_modifier = ?,
+        SET prenom = ?, nom = ?, pseudo = ?, email = ?, role = ?, peut_modifier = ?,
             acces_agenda_admin_pro = ?, acces_agenda_admin_perso = ?,
             garde_partagee = ?, frequence_garde = ?, prochaine_date_garde = ?
         WHERE id = ? AND famille_id = ?
         """,
         (
-            prenom, nom, email, role, peut_modifier,
+            prenom, nom, pseudo or None, email, role, peut_modifier,
             acces_agenda_admin_pro, acces_agenda_admin_perso,
             1 if garde_partagee else 0, frequence_garde, prochaine_date_garde,
             membre_id, famille_id
@@ -2916,7 +2935,7 @@ def messagerie():
             SELECT p.user_type, p.user_id,
                    CASE WHEN p.user_type='admin'
                         THEN (SELECT prenom || ' ' || nom FROM admin WHERE id=p.user_id)
-                        ELSE (SELECT prenom || ' ' || nom FROM membres WHERE id=p.user_id)
+                        ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=p.user_id)
                    END AS participant_name
             FROM conversation_participants p
             WHERE p.conversation_id=?
@@ -2940,7 +2959,7 @@ def messagerie():
         participants = conn.execute("""
             SELECT CASE WHEN p.user_type='admin'
                         THEN (SELECT prenom || ' ' || nom FROM admin WHERE id=p.user_id)
-                        ELSE (SELECT prenom || ' ' || nom FROM membres WHERE id=p.user_id)
+                        ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=p.user_id)
                    END AS participant_name
             FROM conversation_participants p
             WHERE p.conversation_id=?
@@ -2953,7 +2972,7 @@ def messagerie():
         messages = conn.execute("""
             SELECT m.*, CASE WHEN m.sender_type='admin' THEN
                 (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
-            ELSE (SELECT prenom || ' ' || nom FROM membres WHERE id=m.sender_id) END AS sender_name
+            ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=m.sender_id) END AS sender_name
             FROM messages m WHERE m.conversation_id=? ORDER BY m.id
         """, (active_id,)).fetchall()
         conn.execute("""
@@ -2964,7 +2983,7 @@ def messagerie():
 
     # Les membres voient les autres membres et l'administrateur comme destinataires.
     members = conn.execute(
-        "SELECT id, prenom, nom FROM membres WHERE famille_id=? ORDER BY prenom, nom",
+        "SELECT id, prenom, nom, pseudo FROM membres WHERE famille_id=? ORDER BY prenom, nom",
         (family_id,)
     ).fetchall()
     admin_contact = None
