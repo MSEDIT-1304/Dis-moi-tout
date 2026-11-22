@@ -63,7 +63,7 @@
     {% if active %}
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         <h2 style="margin:0">{{ active_title }}</h2>
-        <form method="post" onsubmit="return confirm('ATTENTION : cette action supprimera définitivement toute la conversation et tous ses messages pour tous les participants. Continuer ?');">
+        <form method="post" onsubmit="return confirm('Effacer cette conversation uniquement de votre messagerie ? Les autres participants conserveront leurs messages et la conversation.');">
           <input type="hidden" name="action" value="delete_conversation">
           <input type="hidden" name="conversation_id" value="{{ active.id }}">
           <button type="submit" class="messaging-button" style="background:#8b1e4d">Effacer la conversation</button>
