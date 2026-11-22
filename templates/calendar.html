@@ -10,14 +10,6 @@
         <a href="{{ url_for('add_event_page') }}" class="calendar-button">Ajouter un événement</a>
     </header>
 
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="calendar-messages" role="status">
-                {% for message in messages %}<p>{{ message }}</p>{% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
-
     <div class="calendar-import-links" aria-label="Importer des événements">
         <span>Importer des événements depuis :</span>
         <a href="#google-import-panel" class="calendar-import-link" data-import-panel="google-import-panel">Google Agenda</a>
