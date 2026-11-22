@@ -1369,6 +1369,17 @@ def init_database():
         cursor.execute("ALTER TABLE membres ADD COLUMN pseudo TEXT")
         colonnes_membres.add("pseudo")
 
+    # Photo facultative ou avatar choisi par le membre (migration sans perte).
+    if "photo_data" not in colonnes_membres:
+        cursor.execute("ALTER TABLE membres ADD COLUMN photo_data BLOB")
+        colonnes_membres.add("photo_data")
+    if "photo_mime" not in colonnes_membres:
+        cursor.execute("ALTER TABLE membres ADD COLUMN photo_mime TEXT")
+        colonnes_membres.add("photo_mime")
+    if "avatar" not in colonnes_membres:
+        cursor.execute("ALTER TABLE membres ADD COLUMN avatar TEXT")
+        colonnes_membres.add("avatar")
+
     colonnes_partage = {
         "partage_vers_admin_pro": "INTEGER DEFAULT 0",
         "partage_vers_admin_perso": "INTEGER DEFAULT 0",
@@ -2014,6 +2025,53 @@ def create_member(
 
 
 # ==========================================================
+# PHOTO / AVATAR DES MEMBRES
+# ==========================================================
+
+def read_member_photo_upload(upload):
+    """Retourne (octets, mime) pour une image sûre et légère, ou (None, None)."""
+    if not upload or not upload.filename:
+        return None, None
+    mime = (upload.mimetype or "").lower()
+    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+    if mime not in allowed:
+        raise ValueError("Choisissez une image JPG, PNG, WEBP ou GIF.")
+    data = upload.read(5 * 1024 * 1024 + 1)
+    if not data or len(data) > 5 * 1024 * 1024:
+        raise ValueError("La photo doit faire 5 Mo maximum.")
+    # Vérification légère des signatures, sans dépendance supplémentaire.
+    signatures = {
+        "image/jpeg": data.startswith(b"\xff\xd8\xff"),
+        "image/png": data.startswith(b"\x89PNG\r\n\x1a\n"),
+        "image/gif": data.startswith((b"GIF87a", b"GIF89a")),
+        "image/webp": len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
+    }
+    if not signatures.get(mime, False):
+        raise ValueError("Le fichier choisi n'est pas une image valide.")
+    return data, mime
+
+
+@app.route("/membre/photo/<int:membre_id>")
+def membre_photo(membre_id):
+    identity = current_messaging_identity()
+    if identity is None:
+        if not admin_required():
+            return "Accès refusé", 403
+        famille_id = get_family_id(session.get("admin_id"))
+    else:
+        _, _, famille_id = identity
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT photo_data, photo_mime FROM membres WHERE id=? AND famille_id=?",
+        (membre_id, famille_id)
+    ).fetchone()
+    conn.close()
+    if not row or not row["photo_data"]:
+        return "Photo introuvable", 404
+    return send_file(io.BytesIO(row["photo_data"]), mimetype=row["photo_mime"] or "image/jpeg", max_age=300)
+
+
+# ==========================================================
 # ROUTE AJOUT D'UN MEMBRE
 # ==========================================================
 
@@ -2029,8 +2087,8 @@ def add_member():
         flash("Veuillez d'abord créer votre famille.")
         return redirect(url_for("dashboard"))
 
-    if count_members(famille_id) >= 6:
-        flash("Votre famille contient déjà 6 membres.")
+    if count_members(famille_id) >= 8:
+        flash("Votre famille contient déjà 8 membres.")
         return redirect(url_for("members"))
 
     prenom = request.form.get("prenom", "").strip()
@@ -2041,7 +2099,7 @@ def add_member():
 
     peut_modifier = request.form.get("peut_modifier") == "oui"
 
-    roles_autorises = ["enfant", "conjoint", "ex-conjoint"]
+    roles_autorises = ["enfant", "conjoint", "ex-conjoint", "grands-parents-autre"]
 
     if role not in roles_autorises:
         flash("Catégorie de membre invalide.")
@@ -2055,7 +2113,16 @@ def add_member():
         flash("Cette adresse e-mail est déjà utilisée.")
         return redirect(url_for("members"))
 
-    
+    try:
+        photo_data, photo_mime = read_member_photo_upload(request.files.get("photo"))
+    except ValueError as error:
+        flash(str(error))
+        return redirect(url_for("members"))
+    avatar = request.form.get("avatar", "").strip()
+    avatars_autorises = {"", "😊", "👩", "👨", "👵", "👴", "🧒", "👶", "🐱", "🐶", "🌸", "⭐"}
+    if avatar not in avatars_autorises:
+        avatar = ""
+
     acces_agenda_admin_pro = (
         request.form.get("partage_agenda_pro") == "oui"
         and role == "conjoint"
@@ -2086,8 +2153,10 @@ def add_member():
         (famille_id, prenom, nom)
     ).fetchone()
     if nouveau_membre:
-        conn_pseudo.execute("UPDATE membres SET pseudo=? WHERE id=? AND famille_id=?",
-                            (pseudo or None, nouveau_membre["id"], famille_id))
+        conn_pseudo.execute(
+            "UPDATE membres SET pseudo=?, photo_data=?, photo_mime=?, avatar=? WHERE id=? AND famille_id=?",
+            (pseudo or None, photo_data, photo_mime, avatar or None, nouveau_membre["id"], famille_id)
+        )
         conn_pseudo.commit()
     conn_pseudo.close()
 
@@ -2132,9 +2201,20 @@ def edit_member_route(membre_id):
         flash("Veuillez renseigner le prénom et le nom.")
         return redirect(url_for("members"))
 
-    if role not in ("enfant", "conjoint", "ex-conjoint"):
+    if role not in ("enfant", "conjoint", "ex-conjoint", "grands-parents-autre"):
         flash("Catégorie de membre invalide.")
         return redirect(url_for("members"))
+
+    try:
+        photo_data, photo_mime = read_member_photo_upload(request.files.get("photo"))
+    except ValueError as error:
+        flash(str(error))
+        return redirect(url_for("members"))
+    avatar = request.form.get("avatar", "").strip()
+    avatars_autorises = {"", "😊", "👩", "👨", "👵", "👴", "🧒", "👶", "🐱", "🐶", "🌸", "⭐"}
+    if avatar not in avatars_autorises:
+        avatar = ""
+    supprimer_photo = request.form.get("supprimer_photo") == "oui"
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -2180,13 +2260,19 @@ def edit_member_route(membre_id):
         UPDATE membres
         SET prenom = ?, nom = ?, pseudo = ?, email = ?, role = ?, peut_modifier = ?,
             acces_agenda_admin_pro = ?, acces_agenda_admin_perso = ?,
-            garde_partagee = ?, frequence_garde = ?, prochaine_date_garde = ?
+            garde_partagee = ?, frequence_garde = ?, prochaine_date_garde = ?,
+            photo_data = CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
+            photo_mime = CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END,
+            avatar = ?
         WHERE id = ? AND famille_id = ?
         """,
         (
             prenom, nom, pseudo or None, email, role, peut_modifier,
             acces_agenda_admin_pro, acces_agenda_admin_perso,
             1 if garde_partagee else 0, frequence_garde, prochaine_date_garde,
+            1 if supprimer_photo else 0, photo_data, photo_data,
+            1 if supprimer_photo else 0, photo_mime, photo_mime,
+            avatar or None,
             membre_id, famille_id
         )
     )
@@ -2972,7 +3058,11 @@ def messagerie():
         messages = conn.execute("""
             SELECT m.*, CASE WHEN m.sender_type='admin' THEN
                 (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
-            ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=m.sender_id) END AS sender_name
+            ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=m.sender_id) END AS sender_name,
+            CASE WHEN m.sender_type='membre' THEN
+                (SELECT avatar FROM membres WHERE id=m.sender_id) ELSE NULL END AS sender_avatar,
+            CASE WHEN m.sender_type='membre' THEN
+                (SELECT photo_data IS NOT NULL FROM membres WHERE id=m.sender_id) ELSE 0 END AS sender_has_photo
             FROM messages m WHERE m.conversation_id=? ORDER BY m.id
         """, (active_id,)).fetchall()
         conn.execute("""
@@ -3029,11 +3119,15 @@ def messagerie_fichier(message_id):
     conn.close()
     if file_data is None:
         return "Fichier introuvable", 404
-    return send_file(
-        io.BytesIO(file_data),
-        as_attachment=True,
-        download_name=download_name
-    )
+    extension = os.path.splitext(download_name)[1].lower()
+    audio_mimes = {
+        ".webm": "audio/webm", ".ogg": "audio/ogg", ".mp3": "audio/mpeg",
+        ".wav": "audio/wav", ".m4a": "audio/mp4", ".mp4": "audio/mp4"
+    }
+    if extension in audio_mimes:
+        return send_file(io.BytesIO(file_data), mimetype=audio_mimes[extension], as_attachment=False,
+                         download_name=download_name, conditional=True)
+    return send_file(io.BytesIO(file_data), as_attachment=True, download_name=download_name)
 
 
 @app.route("/messagerie/non-lus")
@@ -3854,6 +3948,38 @@ def calendar():
 # ==========================================================
 # PROFIL
 # ==========================================================
+
+@app.route("/profile/photo", methods=["POST"])
+def update_member_photo():
+    identity = current_messaging_identity()
+    if identity is None or identity[0] != "membre":
+        return redirect(url_for("profile"))
+    _, membre_id, famille_id = identity
+    try:
+        photo_data, photo_mime = read_member_photo_upload(request.files.get("photo"))
+    except ValueError as error:
+        flash(str(error))
+        return redirect(url_for("profile"))
+    avatar = request.form.get("avatar", "").strip()
+    avatars_autorises = {"", "😊", "👩", "👨", "👵", "👴", "🧒", "👶", "🐱", "🐶", "🌸", "⭐"}
+    if avatar not in avatars_autorises:
+        avatar = ""
+    supprimer = request.form.get("supprimer_photo") == "oui"
+    conn = get_connection()
+    conn.execute("""
+        UPDATE membres
+        SET photo_data=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
+            photo_mime=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END,
+            avatar=?
+        WHERE id=? AND famille_id=?
+    """, (1 if supprimer else 0, photo_data, photo_data,
+          1 if supprimer else 0, photo_mime, photo_mime, avatar or None,
+          membre_id, famille_id))
+    conn.commit()
+    conn.close()
+    flash("Votre photo ou avatar a été mis à jour.")
+    return redirect(url_for("profile"))
+
 
 @app.route("/profile")
 def profile():
