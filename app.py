@@ -3449,8 +3449,12 @@ def add_event():
         # Une création par l'administratrice est immédiatement publiée
         # dans tous les agendas sélectionnés. Les propositions d'un membre
         # à un autre utilisateur restent soumises à acceptation.
-        statut = "accepte" if (est_admin or est_son_propre_agenda) else "en_attente"
-        valide_admin = admin_id if est_admin and type_cible == "admin" else None
+        statut = "accepte" if est_admin else ("accepte" if est_son_propre_agenda else "en_attente")
+        # Toute création faite par l'administratrice est considérée comme
+        # validée immédiatement pour TOUS les destinataires, sans exception
+        # (enfants, conjoint, autres membres). On conserve les demandes
+        # d'acceptation uniquement pour les événements créés par un membre.
+        valide_admin = admin_id if est_admin else None
         valide_membre = auteur_membre_id if (not est_admin and est_son_propre_agenda) else None
 
         cursor.execute(
