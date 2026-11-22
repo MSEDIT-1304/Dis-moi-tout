@@ -37,6 +37,15 @@
 .message-file{display:block;margin-top:6px;color:#245d91;text-decoration:underline;overflow-wrap:anywhere}.voice-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}.voice-controls button{border:1px solid #d9b0c4;background:#fff4f8;color:#8f2458;border-radius:8px;padding:6px 10px;font-size:13px;line-height:1.2;cursor:pointer;font-weight:600}.voice-status{font-size:12px;color:#8a7890}
 .message .delete-message-form{display:block;margin-top:7px;text-align:right;background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;box-shadow:none!important}
 .message .delete-message-button{display:inline;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;color:#a52d68;text-decoration:underline;cursor:pointer;font-size:12px;padding:2px}
+.reply-message-button{display:inline-block;margin-top:6px;padding:3px 8px;border:1px solid #c9d9eb;border-radius:7px;background:#fff;color:#315d86;font-size:11px;cursor:pointer}
+.reply-quote{display:block;width:100%;margin:0 0 7px;padding:6px 9px;text-align:left;border:0;border-left:3px solid #a52d68;border-radius:5px;background:rgba(255,255,255,.72);color:#294966;cursor:pointer}
+.reply-quote strong{display:block;font-size:11px;color:#a52d68;margin-bottom:2px}
+.reply-quote span{display:block;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reply-composer-preview{display:none;flex:1 1 100%;padding:7px 10px;border-left:3px solid #a52d68;border-radius:6px;background:#fff4f8;color:#294966;font-size:12px}
+.reply-composer-preview.visible{display:block}
+.reply-composer-preview strong{display:block;color:#a52d68}
+.reply-composer-preview button{float:right;border:0;background:transparent;color:#8f2458;cursor:pointer;font-size:16px}
+.message.reply-selected{outline:2px solid rgba(165,45,104,.28)}
 @media(max-width:700px){.messaging-wrap{grid-template-columns:1fr;margin:8px auto;gap:10px}.message-area{min-height:350px}.message-list{max-height:400px}.messaging-panel{padding:12px}.conversation-box .send-form{padding:10px}.messaging-button{padding:8px 12px;font-size:13px}}
 </style>
 <div class="messaging-wrap">
@@ -103,12 +112,18 @@
       <div class="message-list" id="message-list">
         {% for message in messages|reverse %}
           {% set mine = (message.sender_type == current_kind and message.sender_id == current_user_id) %}
-          <div class="message {{ 'mine' if mine else '' }}">
+          <div class="message {{ 'mine' if mine else '' }}" id="message-{{ message.id }}" data-message-id="{{ message.id }}" data-message-author="{{ message.sender_name or 'Membre' }}">
             <small class="message-meta">
               {% if message.sender_type == 'membre' and message.sender_has_photo %}<img class="message-avatar" src="{{ url_for('membre_photo', membre_id=message.sender_id) }}" alt="">
               {% elif message.sender_avatar %}<span class="message-avatar message-avatar-emoji">{{ message.sender_avatar }}</span>{% endif %}
               <span>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</span>
             </small>
+            {% if message.reply_to_message_id %}
+              <button type="button" class="reply-quote" data-target-message="{{ message.reply_to_message_id }}">
+                <strong>↩ {{ message.reply_sender_name or 'Message d’origine' }}</strong>
+                <span>{% if message.reply_id %}{{ (message.reply_contenu or ('📎 ' ~ (message.reply_fichier_nom or 'Pièce jointe')))[:150] }}{% else %}Message d’origine indisponible{% endif %}</span>
+              </button>
+            {% endif %}
             {% if message.contenu %}<div class="message-content">{{ message.contenu }}</div>{% endif %}
             {% if message.fichier_stockage %}
               {% set ext = (message.fichier_nom or '').lower() %}
@@ -126,12 +141,19 @@
               <button type="submit" class="delete-message-button">Supprimer le message</button>
             </form>
             {% endif %}
+            <button type="button" class="reply-message-button" data-reply-message="{{ message.id }}">↩ Répondre</button>
           </div>
         {% endfor %}
       </div>
       <form method="post" class="send-form" enctype="multipart/form-data">
         <input type="hidden" name="action" value="send">
         <input type="hidden" name="conversation_id" value="{{ active.id }}">
+        <input type="hidden" name="reply_to_message_id" id="reply-to-message-id" value="">
+        <div class="reply-composer-preview" id="reply-composer-preview" aria-live="polite">
+          <button type="button" id="cancel-reply" aria-label="Annuler la réponse">×</button>
+          <strong id="reply-composer-author"></strong>
+          <span id="reply-composer-text"></span>
+        </div>
         <textarea name="contenu" rows="2" maxlength="5000" placeholder="Écrire un message…"></textarea>
         <div class="attachment-row">
           <label>Joindre un fichier (10 Mo maximum) :
@@ -159,6 +181,58 @@
  checks.forEach(c=>c.addEventListener('change',()=>{if(all) all.checked=checks.length>0 && checks.every(x=>x.checked);}));
  const list=document.getElementById('message-list'); if(list) list.scrollTop=0;
  const form=document.querySelector('.send-form');
+ const replyInput=document.getElementById('reply-to-message-id');
+ const replyPreview=document.getElementById('reply-composer-preview');
+ const replyAuthor=document.getElementById('reply-composer-author');
+ const replyText=document.getElementById('reply-composer-text');
+ const cancelReply=document.getElementById('cancel-reply');
+ const textarea=form ? form.querySelector('textarea[name="contenu"]') : null;
+
+ function clearReply(){
+   if(replyInput) replyInput.value='';
+   if(replyPreview) replyPreview.classList.remove('visible');
+   if(replyAuthor) replyAuthor.textContent='';
+   if(replyText) replyText.textContent='';
+   document.querySelectorAll('.message.reply-selected').forEach(el=>el.classList.remove('reply-selected'));
+ }
+ function selectReply(messageId){
+   const message=document.getElementById('message-'+messageId);
+   if(!message || !replyInput || !replyPreview) return;
+   replyInput.value=messageId;
+   replyAuthor.textContent=message.dataset.messageAuthor || 'Message';
+   const content=message.querySelector('.message-content');
+   const audio=message.querySelector('audio');
+   const attachment=message.querySelector('.message-file');
+   let excerpt=content ? content.textContent.trim() : '';
+   if(!excerpt && audio) excerpt='🎙 Message vocal';
+   if(!excerpt && attachment) excerpt='📎 '+attachment.textContent.trim();
+   replyText.textContent=excerpt || 'Message';
+   replyPreview.classList.add('visible');
+   document.querySelectorAll('.message.reply-selected').forEach(el=>el.classList.remove('reply-selected'));
+   message.classList.add('reply-selected');
+   if(textarea) textarea.focus();
+ }
+ document.querySelectorAll('.reply-message-button').forEach(button=>{
+   button.addEventListener('click',()=>selectReply(button.dataset.replyMessage));
+ });
+ document.querySelectorAll('.message').forEach(message=>{
+   message.addEventListener('click',event=>{
+     if(event.target.closest('button,form,a,audio,input,textarea')) return;
+     selectReply(message.dataset.messageId);
+   });
+   message.addEventListener('keydown',event=>{
+     if((event.key==='Enter' || event.key===' ') && event.target===message){
+       event.preventDefault(); selectReply(message.dataset.messageId);
+     }
+   });
+ });
+ document.querySelectorAll('.reply-quote').forEach(button=>{
+   button.addEventListener('click',()=>{
+     const target=document.getElementById('message-'+button.dataset.targetMessage);
+     if(target){target.scrollIntoView({behavior:'smooth',block:'center'});}
+   });
+ });
+ if(cancelReply) cancelReply.addEventListener('click',clearReply);
  const start=document.getElementById('record-voice');
  const stop=document.getElementById('stop-voice');
  const status=document.getElementById('voice-status');
@@ -183,7 +257,6 @@
          const blob=new Blob(chunks,{type});
          const voiceFile=new File([blob],'message-vocal'+ext,{type});
          const transfer=new DataTransfer(); transfer.items.add(voiceFile); fileInput.files=transfer.files;
-         const textarea=form.querySelector('textarea[name="contenu"]');
          if(textarea) textarea.value='';
          if(status) status.textContent='Message vocal prêt. Cliquez sur Envoyer.';
          start.disabled=false; stop.disabled=true;
