@@ -3883,15 +3883,9 @@ def calendar():
             )
 
         if est_admin:
-            # Ses propres rendez-vous et uniquement ceux qu'elle a créés
-            # dans les agendas des membres.
+            # L'agenda administrateur affiche uniquement les événements
+            # qui lui sont explicitement destinés.
             if ev_dict.get("concerne_admin") == 1:
-                # Agenda de l'administratrice : ses événements personnels
-                # et les propositions qu'elle a elle-même acceptées.
-                evenements.append(ev_dict)
-                continue
-
-            if ev_dict.get("membre_id") is not None and ev_dict.get("created_by_admin_id") == admin_id:
                 evenements.append(ev_dict)
                 continue
 
