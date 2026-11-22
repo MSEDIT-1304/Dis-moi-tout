@@ -9,15 +9,16 @@ self.addEventListener("activate", (event) => {
     event.waitUntil(self.clients.claim());
 });
 
-// Les requêtes réseau restent gérées par le serveur,
-// sans mise en cache des pages privées ou des agendas.
+// Les requêtes restent gérées par le serveur.
+// Aucune page privée ou aucun agenda n'est mis en cache.
 self.addEventListener("fetch", (event) => {
     if (event.request.method === "GET") {
         event.respondWith(fetch(event.request));
     }
 });
 
-// Réception des notifications envoyées par le serveur.
+// Réception des notifications Push, même lorsque
+// l'application n'est pas ouverte.
 self.addEventListener("push", (event) => {
     let data = {};
 
@@ -25,7 +26,9 @@ self.addEventListener("push", (event) => {
         try {
             data = event.data.json();
         } catch (error) {
-            data = { body: event.data.text() };
+            data = {
+                body: event.data.text()
+            };
         }
     }
 
@@ -37,29 +40,14 @@ self.addEventListener("push", (event) => {
         badge: "/static/images/favicon-32.png",
         data: {
             url: data.url || "/messagerie"
-        }
+        },
+        tag: "dis-moi-tout-message",
+        renotify: true
     };
 
-    event.waitUntil((async () => {
-        // Mise à jour du badge sur l'icône de l'application
-        // lorsque le navigateur prend en charge cette fonction.
-        const count = Number(data.badgeCount);
-
-        if (
-            self.navigator &&
-            "setAppBadge" in self.navigator &&
-            Number.isFinite(count)
-        ) {
-            if (count > 0) {
-                await self.navigator.setAppBadge(count);
-            } else if ("clearAppBadge" in self.navigator) {
-                await self.navigator.clearAppBadge();
-            }
-        }
-
-        // Affichage de la notification
-        await self.registration.showNotification(title, options);
-    })());
+    event.waitUntil(
+        self.registration.showNotification(title, options)
+    );
 });
 
 // Clic sur la notification : ouverture de la messagerie.
