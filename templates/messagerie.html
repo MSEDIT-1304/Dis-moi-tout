@@ -15,10 +15,10 @@
 .unread-pill{float:right;background:#a52d68;color:#fff;border-radius:20px;padding:2px 8px;font-size:12px}
 .message-area{display:flex;flex-direction:column;min-height:440px}
 .message-list{flex:1;max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 2px}
-.message{position:relative;max-width:78%;padding:13px 16px;border-radius:16px 16px 16px 5px;background:#f3f5f9;border:1px solid #e8eaf0;box-shadow:0 2px 7px rgba(30,55,80,.05);overflow-wrap:anywhere;line-height:1.55;color:#243e59;white-space:pre-wrap}
-.message.mine{align-self:flex-end;background:#fff0f6;border:1px solid #f0c5d8;border-radius:16px 16px 5px 16px}
-.message small{display:block;color:#8a7890;font-size:11px;margin-bottom:6px;font-weight:600}
-.message-list{flex:1;max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:14px 10px;background:linear-gradient(180deg,#fbfcff 0%,#fff 100%);border:1px solid #f0e4eb;border-radius:14px}
+.message{position:relative;align-self:flex-start;width:fit-content;max-width:78%;min-width:0;height:auto;min-height:0;padding:9px 12px;border-radius:15px 15px 15px 5px;background:#f3f5f9;border:1px solid #e8eaf0;box-shadow:0 2px 7px rgba(30,55,80,.045);overflow-wrap:anywhere;line-height:1.4;color:#243e59;white-space:pre-wrap}
+.message.mine{align-self:flex-end;background:#fff0f6;border:1px solid #f0c5d8;border-radius:15px 15px 5px 15px}
+.message small{display:block;color:#8a7890;font-size:10px;margin-bottom:3px;font-weight:600}.message-meta{display:flex!important;align-items:center;gap:6px}.message-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:0 0 24px}.message-avatar-emoji{display:inline-flex;align-items:center;justify-content:center;background:#fce8f1;font-size:16px}.message audio{display:block;width:min(280px,100%);height:36px;margin-top:5px}
+.message-list{flex:1;max-height:520px;overflow:auto;display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:12px 10px;background:linear-gradient(180deg,#fbfcff 0%,#fff 100%);border:1px solid #f0e4eb;border-radius:14px}
 .conversation-link{display:block;text-decoration:none;color:#294966;border:1px solid #eee;border-radius:11px;padding:12px;transition:background .15s,border-color .15s}
 .conversation-link:hover{border-color:#d98ab0;background:#fff8fb}
 .send-form textarea{min-height:58px;background:#fff;border:1px solid #d9dce5;border-radius:12px;padding:12px;line-height:1.45}
@@ -28,7 +28,7 @@
 .send-form{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:flex-end}
 .send-form textarea{flex:1 1 70%;min-width:0;resize:vertical;border:1px solid #ddd;border-radius:9px;padding:10px;font:inherit}
 .attachment-row{flex:1 1 100%;font-size:13px;color:#555}
-.message-file{display:block;margin-top:8px;color:#245d91;text-decoration:underline;overflow-wrap:anywhere}
+.message-file{display:block;margin-top:6px;color:#245d91;text-decoration:underline;overflow-wrap:anywhere}.voice-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}.voice-controls button{border:1px solid #d9b0c4;background:#fff4f8;color:#8f2458;border-radius:9px;padding:8px 11px;cursor:pointer;font-weight:600}.voice-status{font-size:12px;color:#8a7890}
 .delete-message-form{margin-top:7px;text-align:right}
 .delete-message-button{border:0;background:transparent;color:#a52d68;text-decoration:underline;cursor:pointer;font-size:12px;padding:2px}
 @media(max-width:700px){.messaging-wrap{grid-template-columns:1fr;margin:8px auto;gap:10px}.message-area{min-height:350px}.message-list{max-height:400px}.messaging-panel{padding:12px}}
@@ -80,10 +80,19 @@
         {% for message in messages %}
           {% set mine = (message.sender_type == current_kind and message.sender_id == current_user_id) %}
           <div class="message {{ 'mine' if mine else '' }}">
-            <small>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</small>
+            <small class="message-meta">
+              {% if message.sender_type == 'membre' and message.sender_has_photo %}<img class="message-avatar" src="{{ url_for('membre_photo', membre_id=message.sender_id) }}" alt="">
+              {% elif message.sender_avatar %}<span class="message-avatar message-avatar-emoji">{{ message.sender_avatar }}</span>{% endif %}
+              <span>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</span>
+            </small>
             {% if message.contenu %}{{ message.contenu }}{% endif %}
             {% if message.fichier_stockage %}
-              <a class="message-file" href="{{ url_for('messagerie_fichier', message_id=message.id) }}">📎 {{ message.fichier_nom or 'Télécharger le fichier' }}</a>
+              {% set ext = (message.fichier_nom or '').lower() %}
+              {% if ext.endswith('.webm') or ext.endswith('.ogg') or ext.endswith('.mp3') or ext.endswith('.wav') or ext.endswith('.m4a') %}
+                <audio controls preload="metadata" src="{{ url_for('messagerie_fichier', message_id=message.id) }}">Votre navigateur ne peut pas lire ce message vocal.</audio>
+              {% else %}
+                <a class="message-file" href="{{ url_for('messagerie_fichier', message_id=message.id) }}">📎 {{ message.fichier_nom or 'Télécharger le fichier' }}</a>
+              {% endif %}
             {% endif %}
             {% if mine %}
             <form method="post" class="delete-message-form" onsubmit="return confirm('Supprimer définitivement ce message ?');">
@@ -102,8 +111,13 @@
         <textarea name="contenu" rows="2" maxlength="5000" placeholder="Écrire un message…"></textarea>
         <div class="attachment-row">
           <label>Joindre un fichier (10 Mo maximum) :
-            <input type="file" name="fichier">
+            <input type="file" name="fichier" id="message-file-input">
           </label>
+        </div>
+        <div class="voice-controls" style="flex:1 1 100%">
+          <button type="button" id="record-voice">🎙️ Enregistrer un vocal</button>
+          <button type="button" id="stop-voice" disabled>Terminer</button>
+          <span class="voice-status" id="voice-status" aria-live="polite">Vous pouvez aussi envoyer un message écrit.</span>
         </div>
         <button class="messaging-button" type="submit">Envoyer</button>
       </form>
@@ -120,6 +134,42 @@
  if(all){all.addEventListener('change',()=>checks.forEach(c=>{c.checked=all.checked;}));}
  checks.forEach(c=>c.addEventListener('change',()=>{if(all) all.checked=checks.length>0 && checks.every(x=>x.checked);}));
  const list=document.getElementById('message-list'); if(list) list.scrollTop=list.scrollHeight;
+ const form=document.querySelector('.send-form');
+ const start=document.getElementById('record-voice');
+ const stop=document.getElementById('stop-voice');
+ const status=document.getElementById('voice-status');
+ const fileInput=document.getElementById('message-file-input');
+ let recorder=null, chunks=[];
+ if(start && stop && form && fileInput){
+   start.addEventListener('click', async()=>{
+     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){
+       if(status) status.textContent='L’enregistrement vocal n’est pas pris en charge par ce navigateur.';
+       return;
+     }
+     try{
+       const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+       const preferred=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
+       recorder=preferred?new MediaRecorder(stream,{mimeType:preferred}):new MediaRecorder(stream);
+       chunks=[];
+       recorder.ondataavailable=e=>{if(e.data && e.data.size) chunks.push(e.data);};
+       recorder.onstop=()=>{
+         stream.getTracks().forEach(track=>track.stop());
+         const type=recorder.mimeType || 'audio/webm';
+         const ext=type.includes('ogg')?'.ogg':'.webm';
+         const blob=new Blob(chunks,{type});
+         const voiceFile=new File([blob],'message-vocal'+ext,{type});
+         const transfer=new DataTransfer(); transfer.items.add(voiceFile); fileInput.files=transfer.files;
+         const textarea=form.querySelector('textarea[name="contenu"]');
+         if(textarea) textarea.value='';
+         if(status) status.textContent='Message vocal prêt. Cliquez sur Envoyer.';
+         start.disabled=false; stop.disabled=true;
+       };
+       recorder.start(); start.disabled=true; stop.disabled=false;
+       if(status) status.textContent='Enregistrement en cours…';
+     }catch(err){if(status) status.textContent='Microphone inaccessible : autorisez son utilisation dans le navigateur.';}
+   });
+   stop.addEventListener('click',()=>{if(recorder && recorder.state!=='inactive') recorder.stop();});
+ }
 })();
 </script>
 {% endblock %}
