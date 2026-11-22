@@ -12,6 +12,7 @@
             <h3>🎙️ Ajouter par commande vocale</h3>
             <p>Exemple : « Rendez-vous chez le dentiste demain à 14 heures »</p>
             <button type="button" id="voice-button" class="calendar-button">🎙️ Parler</button>
+            <button type="button" id="voice-stop-button" class="calendar-button calendar-small" hidden>■ Arrêter</button>
             <p id="voice-status" role="status"></p>
             <p id="voice-transcript"></p>
         </div>
@@ -259,7 +260,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const date = document.getElementById("date");
     const heure = document.getElementById("heure");
     const commentaire = document.getElementById("description");
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const stopButton = document.getElementById("voice-stop-button");
     const rappelCheckbox = document.getElementById("rappel");
     const rappelDelai = document.getElementById("rappel-delai-container");
 
@@ -268,20 +269,10 @@ document.addEventListener("DOMContentLoaded", function () {
         rappelCheckbox.addEventListener("change", updateReminder);
         updateReminder();
     }
-    if (!button || !status || !transcript) return;
-    if (!SpeechRecognition) {
-        button.disabled = true;
-        status.textContent = "La dictée vocale nécessite un navigateur compatible, comme Chrome ou Edge.";
-        return;
-    }
-
-    // Reconnaissance vocale gratuite du navigateur + compréhension locale,
-    // sans API payante et sans envoi du texte à un service d'IA externe.
-    const recognition = new SpeechRecognition();
-    recognition.lang = "fr-FR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 3;
+    if (!button || !stopButton || !status || !transcript) return;
+    let mediaRecorder = null;
+    let mediaStream = null;
+    let audioChunks = [];
     let phrases = [];
 
     const normalize = value => (value || "").toLocaleLowerCase("fr-FR")
@@ -300,6 +291,17 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     function parseDate(text) {
         let t = text;
+        const weekdays = {dimanche:0,lundi:1,mardi:2,mercredi:3,jeudi:4,vendredi:5,samedi:6};
+        const weekdayMatch = t.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?:\s+(prochain|prochaine|qui vient))?\b/);
+        if (weekdayMatch) {
+            const now = new Date();
+            const targetDay = weekdays[weekdayMatch[1]];
+            let daysAhead = (targetDay - now.getDay() + 7) % 7;
+            if (daysAhead === 0 || weekdayMatch[2]) daysAhead = daysAhead === 0 ? 7 : daysAhead;
+            const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead);
+            date.value = `${targetDate.getFullYear()}-${String(targetDate.getMonth()+1).padStart(2,"0")}-${String(targetDate.getDate()).padStart(2,"0")}`;
+            t = t.replace(weekdayMatch[0], " ");
+        }
         const relative = t.match(/\b(apres demain|demain|aujourd hui)\b/);
         if (relative) {
             const d = new Date(); d.setDate(d.getDate() + (relative[1] === "demain" ? 1 : relative[1] === "apres demain" ? 2 : 0));
@@ -392,25 +394,70 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!checked) missing.push("agenda destinataire");
         status.textContent = missing.length ? "J'ai rempli les informations reconnues. Il manque : " + missing.join(", ") + ". Vérifiez le formulaire." : "Formulaire rempli. Vérifiez les informations puis cliquez sur « Ajouter l'événement ».";
     }
-    button.addEventListener("click", function () {
-        if (button.disabled) return;
-        status.textContent = "Je vous écoute… Dictez votre rendez-vous en une phrase naturelle.";
-        button.disabled = true;
-        try { recognition.start(); } catch (e) { button.disabled = false; status.textContent = "Réessayez dans un instant."; }
-    });
-    recognition.onresult = function (event) {
-        const result = event.results[event.results.length - 1];
-        const phrase = (result[0]?.transcript || "").trim();
-        if (phrase) {
-            phrases.push(phrase);
-            transcript.textContent = "Vous avez dit : " + phrases.join(" | ");
-            fillForm();
+    button.addEventListener("click", async function () {
+        if (button.disabled || mediaRecorder) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+            status.textContent = "L'enregistrement vocal nécessite Chrome ou Edge à jour et une connexion sécurisée HTTPS.";
+            return;
         }
-    };
-    recognition.onerror = function (event) {
-        status.textContent = event.error === "not-allowed" ? "Autorisez l'accès au microphone dans votre navigateur." : "La dictée n'a pas abouti. Appuyez sur Parler pour réessayer.";
-    };
-    recognition.onend = function () { button.disabled = false; };
+        try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioChunks = [];
+            const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+                ? "audio/webm;codecs=opus" : "audio/webm";
+            mediaRecorder = new MediaRecorder(mediaStream, { mimeType: preferredType });
+            mediaRecorder.addEventListener("dataavailable", event => {
+                if (event.data && event.data.size) audioChunks.push(event.data);
+            });
+            mediaRecorder.addEventListener("stop", async function () {
+                const recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+                mediaRecorder = null;
+                stopButton.hidden = true;
+                button.disabled = true;
+                status.textContent = "Transcription en cours avec Google…";
+                try {
+                    const formData = new FormData();
+                    const extension = recordedBlob.type.includes("mp4") ? "m4a" : recordedBlob.type.includes("ogg") ? "ogg" : "webm";
+                    formData.append("audio", recordedBlob, "dictee." + extension);
+                    const response = await fetch("{{ url_for('transcribe_voice_event') }}", {
+                        method: "POST", body: formData, credentials: "same-origin"
+                    });
+                    const data = await response.json();
+                    if (!response.ok) throw new Error(data.error || "La transcription a échoué.");
+                    const phrase = (data.transcript || "").trim();
+                    if (!phrase) throw new Error("Aucune parole reconnue. Réessayez.");
+                    phrases = [phrase];
+                    transcript.textContent = "Vous avez dit : " + phrase;
+                    fillForm();
+                } catch (error) {
+                    status.textContent = error.message || "Impossible de transcrire l'enregistrement.";
+                } finally {
+                    button.disabled = false;
+                    audioChunks = [];
+                }
+            }, { once: true });
+            mediaRecorder.start();
+            button.disabled = true;
+            stopButton.hidden = false;
+            status.textContent = "Je vous écoute… Appuyez sur ARRÊTER lorsque vous avez terminé.";
+        } catch (error) {
+            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+            mediaRecorder = null;
+            button.disabled = false;
+            status.textContent = error.name === "NotAllowedError"
+                ? "Autorisez l'accès au microphone dans votre navigateur."
+                : "Impossible d'activer le microphone. Vérifiez ses autorisations.";
+        }
+    });
+    stopButton.addEventListener("click", function () {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+            status.textContent = "Arrêt de l'enregistrement…";
+            mediaRecorder.stop();
+        }
+    });
 });
 </script>
 {% endblock %}
