@@ -42,25 +42,37 @@ self.addEventListener("push", (event) => {
     };
 
     event.waitUntil((async () => {
-        // Affichage prioritaire de la notification.
-        await self.registration.showNotification(title, options);
-
-        // Mise à jour du compteur si le système le permet.
-        const count = Number(data.badgeCount || data.count || 0);
+        // Mise à jour du badge de l'application installée.
+        const rawCount = data.badgeCount ?? data.count;
+        const count = Number(rawCount);
 
         try {
-            if (count > 0 && "setAppBadge" in self.navigator) {
-                await self.navigator.setAppBadge(count);
-            } else if (count <= 0 && "clearAppBadge" in self.navigator) {
-                await self.navigator.clearAppBadge();
+            if (
+                Number.isFinite(count) &&
+                count > 0 &&
+                typeof navigator.setAppBadge === "function"
+            ) {
+                await navigator.setAppBadge(Math.floor(count));
+            } else if (
+                (!Number.isFinite(count) || count <= 0) &&
+                typeof navigator.clearAppBadge === "function"
+            ) {
+                await navigator.clearAppBadge();
             }
         } catch (error) {
-            console.warn("Compteur d'icône non pris en charge :", error);
+            // Une erreur de badge ne doit pas bloquer la notification.
+            console.warn(
+                "Impossible de mettre à jour le badge de l'application :",
+                error
+            );
         }
+
+        // La notification reste affichée même si le badge n'est pas pris en charge.
+        await self.registration.showNotification(title, options);
     })());
 });
 
-// Ouverture de la conversation au clic.
+// Ouverture de la conversation au clic sur la notification.
 self.addEventListener("notificationclick", (event) => {
     event.notification.close();
 
