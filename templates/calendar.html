@@ -82,6 +82,13 @@
         <button type="button" class="calendar-import-close" data-close-panel="apple-import-panel" aria-label="Fermer">×</button>
         <h3>Apple / iCloud</h3>
         <p>Apple nécessite un mot de passe spécifique d’application. Il n'est pas enregistré dans Dis-moi tout.</p>
+        <p>
+            <a href="https://account.apple.com/" class="calendar-button"
+               target="_blank" rel="noopener noreferrer">
+                Créer mon mot de passe Apple
+            </a>
+        </p>
+        <p class="calendar-import-note">Après avoir créé votre mot de passe spécifique sur le site Apple, revenez ici pour le saisir.</p>
         <form method="POST" action="{{ url_for('apple_import') }}">
             <label for="apple_id">Identifiant Apple</label>
             <input type="email" id="apple_id" name="apple_id" autocomplete="username" required>
