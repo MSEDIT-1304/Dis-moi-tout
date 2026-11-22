@@ -1426,6 +1426,21 @@ def init_database():
             FOREIGN KEY(conversation_id) REFERENCES conversations(id)
         )
     """)
+    # Masquage individuel : on conserve participants, messages et pièces jointes.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conversation_hidden (
+            conversation_id INTEGER NOT NULL,
+            user_type TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            hidden_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (conversation_id, user_type, user_id),
+            FOREIGN KEY(conversation_id) REFERENCES conversations(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_conversation_hidden_user
+        ON conversation_hidden(user_type, user_id, conversation_id)
+    """)
     # Champs facultatifs pour les pièces jointes de la messagerie (migration sans perte).
     message_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(messages)").fetchall()
@@ -2773,6 +2788,15 @@ def messagerie():
                     SET last_read_at = CURRENT_TIMESTAMP
                     WHERE conversation_id = ? AND user_type = ? AND user_id = ?
                 """, (conversation_id, kind, user_id))
+                # Réafficher chez les destinataires si un nouveau message arrive.
+                conn.execute("""
+                    DELETE FROM conversation_hidden
+                    WHERE conversation_id=? AND NOT (user_type=? AND user_id=?)
+                """, (conversation_id, kind, user_id))
+                conn.execute("""
+                    DELETE FROM conversation_hidden
+                    WHERE conversation_id=? AND user_type=? AND user_id=?
+                """, (conversation_id, kind, user_id))
                 conn.commit()
                 send_message_push_notifications(conn, conversation_id, identity)
 
@@ -2782,27 +2806,16 @@ def messagerie():
         elif action == "delete_conversation":
             conversation_id = request.form.get("conversation_id", type=int)
             if conversation_id and conversation_is_accessible(conn, conversation_id, identity):
-                # Suppression personnelle : on retire uniquement le participant
-                # connecté. Les autres participants conservent la conversation,
-                # tous les messages et toutes les pièces jointes.
-                conn.execute(
-                    "DELETE FROM conversation_participants "
-                    "WHERE conversation_id=? AND user_type=? AND user_id=?",
-                    (conversation_id, kind, user_id)
-                )
-                remaining = conn.execute(
-                    "SELECT COUNT(*) AS total FROM conversation_participants WHERE conversation_id=?",
-                    (conversation_id,)
-                ).fetchone()
-                # Nettoyage uniquement si plus personne ne possède la conversation.
-                if not remaining or remaining["total"] == 0:
-                    conn.execute("DELETE FROM messages WHERE conversation_id=?", (conversation_id,))
-                    conn.execute(
-                        "DELETE FROM conversations WHERE id=? AND famille_id=?",
-                        (conversation_id, family_id)
-                    )
+                # Effacement personnel : on masque uniquement cette conversation
+                # dans la messagerie de l'utilisateur connecté. AUCUN message,
+                # participant ou conversation partagée n'est supprimé.
+                conn.execute("""
+                    INSERT OR IGNORE INTO conversation_hidden
+                        (conversation_id, user_type, user_id)
+                    VALUES (?, ?, ?)
+                """, (conversation_id, kind, user_id))
                 conn.commit()
-                flash("La conversation a été retirée de votre messagerie. Les autres participants la conservent.")
+                flash("Conversation effacée uniquement de votre messagerie.")
             else:
                 flash("Cette conversation n'est pas accessible.")
             conn.close()
@@ -2836,6 +2849,11 @@ def messagerie():
         FROM conversations c
         JOIN conversation_participants p ON p.conversation_id=c.id
         WHERE c.famille_id=? AND p.user_type=? AND p.user_id=?
+          AND NOT EXISTS (
+              SELECT 1 FROM conversation_hidden h
+              WHERE h.conversation_id=c.id
+                AND h.user_type=p.user_type AND h.user_id=p.user_id
+          )
         ORDER BY COALESCE((SELECT MAX(m2.id) FROM messages m2 WHERE m2.conversation_id=c.id),0) DESC, c.id DESC
     """, (kind, user_id, family_id, kind, user_id)).fetchall()
 
@@ -2959,6 +2977,11 @@ def messagerie_non_lus():
         JOIN conversation_participants p ON p.conversation_id=m.conversation_id
         JOIN conversations c ON c.id=m.conversation_id
         WHERE c.famille_id=? AND p.user_type=? AND p.user_id=?
+          AND NOT EXISTS (
+              SELECT 1 FROM conversation_hidden h
+              WHERE h.conversation_id=c.id
+                AND h.user_type=p.user_type AND h.user_id=p.user_id
+          )
           AND (p.last_read_at IS NULL OR m.created_at > p.last_read_at)
           AND NOT (m.sender_type=? AND m.sender_id=?)
     """, (family_id, kind, user_id, kind, user_id)).fetchone()
