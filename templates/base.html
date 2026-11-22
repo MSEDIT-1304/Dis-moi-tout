@@ -187,11 +187,17 @@
     async function refreshPushButton() {
         if (!pushButton) return;
 
-        // Après une activation réussie sur cet appareil, ne plus redemander
-        // à chaque actualisation. Si l'autorisation a été retirée, réafficher.
+        // Après un rechargement manuel (F5), réafficher le bandeau
+        // pour permettre de réactiver les notifications après un déploiement.
+        // À l'ouverture normale, ne l'afficher que si elles ne sont pas activées.
         try {
+            const navigationEntry = performance.getEntriesByType("navigation")[0];
+            const pageReloaded = navigationEntry && navigationEntry.type === "reload";
             const wasActivated = localStorage.getItem(pushBannerPreferenceKey) === "1";
-            if (wasActivated && Notification.permission === "granted") {
+
+            if (pageReloaded) {
+                showPushBanner();
+            } else if (wasActivated && Notification.permission === "granted") {
                 hidePushBanner();
             } else {
                 if (wasActivated) localStorage.removeItem(pushBannerPreferenceKey);
