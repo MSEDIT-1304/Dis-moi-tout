@@ -4682,10 +4682,27 @@ def google_callback():
         )
     )
     conn.commit()
+
+    # Récupérer l'identifiant du compte qui vient d'être connecté afin que
+    # le calendrier puisse le sélectionner et ouvrir directement le panneau.
+    cursor.execute(
+        """
+        SELECT id FROM google_connections_users
+        WHERE famille_id = ? AND owner_type = ? AND owner_id = ?
+          AND LOWER(google_email) = LOWER(?)
+        """,
+        (session["famille_id"], owner_type, owner_id, google_email)
+    )
+    connected_row = cursor.fetchone()
+    connected_google_id = connected_row["id"] if connected_row else None
     conn.close()
 
     flash("Compte Google connecté avec succès.")
-    return redirect(url_for("calendar_import"))
+    return redirect(url_for(
+        "calendar",
+        google_import="1",
+        google_account_id=connected_google_id
+    ))
 
 
 # ==========================================================
