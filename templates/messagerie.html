@@ -15,7 +15,10 @@
 .unread-pill{float:right;background:#a52d68;color:#fff;border-radius:20px;padding:2px 8px;font-size:12px}
 .message-area{display:flex;flex-direction:column;min-height:440px}
 .message-list{flex:1;max-height:520px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:8px 2px}
-.message{position:relative;align-self:flex-start;width:fit-content;max-width:78%;min-width:0;height:auto;min-height:0;padding:9px 12px;border-radius:15px 15px 15px 5px;background:#f3f5f9;border:1px solid #e8eaf0;box-shadow:0 2px 7px rgba(30,55,80,.045);overflow-wrap:anywhere;line-height:1.4;color:#243e59;white-space:pre-wrap}
+.message{position:relative;display:block;flex:0 0 auto;align-self:flex-start;width:fit-content;max-width:78%;min-width:0;height:auto;min-height:max-content;box-sizing:border-box;padding:9px 12px;border-radius:15px 15px 15px 5px;background:#f3f5f9;border:1px solid #e8eaf0;box-shadow:0 2px 7px rgba(30,55,80,.045);overflow-wrap:anywhere;line-height:1.45;color:#243e59;white-space:normal}
+.message-content{display:block;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;color:#243e59;font-size:inherit;line-height:1.45}
+.message-list{align-items:stretch;justify-content:flex-start;min-height:240px}
+.message audio{max-width:100%;box-sizing:border-box}
 .message.mine{align-self:flex-end;background:#fff0f6;border:1px solid #f0c5d8;border-radius:15px 15px 5px 15px}
 .message small{display:block;color:#8a7890;font-size:10px;margin-bottom:3px;font-weight:600}.message-meta{display:flex!important;align-items:center;gap:6px}.message-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:0 0 24px}.message-avatar-emoji{display:inline-flex;align-items:center;justify-content:center;background:#fce8f1;font-size:16px}.message audio{display:block;width:min(280px,100%);height:36px;margin-top:5px}
 .message-list{flex:1;max-height:520px;overflow:auto;display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:12px 10px;background:linear-gradient(180deg,#fbfcff 0%,#fff 100%);border:1px solid #f0e4eb;border-radius:14px}
@@ -53,6 +56,22 @@
       </div>
       <button class="messaging-button" type="submit">Créer la conversation</button>
     </form>
+    {% if current_kind == 'membre' and nickname_targets %}
+    <div class="nickname-panel" style="margin-top:16px;padding:12px;border:1px solid #ead5e0;border-radius:11px;background:#fffafd">
+      <h3>Les surnoms que je donne</h3>
+      <p style="font-size:13px;color:#666;margin:0 0 8px">Choisissez le nom sous lequel chaque personne apparaîtra dans votre messagerie. Ces surnoms sont privés.</p>
+      {% for target in nickname_targets %}
+      <form method="post" class="nickname-form" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0">
+        <input type="hidden" name="action" value="set_nickname">
+        <input type="hidden" name="target_type" value="{{ target.type }}">
+        <input type="hidden" name="target_id" value="{{ target.id }}">
+        <label style="flex:1 1 100%;font-size:13px;color:#294966">{{ target.label }}</label>
+        <input type="text" name="surnom" maxlength="80" value="{{ target.surnom }}" placeholder="Nom à afficher" style="flex:1 1 140px;min-width:0;border:1px solid #ddd;border-radius:8px;padding:8px;font:inherit">
+        <button type="submit" class="messaging-button">Enregistrer</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
     <div class="conversation-list">
       <h3>Mes conversations</h3>
       {% for conv in conversations %}
@@ -85,7 +104,7 @@
               {% elif message.sender_avatar %}<span class="message-avatar message-avatar-emoji">{{ message.sender_avatar }}</span>{% endif %}
               <span>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</span>
             </small>
-            {% if message.contenu %}{{ message.contenu }}{% endif %}
+            {% if message.contenu %}<div class="message-content">{{ message.contenu }}</div>{% endif %}
             {% if message.fichier_stockage %}
               {% set ext = (message.fichier_nom or '').lower() %}
               {% if ext.endswith('.webm') or ext.endswith('.ogg') or ext.endswith('.mp3') or ext.endswith('.wav') or ext.endswith('.m4a') %}
