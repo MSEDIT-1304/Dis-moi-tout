@@ -1480,6 +1480,8 @@ def init_database():
         cursor.execute("ALTER TABLE messages ADD COLUMN fichier_stockage TEXT")
     if "fichier_data" not in message_columns:
         cursor.execute("ALTER TABLE messages ADD COLUMN fichier_data BLOB")
+    if "reply_to_message_id" not in message_columns:
+        cursor.execute("ALTER TABLE messages ADD COLUMN reply_to_message_id INTEGER")
 
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_participants_user ON conversation_participants(user_type, user_id)")
@@ -2927,6 +2929,7 @@ def messagerie():
         elif action == "send":
             conversation_id = request.form.get("conversation_id", type=int)
             contenu = request.form.get("contenu", "").strip()
+            reply_to_message_id = request.form.get("reply_to_message_id", type=int)
             uploaded = request.files.get("fichier")
             has_file = uploaded is not None and bool(uploaded.filename)
 
@@ -2961,11 +2964,21 @@ def messagerie():
                 else:
                     fichier_data = None
 
+                # Une réponse ne peut référencer qu'un message de cette conversation.
+                # Une référence invalide est ignorée sans bloquer l'envoi du message.
+                if reply_to_message_id:
+                    reply_target = conn.execute("""
+                        SELECT id FROM messages
+                        WHERE id=? AND conversation_id=?
+                    """, (reply_to_message_id, conversation_id)).fetchone()
+                    if not reply_target:
+                        reply_to_message_id = None
+
                 conn.execute("""
                     INSERT INTO messages
-                    (conversation_id,sender_type,sender_id,contenu,fichier_nom,fichier_stockage,fichier_data)
-                    VALUES (?,?,?,?,?,?,?)
-                """, (conversation_id, kind, user_id, contenu, fichier_nom, fichier_stockage, fichier_data))
+                    (conversation_id,sender_type,sender_id,contenu,fichier_nom,fichier_stockage,fichier_data,reply_to_message_id)
+                    VALUES (?,?,?,?,?,?,?,?)
+                """, (conversation_id, kind, user_id, contenu, fichier_nom, fichier_stockage, fichier_data, reply_to_message_id))
                 conn.commit()
                 conn.execute("""
                     UPDATE conversation_participants
@@ -3129,14 +3142,28 @@ def messagerie():
         active_title = "Conversation avec " + (", ".join(active_names) if active_names else "correspondant")
 
         messages_raw = conn.execute("""
-            SELECT m.*, CASE WHEN m.sender_type='admin' THEN
+            SELECT m.*,
+            CASE WHEN m.sender_type='admin' THEN
                 (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
             ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=m.sender_id) END AS sender_name,
             CASE WHEN m.sender_type='membre' THEN
                 (SELECT avatar FROM membres WHERE id=m.sender_id) ELSE NULL END AS sender_avatar,
             CASE WHEN m.sender_type='membre' THEN
-                (SELECT photo_data IS NOT NULL FROM membres WHERE id=m.sender_id) ELSE 0 END AS sender_has_photo
-            FROM messages m WHERE m.conversation_id=? ORDER BY m.id
+                (SELECT photo_data IS NOT NULL FROM membres WHERE id=m.sender_id) ELSE 0 END AS sender_has_photo,
+            rm.id AS reply_id,
+            rm.contenu AS reply_contenu,
+            rm.fichier_nom AS reply_fichier_nom,
+            rm.fichier_stockage AS reply_fichier_stockage,
+            rm.sender_type AS reply_sender_type,
+            rm.sender_id AS reply_sender_id,
+            CASE WHEN rm.sender_type='admin' THEN
+                (SELECT prenom || ' ' || nom FROM admin WHERE id=rm.sender_id)
+            WHEN rm.sender_type='membre' THEN
+                (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=rm.sender_id)
+            ELSE NULL END AS reply_sender_name
+            FROM messages m
+            LEFT JOIN messages rm ON rm.id=m.reply_to_message_id AND rm.conversation_id=m.conversation_id
+            WHERE m.conversation_id=? ORDER BY m.id
         """, (active_id,)).fetchall()
         messages = []
         for message in messages_raw:
@@ -3144,6 +3171,11 @@ def messagerie():
             message_dict["sender_name"] = messaging_name_for_viewer(
                 conn, identity, message["sender_type"], message["sender_id"], message["sender_name"]
             )
+            if message_dict.get("reply_id") and message_dict.get("reply_sender_name"):
+                message_dict["reply_sender_name"] = messaging_name_for_viewer(
+                    conn, identity, message["reply_sender_type"],
+                    message["reply_sender_id"], message["reply_sender_name"]
+                )
             messages.append(message_dict)
         conn.execute("""
             UPDATE conversation_participants SET last_read_at=CURRENT_TIMESTAMP
