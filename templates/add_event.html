@@ -42,14 +42,14 @@
                         {% endif %}
                         {% for membre in membres %}
                             {% if est_admin or membre['id'] != membre_connecte_id %}
-                            <label class="destinataire-option">
+                            <label class="destinataire-option" data-destinataire-nom="{{ (membre['pseudo'] or membre['prenom'])|lower }}">
                                 <input type="checkbox" name="destinataire_ids" value="{{ membre['id'] }}" {% if not est_admin and membre['id'] == membre_connecte_id %}checked{% endif %}>
-                                {{ membre['prenom'] }} {{ membre['nom'] }}{% if not est_admin and membre['id'] == membre_connecte_id %} (moi){% endif %}
+                                {{ membre['pseudo'] or membre['prenom'] }}{% if not est_admin and membre['id'] == membre_connecte_id %} (moi){% endif %}
                             </label>
                             {% endif %}
                         {% endfor %}
                     </div>
-                    <p class="destinataires-help">Chaque personne sélectionnée devra accepter la proposition avant que l'événement apparaisse dans son agenda.</p>
+                    <p class="destinataires-help">{% if est_admin %}L'événement sera ajouté directement dans tous les agendas sélectionnés.{% else %}Les autres personnes sélectionnées devront accepter la proposition avant son ajout dans leur agenda.{% endif %}</p>
                 </div>
                 <div>
                     <label for="date">Date</label>
@@ -79,7 +79,7 @@
                 </div>
             </div>
             <div class="calendar-description">
-                <label for="description">Description</label>
+                <label for="description">Commentaires</label>
                 <textarea id="description" name="description" rows="3"></textarea>
             </div>
             <div class="calendar-reminder-block">
@@ -194,144 +194,157 @@ document.addEventListener("DOMContentLoaded", function () {
     const titre = document.getElementById("titre");
     const date = document.getElementById("date");
     const heure = document.getElementById("heure");
-    const form = document.querySelector("form");
+    const commentaire = document.getElementById("description");
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rappelCheckbox = document.getElementById("rappel");
     const rappelDelai = document.getElementById("rappel-delai-container");
 
     if (rappelCheckbox && rappelDelai) {
-        const actualiserRappel = () => { rappelDelai.hidden = !rappelCheckbox.checked; };
-        rappelCheckbox.addEventListener("change", actualiserRappel);
-        actualiserRappel();
+        const updateReminder = () => { rappelDelai.hidden = !rappelCheckbox.checked; };
+        rappelCheckbox.addEventListener("change", updateReminder);
+        updateReminder();
     }
     if (!button || !status || !transcript) return;
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         button.disabled = true;
-        status.textContent = "La reconnaissance vocale nécessite Chrome ou Edge à jour.";
+        status.textContent = "La dictée vocale nécessite un navigateur compatible, comme Chrome ou Edge.";
         return;
     }
 
+    // Reconnaissance vocale gratuite du navigateur + compréhension locale,
+    // sans API payante et sans envoi du texte à un service d'IA externe.
     const recognition = new SpeechRecognition();
     recognition.lang = "fr-FR";
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    let commandeEnCours = false;
-    let envoiAutomatiqueEffectue = false;
+    recognition.maxAlternatives = 3;
+    let phrases = [];
 
-    const normaliser = value => (value || "").toLocaleLowerCase("fr-FR")
+    const normalize = value => (value || "").toLocaleLowerCase("fr-FR")
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/[’']/g, " ").replace(/[^a-z0-9\s-]/g, " ")
+        .replace(/[’']/g, " ").replace(/[^a-z0-9\s:-]/g, " ")
         .replace(/\s+/g, " ").trim();
-    const mois = {
-        janvier:"01", fevrier:"02", mars:"03", avril:"04", mai:"05", juin:"06",
-        juillet:"07", aout:"08", septembre:"09", octobre:"10", novembre:"11", decembre:"12"
-    };
-    const nombres = {
-        un:1, une:1, deux:2, trois:3, quatre:4, cinq:5, six:6, sept:7, huit:8, neuf:9,
-        dix:10, onze:11, douze:12, treize:13, quatorze:14, quinze:15, seize:16,
-        dixsept:17, dixhuit:18, dixneuf:19, vingt:20, vingtetun:21, vingtdeux:22,
-        vingttrois:23, vingtquatre:24, vingtcinq:25, vingtsix:26,
-        vingtsept:27, vingthuit:28, vingtneuf:29, trente:30, trenteetun:31
-    };
-    function nombreJour(token) {
-        const t = normaliser(token).replace(/\s/g, "");
-        return /^\d{1,2}$/.test(t) ? Number(t) : (nombres[t] || null);
+    const months = {janvier:"01",fevrier:"02",mars:"03",avril:"04",mai:"05",juin:"06",juillet:"07",aout:"08",septembre:"09",octobre:"10",novembre:"11",decembre:"12"};
+    const numberWords = {un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,huit:8,neuf:9,dix:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,dixsept:17,dixhuit:18,dixneuf:19,vingt:20,trente:30};
+    function parseNumber(value) {
+        const t = normalize(value).replace(/\s/g, "");
+        if (/^\d{1,2}$/.test(t)) return Number(t);
+        if (numberWords[t]) return numberWords[t];
+        const compound = t.match(/^(vingt|trente)(etun|un|deux|trois|quatre|cinq|six|sept|huit|neuf)?$/);
+        if (compound) return (compound[1] === "vingt" ? 20 : 30) + (compound[2] ? (compound[2] === "etun" || compound[2] === "un" ? 1 : numberWords[compound[2]] || 0) : 0);
+        return null;
     }
-    function remplirDestinataires(texte) {
-        const match = texte.match(/(?:agenda|agendas)\s+(?:de|du|des)\s+(.+?)(?=\s+(?:pour|le|la|un|une|rendez|rdv|dentiste|medecin|docteur|reunion|demain|apres|aujourd|\d|$))/i);
-        if (!match) return;
-        const noms = match[1].split(/\s+et\s+|\s*,\s*/i).map(normaliser).filter(Boolean);
-        const cases = [...document.querySelectorAll('input[name="destinataire_ids"]')];
-        const correspondants = cases.filter(input => {
-            const label = input.closest("label");
-            const nom = normaliser(label ? label.innerText : "");
-            return noms.some(n => n && (nom.includes(n) || n.includes(nom)));
-        });
-        const selectionTrouvee = correspondants.length > 0;
-        if (selectionTrouvee) {
-            cases.forEach(input => { input.checked = false; });
-            correspondants.forEach(input => { input.checked = true; });
-            status.textContent = "Destinataires sélectionnés.";
-        }
-        else status.textContent = "Je n'ai pas reconnu le nom d'un destinataire. Vérifiez les cases des agendas.";
-    }
-    function extraireDate(texte) {
-        let t = texte;
-        const relatif = t.match(/\b(apres-demain|demain|aujourd hui)\b/);
-        if (relatif) {
-            const d = new Date();
-            d.setDate(d.getDate() + (relatif[1] === "demain" ? 1 : relatif[1] === "apres-demain" ? 2 : 0));
+    function parseDate(text) {
+        let t = text;
+        const relative = t.match(/\b(apres demain|demain|aujourd hui)\b/);
+        if (relative) {
+            const d = new Date(); d.setDate(d.getDate() + (relative[1] === "demain" ? 1 : relative[1] === "apres demain" ? 2 : 0));
             date.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-            t = t.replace(relatif[0], " ");
+            t = t.replace(relative[0], " ");
         }
         const numeric = t.match(/\b(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?\b/);
         if (numeric) {
-            const year = numeric[3] ? (numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]) : String(new Date().getFullYear());
-            date.value = `${year}-${numeric[2].padStart(2,"0")}-${numeric[1].padStart(2,"0")}`;
-            t = t.replace(numeric[0], " ");
-        } else {
-            const monthRegex = new RegExp("\\b(\\d{1,2}|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|dix sept|dix huit|dix neuf|vingt|vingt et un|vingt deux|vingt trois|vingt quatre|vingt cinq|vingt six|vingt sept|vingt huit|vingt neuf|trente|trente et un)\\s+(" + Object.keys(mois).join("|") + ")(?:\\s+(\\d{4}))?\\b", "i");
-            const named = t.match(monthRegex);
-            if (named) {
-                const day = nombreJour(named[1]);
-                if (day && day <= 31) {
-                    const year = named[3] || new Date().getFullYear();
-                    date.value = `${year}-${mois[named[2]]}-${String(day).padStart(2,"0")}`;
-                    t = t.replace(named[0], " ");
-                }
+            const y = numeric[3] ? (numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]) : String(new Date().getFullYear());
+            date.value = `${y}-${numeric[2].padStart(2,"0")}-${numeric[1].padStart(2,"0")}`;
+            return t.replace(numeric[0], " ");
+        }
+        const monthPattern = Object.keys(months).join("|");
+        const named = t.match(new RegExp("\\b(\\d{1,2}|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|dix sept|dix huit|dix neuf|vingt(?: et un| deux| trois| quatre| cinq| six| sept| huit| neuf)?|trente(?: et un)?)\\s+("+monthPattern+")(?:\\s+(\\d{4}))?\\b"));
+        if (named) {
+            const day = parseNumber(named[1]);
+            if (day && day <= 31) {
+                date.value = `${named[3] || new Date().getFullYear()}-${months[named[2]]}-${String(day).padStart(2,"0")}`;
+                t = t.replace(named[0], " ");
             }
         }
         return t;
     }
-    function extraireHeure(texte) {
-        let t = texte;
-        let m = t.match(/\b(\d{1,2})\s*(?:h|heure|heures)(?:\s*(\d{1,2}))?\b/i);
+    function parseTime(text) {
+        let t = text;
+        let m = t.match(/\b(\d{1,2})\s*(?:h|heure|heures)(?:\s*(\d{1,2}))?\b/);
+        if (!m) {
+            const words = t.match(/\b(un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt|vingt et un|vingt deux|vingt trois)\s+heures?\b/);
+            if (words) m = [words[0], String(parseNumber(words[1])), "0"];
+        }
         if (!m) m = t.match(/\b(\d{1,2}):(\d{2})\b/);
         if (m) {
-            const h = Number(m[1]), min = Number(m[2] || 0);
-            if (h <= 23 && min <= 59) heure.value = `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
+            const hh = Number(m[1]), mm = Number(m[2] || 0);
+            if (hh <= 23 && mm <= 59) heure.value = `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
             t = t.replace(m[0], " ");
         }
         return t;
     }
-    function extraireTitre(texte) {
-        let t = normaliser(texte);
-        t = t.replace(/\b(?:mets?|mettre|ajoute|ajouter|envoie|envoyer|planifie|planifier|cree|creer|inscris|inscrire|dans|agenda|agendas|de|du|des|pour|moi|mon|ma|mes|le|la|les|un|une|a|au|aux|rendez vous|rdv|s il te plait)\b/g, " ");
-        t = t.replace(/\b(?:chez|demain|apres demain|aujourd hui)\b/g, " ").replace(/\s+/g," ").trim();
-        return t;
+    function parseRecipients(text) {
+        const labels = [...document.querySelectorAll('input[name="destinataire_ids"]')].map(input => ({input, label:input.closest("label"), name:normalize((input.closest("label")?.dataset.destinataireNom || input.closest("label")?.innerText || "").replace(/\(moi\)/g,""))})).filter(x => x.name);
+        const normalized = normalize(text);
+        const found = labels.filter(x => new RegExp("(^| )" + x.name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + "( |$)").test(normalized));
+        if (found.length) {
+            labels.forEach(x => x.input.checked = false);
+            found.forEach(x => x.input.checked = true);
+        }
+        return found.length;
+    }
+    function parseAgendaType(text) {
+        const t = normalize(text);
+        const select = document.getElementById("type_agenda");
+        if (select && /\bagenda pro\b|\ben pro\b/.test(t)) select.value = "pro";
+        if (select && /\bagenda perso\b|\ben perso\b/.test(t)) select.value = "perso";
+    }
+    function parseComments(text) {
+        const patterns = [/(?:commentaires?|description|note|precisions?)\s*(?:[:,-]|sont|:)?\s*(.+)$/i, /(?:ne pas oublier|pense a|penser a|n oublie pas)\s+(.+)$/i];
+        for (const pattern of patterns) {
+            const m = text.match(pattern);
+            if (m && m[1]) { commentaire.value = m[1].trim().replace(/[.!?]+$/, ""); return text.replace(m[0], " "); }
+        }
+        return text;
+    }
+    function parseTitle(text) {
+        let t = normalize(text);
+        t = t.replace(/(?:dans )?(?:les )?agendas? (?:de|du|des) .+?(?=\s+(?:le|pour|a|chez|rendez|rdv|demain|apres demain|aujourd hui|\d|$))/g, " ");
+        t = t.replace(/\b(?:mets?|mettre|ajoute|ajouter|envoie|envoyer|planifie|planifier|cree|creer|inscris|inscrire|dans|agenda|agendas|de|du|des|pour|moi|mon|ma|mes|le|la|les|un|une|a|au|aux|rendez vous|rdv|s il te plait|chez|demain|apres demain|aujourd hui|agenda pro|agenda perso)\b/g, " ");
+        t = t.replace(/\s+/g," ").trim();
+        return t.replace(/^(?:un|une)\s+/, "").trim();
+    }
+    function fillForm() {
+        const full = normalize(phrases.join(" "));
+        let remaining = parseComments(full);
+        const recipientCount = parseRecipients(remaining);
+        parseAgendaType(remaining);
+        remaining = parseDate(remaining);
+        remaining = parseTime(remaining);
+        const extracted = parseTitle(remaining);
+        if (extracted && titre) {
+            // Conserve le titre existant quand la nouvelle dictée ne contient
+            // qu'une date, une heure ou des commentaires.
+            const onlyMeta = /^(?:le |a |pour |commentaire)/.test(extracted);
+            if (!onlyMeta && (!titre.value.trim() || extracted.length > titre.value.trim().length)) {
+                titre.value = extracted.charAt(0).toLocaleUpperCase("fr-FR") + extracted.slice(1);
+            }
+        }
+        const checked = document.querySelectorAll('input[name="destinataire_ids"]:checked').length;
+        const missing = [];
+        if (!titre.value.trim()) missing.push("titre");
+        if (!date.value) missing.push("date");
+        if (!checked) missing.push("agenda destinataire");
+        status.textContent = missing.length ? "J'ai rempli les informations reconnues. Il manque : " + missing.join(", ") + ". Vérifiez le formulaire." : "Formulaire rempli. Vérifiez les informations puis cliquez sur « Ajouter l'événement ».";
     }
     button.addEventListener("click", function () {
-        status.textContent = "Je vous écoute...";
+        if (button.disabled) return;
+        status.textContent = "Je vous écoute… Dictez votre rendez-vous en une phrase naturelle.";
         button.disabled = true;
-        try { recognition.start(); }
-        catch (e) { button.disabled = false; status.textContent = "Réessayez dans un instant."; }
+        try { recognition.start(); } catch (e) { button.disabled = false; status.textContent = "Réessayez dans un instant."; }
     });
     recognition.onresult = function (event) {
-        const phrase = event.results[0][0].transcript.trim();
-        transcript.textContent = (transcript.textContent ? transcript.textContent + " | " : "") + "Vous avez dit : " + phrase;
-        let texte = normaliser(phrase);
-        if (/\b(mets?|ajoute|envoie|planifie|inscris)\b/.test(texte)) commandeEnCours = true;
-        remplirDestinataires(texte);
-        // Retire la désignation des agendas avant de calculer le titre.
-        texte = texte.replace(/(?:dans\s+)?(?:les?\s+|l\s+)?agendas?\s+(?:de|du|des)\s+.+?(?=\s+(?:pour|le|la|un|une|chez|dentiste|medecin|docteur|reunion|demain|apres|aujourd|\d|$))/i, " ");
-        texte = extraireDate(texte);
-        texte = extraireHeure(texte);
-        const titreExtrait = extraireTitre(texte);
-        if (titreExtrait && titre) {
-            // Une phrase complémentaire contenant uniquement date/heure ne remplace jamais le titre déjà reconnu.
-            if (!titre.value.trim()) titre.value = titreExtrait.charAt(0).toUpperCase() + titreExtrait.slice(1);
-        }
-        const destinataires = [...document.querySelectorAll('input[name="destinataire_ids"]:checked')];
-        status.textContent = "Champs complétés. Vérifiez le titre, la date, l'heure et les agendas sélectionnés.";
-        if (commandeEnCours && titre.value.trim() && date.value && destinataires.length && !envoiAutomatiqueEffectue) {
-            envoiAutomatiqueEffectue = true;
-            status.textContent = "Événement prêt : enregistrement dans les agendas sélectionnés...";
-            if (form) form.requestSubmit();
+        const result = event.results[event.results.length - 1];
+        const phrase = (result[0]?.transcript || "").trim();
+        if (phrase) {
+            phrases.push(phrase);
+            transcript.textContent = "Vous avez dit : " + phrases.join(" | ");
+            fillForm();
         }
     };
     recognition.onerror = function (event) {
-        status.textContent = event.error === "not-allowed" ? "Autorisez l'accès au microphone dans votre navigateur." : "Je n'ai pas réussi à comprendre. Vous pouvez réessayer.";
+        status.textContent = event.error === "not-allowed" ? "Autorisez l'accès au microphone dans votre navigateur." : "La dictée n'a pas abouti. Appuyez sur Parler pour réessayer.";
     };
     recognition.onend = function () { button.disabled = false; };
 });
