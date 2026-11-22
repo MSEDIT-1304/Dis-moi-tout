@@ -128,6 +128,16 @@ def service_worker_file():
     response.headers["Cache-Control"] = "no-cache"
     return response
 
+@app.route("/app-version", methods=["GET"])
+def app_version():
+    """Retourne l'identifiant du déploiement Render pour le contrôle quotidien."""
+    version = os.environ.get("RENDER_GIT_COMMIT", "").strip()
+    if not version:
+        return jsonify({"error": "Version du déploiement indisponible"}), 503
+    response = jsonify({"version": version})
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
+
 @app.before_request
 def keep_authenticated_session_permanent():
     # Garantit le caractère permanent à chaque requête authentifiée.
