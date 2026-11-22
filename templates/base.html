@@ -195,16 +195,15 @@
                     });
                 }
                 await savePushSubscription(subscription);
-                const banner = document.getElementById("push-notification-banner");
-                if (banner) banner.style.display = "none";
+                // La synchronisation automatique ne masque plus le bandeau.
+                // Le client peut ainsi cliquer volontairement sur le bouton après F5.
                 return;
             }
 
             // Un abonnement local existant est également resynchronisé.
             if (subscription) {
                 await savePushSubscription(subscription);
-                const banner = document.getElementById("push-notification-banner");
-                if (banner) banner.style.display = "none";
+                // Ne pas masquer le bandeau lors de la synchronisation automatique.
             }
         } catch (error) {
             console.warn("Synchronisation automatique des notifications impossible :", error);
