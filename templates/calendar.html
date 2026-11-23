@@ -941,10 +941,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const events = [
         {% for evenement in evenements_perso %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#A52D68','#54a66b','#e2a43b'] else '#A52D68')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (('#A52D68' if evenement['calendrier'] == '#d94f9b' else evenement['calendrier']) if evenement['calendrier'] in ['#4f8fc9','#A52D68','#d94f9b','#54a66b','#e2a43b'] else '#A52D68')|tojson }}},
         {% endfor %}
         {% for evenement in evenements_pro %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#A52D68','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (('#A52D68' if evenement['calendrier'] == '#d94f9b' else evenement['calendrier']) if evenement['calendrier'] in ['#4f8fc9','#A52D68','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
         {% endfor %}
     ];
     const agendaList = document.getElementById("calendar-agenda-list");
