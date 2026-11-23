@@ -1118,6 +1118,11 @@ def init_database():
             calendrier TEXT,
             rappel INTEGER DEFAULT 1,
             type_evenement TEXT,
+            recurrence_rule TEXT,
+            recurrence_end TEXT,
+            recurrence_series_id TEXT,
+            recurrence_index INTEGER DEFAULT 0,
+            recurrence_skips TEXT DEFAULT '[]',
             created_at TIMESTAMP
                 DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(famille_id)
@@ -1321,7 +1326,12 @@ def init_database():
     "valide_par_membre_id": "INTEGER",
     "concerne_admin": "INTEGER DEFAULT 0",
     "type_agenda": "TEXT DEFAULT 'legacy'",
-    "rappel_delai_minutes": "INTEGER DEFAULT 60"
+    "rappel_delai_minutes": "INTEGER DEFAULT 60",
+    "recurrence_rule": "TEXT",
+    "recurrence_end": "TEXT",
+    "recurrence_series_id": "TEXT",
+    "recurrence_index": "INTEGER DEFAULT 0",
+    "recurrence_skips": "TEXT DEFAULT '[]'"
     }
     for colonne, definition in colonnes_evenements_a_ajouter.items():
 
@@ -3460,6 +3470,99 @@ def add_event_page():
     )
 
 
+def _next_recurrence_date(current_date, rule):
+    """Calcule la prochaine occurrence sans dériver les fins de mois."""
+    if rule == "weekly":
+        return current_date + timedelta(days=7)
+    if rule == "fortnightly":
+        return current_date + timedelta(days=15)
+    months = {"monthly": 1, "quarterly": 3, "six_monthly": 6, "yearly": 12}.get(rule)
+    if not months:
+        return None
+    month_index = current_date.month - 1 + months
+    year = current_date.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(current_date.day, pycal.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _promote_recurrence_master(cursor, series_id, famille_id):
+    """Promote the next remaining occurrence when the original first one is removed."""
+    rows = cursor.execute(
+        "SELECT id FROM evenements WHERE recurrence_series_id=? AND famille_id=? ORDER BY date, id",
+        (series_id, famille_id)
+    ).fetchall()
+    for index, row in enumerate(rows):
+        cursor.execute(
+            "UPDATE evenements SET recurrence_index=? WHERE id=? AND famille_id=?",
+            (index, row["id"], famille_id)
+        )
+
+
+def _ensure_recurrence_occurrences(conn, famille_id):
+    """Matérialise les occurrences jusqu'à 18 mois, ou jusqu'à la date de fin."""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM evenements
+        WHERE famille_id = ? AND recurrence_series_id IS NOT NULL
+          AND COALESCE(recurrence_index, 0) = 0 AND statut_validation = 'accepte' AND statut_validation = 'accepte'
+    """, (famille_id,))
+    masters = cursor.fetchall()
+    horizon = date.today() + timedelta(days=548)
+    for master in masters:
+        try:
+            first = date.fromisoformat(master["date"])
+        except (TypeError, ValueError):
+            continue
+        rule = master["recurrence_rule"]
+        if not rule:
+            continue
+        try:
+            end_date = date.fromisoformat(master["recurrence_end"]) if master["recurrence_end"] else None
+        except ValueError:
+            end_date = None
+        limit = min(end_date, horizon) if end_date else horizon
+        try:
+            skipped = set(json.loads(master["recurrence_skips"] or "[]"))
+        except (TypeError, ValueError):
+            skipped = set()
+        current = first
+        index = 0
+        while current < limit:
+            nxt = _next_recurrence_date(current, rule)
+            if not nxt or nxt <= current:
+                break
+            if end_date and nxt > end_date:
+                break
+            index += 1
+            cursor.execute("""
+                SELECT id FROM evenements
+                WHERE recurrence_series_id = ? AND recurrence_index = ?
+            """, (master["recurrence_series_id"], index))
+            exists = cursor.fetchone() is not None
+            if index not in skipped and not exists:
+                cursor.execute("""
+                    INSERT INTO evenements (
+                        famille_id, membre_id, titre, description, date, heure,
+                        calendrier, rappel, rappel_delai_minutes, type_evenement,
+                        created_by_admin_id, created_by_membre_id, statut_validation,
+                        valide_par_admin_id, valide_par_membre_id, concerne_admin,
+                        type_agenda, recurrence_rule, recurrence_end,
+                        recurrence_series_id, recurrence_index, recurrence_skips
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    master["famille_id"], master["membre_id"], master["titre"],
+                    master["description"], nxt.isoformat(), master["heure"],
+                    master["calendrier"], master["rappel"], master["rappel_delai_minutes"],
+                    master["type_evenement"], master["created_by_admin_id"],
+                    master["created_by_membre_id"], master["statut_validation"],
+                    master["valide_par_admin_id"], master["valide_par_membre_id"],
+                    master["concerne_admin"], master["type_agenda"], rule,
+                    master["recurrence_end"], master["recurrence_series_id"], index, "[]"
+                ))
+            current = nxt
+
+
 @app.route("/add_event", methods=["POST"])
 def add_event():
     if not session.get("logged"):
@@ -3489,6 +3592,22 @@ def add_event():
         rappel_delai_minutes = 60
     if rappel_delai_minutes not in delais_autorises:
         rappel_delai_minutes = 60
+
+    recurrence_rule = request.form.get("recurrence_rule", "none").strip()
+    recurrence_rules = {"none", "weekly", "fortnightly", "monthly", "quarterly", "six_monthly", "yearly"}
+    if recurrence_rule not in recurrence_rules:
+        recurrence_rule = "none"
+    recurrence_end = request.form.get("recurrence_end", "").strip() or None
+    if recurrence_rule == "none":
+        recurrence_end = None
+    elif recurrence_end:
+        try:
+            if __import__("datetime").date.fromisoformat(recurrence_end) < __import__("datetime").date.fromisoformat(date):
+                raise ValueError
+        except ValueError:
+            flash("La date de fin de répétition doit être égale ou postérieure à la première date.")
+            return redirect(url_for("add_event_page"))
+
     est_admin = session.get("admin_logged") is True
     admin_id = session.get("admin_id")
     auteur_membre_id = session.get("membre_id")
@@ -3566,6 +3685,7 @@ def add_event():
         cibles.append(("membre", mid, 0, "membre_perso"))
 
     for type_cible, destinataire_id, concerne_admin, type_agenda in cibles:
+        recurrence_series_id = str(uuid.uuid4()) if recurrence_rule != "none" else None
         est_son_propre_agenda = (
             (est_admin and type_cible == "admin")
             or (not est_admin and type_cible == "membre" and destinataire_id == auteur_membre_id)
@@ -3587,17 +3707,22 @@ def add_event():
                 famille_id, membre_id, titre, description, date, heure,
                 calendrier, rappel, rappel_delai_minutes, type_evenement, created_by_admin_id,
                 created_by_membre_id, statut_validation, valide_par_admin_id,
-                valide_par_membre_id, concerne_admin, type_agenda
+                valide_par_membre_id, concerne_admin, type_agenda,
+                recurrence_rule, recurrence_end, recurrence_series_id, recurrence_index, recurrence_skips
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 famille_id, destinataire_id, titre, description, date, heure,
                 couleur, rappel, rappel_delai_minutes, "normal", created_by_admin_id,
                 created_by_membre_id, statut, valide_admin,
-                valide_membre, concerne_admin, type_agenda
+                valide_membre, concerne_admin, type_agenda,
+                recurrence_rule if recurrence_rule != "none" else None,
+                recurrence_end, recurrence_series_id, 0, "[]"
             )
         )
+        if recurrence_series_id and statut == "accepte":
+            _ensure_recurrence_occurrences(conn, famille_id)
         if statut == "en_attente":
             nombre_attente += 1
 
@@ -3683,25 +3808,69 @@ def edit_event(event_id):
         flash("Veuillez saisir un titre et une date.")
         return redirect(url_for("calendar"))
 
-    cursor.execute(
-        """
-        UPDATE evenements
-        SET titre = ?,
-            description = ?,
-            date = ?,
-            heure = ?
-        WHERE id = ?
-        AND famille_id = ?
-        """,
-        (
-            titre,
-            description,
-            date,
-            heure,
-            event_id,
-            famille_id
+    scope = request.form.get("series_scope", "single")
+    series_id = evenement["recurrence_series_id"] if "recurrence_series_id" in evenement.keys() else None
+    if series_id and scope in {"all", "future"}:
+        try:
+            old_date = __import__("datetime").date.fromisoformat(evenement["date"])
+            new_date = __import__("datetime").date.fromisoformat(date)
+            shift_days = (new_date - old_date).days
+        except (TypeError, ValueError):
+            conn.close()
+            flash("Date invalide.")
+            return redirect(url_for("calendar"))
+
+        if scope == "all":
+            targets = cursor.execute(
+                "SELECT id, date FROM evenements WHERE recurrence_series_id = ? AND famille_id = ?",
+                (series_id, famille_id)
+            ).fetchall()
+            for target in targets:
+                shifted = (__import__("datetime").date.fromisoformat(target["date"]) + timedelta(days=shift_days)).isoformat()
+                cursor.execute(
+                    "UPDATE evenements SET titre=?, description=?, date=?, heure=? WHERE id=? AND famille_id=?",
+                    (titre, description, shifted, heure, target["id"], famille_id)
+                )
+        else:
+            previous_day = (old_date - timedelta(days=1)).isoformat()
+            cursor.execute(
+                "UPDATE evenements SET recurrence_end=? WHERE recurrence_series_id=? AND COALESCE(recurrence_index,0)=0 AND famille_id=?",
+                (previous_day, series_id, famille_id)
+            )
+            targets = cursor.execute(
+                "SELECT id, date FROM evenements WHERE recurrence_series_id=? AND famille_id=? AND date>=? ORDER BY date,id",
+                (series_id, famille_id, evenement["date"])
+            ).fetchall()
+            new_series_id = str(uuid.uuid4())
+            for new_index, target in enumerate(targets):
+                shifted = (__import__("datetime").date.fromisoformat(target["date"]) + timedelta(days=shift_days)).isoformat()
+                cursor.execute(
+                    """UPDATE evenements SET titre=?, description=?, date=?, heure=?,
+                       recurrence_series_id=?, recurrence_index=? WHERE id=? AND famille_id=?""",
+                    (titre, description, shifted, heure, new_series_id, new_index, target["id"], famille_id)
+                )
+    else:
+        if series_id:
+            master = cursor.execute(
+                "SELECT id, recurrence_skips FROM evenements WHERE recurrence_series_id=? AND COALESCE(recurrence_index,0)=0 AND famille_id=?",
+                (series_id, famille_id)
+            ).fetchone()
+            if master:
+                try:
+                    skips = set(json.loads(master["recurrence_skips"] or "[]"))
+                except (TypeError, ValueError):
+                    skips = set()
+                skips.add(int(evenement["recurrence_index"] or 0))
+                cursor.execute("UPDATE evenements SET recurrence_skips=? WHERE id=?",
+                               (json.dumps(sorted(skips)), master["id"]))
+        cursor.execute(
+            """UPDATE evenements SET titre=?, description=?, date=?, heure=?,
+               recurrence_rule=NULL, recurrence_end=NULL, recurrence_series_id=NULL,
+               recurrence_index=0 WHERE id=? AND famille_id=?""",
+            (titre, description, date, heure, event_id, famille_id)
         )
-    )
+        if series_id and int(evenement["recurrence_index"] or 0) == 0:
+            _promote_recurrence_master(cursor, series_id, famille_id)
 
     conn.commit()
     conn.close()
@@ -3769,14 +3938,39 @@ def delete_event(event_id):
         flash("Vous ne pouvez pas supprimer ce rendez-vous.")
         return redirect(url_for("calendar"))
 
-    cursor.execute(
-        """
-        DELETE FROM evenements
-        WHERE id = ?
-        AND famille_id = ?
-        """,
-        (event_id, famille_id)
-    )
+    scope = request.form.get("series_scope", "single")
+    series_id = evenement["recurrence_series_id"] if "recurrence_series_id" in evenement.keys() else None
+    if series_id and scope in {"all", "future"}:
+        if scope == "future":
+            previous_day = (__import__("datetime").date.fromisoformat(evenement["date"]) - timedelta(days=1)).isoformat()
+            cursor.execute(
+                "UPDATE evenements SET recurrence_end=? WHERE recurrence_series_id=? AND COALESCE(recurrence_index,0)=0 AND famille_id=?",
+                (previous_day, series_id, famille_id)
+            )
+            cursor.execute(
+                "DELETE FROM evenements WHERE recurrence_series_id=? AND famille_id=? AND date>=?",
+                (series_id, famille_id, evenement["date"])
+            )
+        else:
+            cursor.execute("DELETE FROM evenements WHERE recurrence_series_id=? AND famille_id=?",
+                           (series_id, famille_id))
+    else:
+        if series_id:
+            master = cursor.execute(
+                "SELECT id, recurrence_skips FROM evenements WHERE recurrence_series_id=? AND COALESCE(recurrence_index,0)=0 AND famille_id=?",
+                (series_id, famille_id)
+            ).fetchone()
+            if master:
+                try:
+                    skips = set(json.loads(master["recurrence_skips"] or "[]"))
+                except (TypeError, ValueError):
+                    skips = set()
+                skips.add(int(evenement["recurrence_index"] or 0))
+                cursor.execute("UPDATE evenements SET recurrence_skips=? WHERE id=?",
+                               (json.dumps(sorted(skips)), master["id"]))
+        cursor.execute("DELETE FROM evenements WHERE id=? AND famille_id=?", (event_id, famille_id))
+        if series_id and int(evenement["recurrence_index"] or 0) == 0:
+            _promote_recurrence_master(cursor, series_id, famille_id)
 
     conn.commit()
     conn.close()
@@ -3965,6 +4159,8 @@ def calendar():
     admin_id = session.get("admin_id")
     conn = get_connection()
     cursor = conn.cursor()
+    _ensure_recurrence_occurrences(conn, famille_id)
+    conn.commit()
     membre = None
 
     if not est_admin:
