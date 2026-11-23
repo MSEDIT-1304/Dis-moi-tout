@@ -4,7 +4,7 @@
    ============================== */
 
 :root {
-    --rose: #A52D68;
+    --rose: #F8E7EF;
     --rose-hover: #8B2457;
     --bleu-fond: #DCEEFF;
     --bleu-fonce: #45647F;
@@ -1840,4 +1840,20 @@ html body .calendar-page .agenda-tab.active {
     background: #A52D68 !important;
     border-color: #A52D68 !important;
     color: #FFFFFF !important;
+}
+
+
+/* CORRECTIONS COULEURS CALENDRIER — ADMIN ET MEMBRES */
+html body .calendar-page .calendar-view-card {
+    background: #E8F1FA !important;
+}
+html body .calendar-page .agenda-date-heading,
+html body .calendar-page .calendar-view-card.pro-mode .agenda-date-heading {
+    background: #C9DEF0 !important;
+    color: #244967 !important;
+    border-color: rgba(79, 143, 201, .22) !important;
+}
+/* Bandeau avec logo : rose clair. */
+html body .site-header {
+    background-color: #F8E7EF !important;
 }
