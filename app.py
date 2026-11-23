@@ -3803,6 +3803,10 @@ def edit_event(event_id):
     description = request.form.get("description", "").strip()
     date = request.form.get("date", "").strip()
     heure = request.form.get("heure", "").strip()
+    couleur = request.form.get("couleur_evenement", evenement["calendrier"] or "#4f8fc9").strip()
+    couleurs_autorisees = {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}
+    if couleur not in couleurs_autorisees:
+        couleur = evenement["calendrier"] if evenement["calendrier"] in couleurs_autorisees else "#4f8fc9"
 
     if not titre or not date:
         conn.close()
@@ -3829,8 +3833,8 @@ def edit_event(event_id):
             for target in targets:
                 shifted = (__import__("datetime").date.fromisoformat(target["date"]) + timedelta(days=shift_days)).isoformat()
                 cursor.execute(
-                    "UPDATE evenements SET titre=?, description=?, date=?, heure=? WHERE id=? AND famille_id=?",
-                    (titre, description, shifted, heure, target["id"], famille_id)
+                    "UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=? WHERE id=? AND famille_id=?",
+                    (titre, description, shifted, heure, couleur, target["id"], famille_id)
                 )
         else:
             previous_day = (old_date - timedelta(days=1)).isoformat()
@@ -3846,9 +3850,9 @@ def edit_event(event_id):
             for new_index, target in enumerate(targets):
                 shifted = (__import__("datetime").date.fromisoformat(target["date"]) + timedelta(days=shift_days)).isoformat()
                 cursor.execute(
-                    """UPDATE evenements SET titre=?, description=?, date=?, heure=?,
+                    """UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=?,
                        recurrence_series_id=?, recurrence_index=? WHERE id=? AND famille_id=?""",
-                    (titre, description, shifted, heure, new_series_id, new_index, target["id"], famille_id)
+                    (titre, description, shifted, heure, couleur, new_series_id, new_index, target["id"], famille_id)
                 )
     else:
         if series_id:
@@ -3865,10 +3869,10 @@ def edit_event(event_id):
                 cursor.execute("UPDATE evenements SET recurrence_skips=? WHERE id=?",
                                (json.dumps(sorted(skips)), master["id"]))
         cursor.execute(
-            """UPDATE evenements SET titre=?, description=?, date=?, heure=?,
+            """UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=?,
                recurrence_rule=NULL, recurrence_end=NULL, recurrence_series_id=NULL,
                recurrence_index=0 WHERE id=? AND famille_id=?""",
-            (titre, description, date, heure, event_id, famille_id)
+            (titre, description, date, heure, couleur, event_id, famille_id)
         )
         if series_id and int(evenement["recurrence_index"] or 0) == 0:
             _promote_recurrence_master(cursor, series_id, famille_id)
