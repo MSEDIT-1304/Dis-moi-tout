@@ -4,8 +4,8 @@
    ============================== */
 
 :root {
-    --rose: #FCE4EC;
-    --rose-hover: #F8BBD0;
+    --rose: #A52D68;
+    --rose-hover: #8B2457;
     --bleu-fond: #DCEEFF;
     --bleu-fonce: #45647F;
     --blanc: #FFFFFF;
@@ -205,13 +205,13 @@ form label,
 table {
     width: 100%;
     border-collapse: collapse;
-    background: #F4B6CC;
+    background: #A52D68;
     border-radius: 12px;
     overflow: hidden;
 }
 
 th {
-    background: #EFA3BF;
+    background: #8B2457;
     color: #FFFFFF;
     padding: 13px;
     text-align: left;
@@ -220,11 +220,11 @@ th {
 td {
     color: #45647F;
     padding: 12px;
-    border-bottom: 1px solid #FCE4EC;
+    border-bottom: 1px solid #A52D68;
 }
 
 tr:nth-child(even) {
-    background: #FCE4EC;
+    background: #A52D68;
 }
 
 /* Images et logos : affichage carré 192 x 192 */
@@ -700,7 +700,7 @@ html body .dashboard-links a {
 
 /* BLOC COMMANDE VOCALE */
 html body .voice-command {
-    background: #F3E4ED !important;
+    background: #A52D68 !important;
     border: 1px solid #A52D68 !important;
     border-radius: 12px !important;
     padding: 15px !important;
@@ -1694,4 +1694,150 @@ html body .calendar-page:has(form[action*="add_event"]) form[action*="add_event"
         padding: 7px 8px !important;
         font-size: 12px !important;
     }
+}
+
+
+/* ======================================================
+   NAVIGATION — ESPACEMENT UNIFORME SUR TOUTES LES PAGES
+   ====================================================== */
+html body .navigation {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+    margin: 14px auto 18px !important;
+    padding: 0 14px !important;
+    position: relative !important;
+    z-index: 2 !important;
+}
+html body .navigation a {
+    margin: 0 !important;
+    flex: 0 0 auto !important;
+}
+@media (max-width: 768px) {
+    html body .navigation {
+        gap: 8px !important;
+        margin: 10px auto 14px !important;
+        padding: 0 10px !important;
+    }
+}
+
+/* PROFIL ADMIN ET MEMBRES — DIMENSIONS PLUS COMPACTES */
+html body .profile-page {
+    width: min(100% - 24px, 650px) !important;
+    max-width: 650px !important;
+    margin: 0 auto !important;
+    padding: 12px 0 22px !important;
+}
+html body .profile-header {
+    margin: 0 0 14px !important;
+}
+html body .profile-header h1 {
+    margin: 0 0 5px !important;
+    font-size: 24px !important;
+}
+html body .profile-header p {
+    margin: 0 !important;
+}
+html body .profile-card {
+    padding: 18px 22px !important;
+    margin: 0 !important;
+    border-radius: 14px !important;
+}
+html body .profile-card .profile-avatar {
+    width: 62px !important;
+    height: 62px !important;
+    margin: 0 auto 9px !important;
+    font-size: 21px !important;
+}
+html body .profile-card h2 {
+    margin: 5px 0 10px !important;
+    font-size: 20px !important;
+}
+html body .profile-information {
+    margin-top: 12px !important;
+}
+html body .profile-information div {
+    padding: 8px 0 !important;
+    gap: 12px !important;
+}
+html body .profile-information span,
+html body .profile-information strong {
+    font-size: 13px !important;
+    line-height: 1.35 !important;
+}
+html body .profile-photo-form {
+    max-width: 340px !important;
+    gap: 5px !important;
+    margin-bottom: 12px !important;
+    padding: 10px 12px !important;
+}
+html body .profile-photo-form input,
+html body .profile-photo-form select {
+    margin: 3px 0 7px !important;
+    padding: 7px !important;
+}
+html body .delete-account-card {
+    max-width: 650px !important;
+    margin: 14px auto 0 !important;
+    padding: 14px 18px !important;
+}
+html body .delete-account-card h2 {
+    font-size: 18px !important;
+    margin-bottom: 6px !important;
+}
+html body .delete-account-card p {
+    margin: 5px 0 8px !important;
+    font-size: 13px !important;
+}
+html body .delete-account-card form {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+html body .delete-account-card label {
+    margin: 8px 0 5px !important;
+}
+html body .delete-account-card input {
+    padding: 8px !important;
+    margin-bottom: 8px !important;
+}
+html body .delete-account-button {
+    padding: 9px 14px !important;
+    font-size: 13px !important;
+}
+@media (max-width: 600px) {
+    html body .profile-page {
+        width: calc(100% - 20px) !important;
+        padding: 10px 0 18px !important;
+    }
+    html body .profile-card {
+        padding: 15px !important;
+    }
+    html body .profile-information div {
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+    html body .profile-information span {
+        flex: 0 0 40% !important;
+    }
+    html body .profile-information strong {
+        flex: 1 1 auto !important;
+        text-align: right !important;
+    }
+    html body .profile-photo-form {
+        max-width: 100% !important;
+    }
+}
+
+/* Tous les anciens fonds roses utilisent désormais le fuchsia du profil */
+html body .site-header,
+html body .site-footer {
+    background-color: #A52D68 !important;
+}
+html body .calendar-page .agenda-tab.active {
+    background: #A52D68 !important;
+    border-color: #A52D68 !important;
+    color: #FFFFFF !important;
 }
