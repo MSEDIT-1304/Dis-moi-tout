@@ -137,14 +137,36 @@
             <h2>Ajouter un événement</h2>
             <button type="button" id="close-add-event" class="calendar-button calendar-small">Fermer</button>
         </div>
-        <div class="voice-command">
-            <h3>🎙️ Ajouter par commande vocale</h3>
-            <p>Exemple : « Mets le rendez-vous chez le dentiste le 27 novembre à 11 heures, commentaire prends ma carte Vitale »</p>
-            <button type="button" id="voice-button" class="calendar-button">🎙️ Parler</button>
-            <button type="button" id="voice-stop-button" class="calendar-button calendar-small" hidden>■ Arrêter</button>
-            <p id="voice-status" role="status"></p>
-            <p id="voice-transcript"></p>
-        </div>
+        <div class="voice-command voice-assistant" id="voice-assistant">
+            <h3>🎙️ Assistant vocal</h3>
+            <p>Dictez votre événement. Je vous présenterai un récapitulatif avant de l'ajouter.</p>
+            <div class="voice-controls">
+              <button type="button" id="voice-button" class="calendar-button">🎙️ Parler</button>
+              <button type="button" id="voice-stop-button" class="calendar-button calendar-small" hidden>■ Arrêter</button>
+            </div>
+            <p id="voice-status" role="status" aria-live="polite"></p>
+            <p id="voice-transcript" class="voice-transcript"></p>
+            <div id="voice-preview" class="voice-preview" hidden>
+              <h4>Vérifiez votre événement avant l'envoi</h4>
+              <label for="voice-title">Titre</label><input id="voice-title" type="text">
+              <label for="voice-date">Date</label><input id="voice-date" type="date">
+              <label for="voice-time">Heure</label><input id="voice-time" type="time">
+              <label for="voice-comment">Commentaire</label><textarea id="voice-comment" rows="2"></textarea>
+              <p><strong>Destinataire(s) :</strong> <span id="voice-recipients"></span></p>
+              <p><strong>Agenda :</strong> <span id="voice-agenda-label"></span></p>
+              <button type="button" id="voice-confirm" class="calendar-button">Ajouter dans l'agenda</button>
+              <button type="button" id="voice-cancel" class="calendar-button calendar-small">Annuler</button>
+            </div>
+            <form id="voice-submit-form" method="POST" action="{{ url_for('add_event') }}" hidden>
+              <input type="hidden" name="titre" id="voice-submit-title">
+              <input type="hidden" name="date" id="voice-submit-date">
+              <input type="hidden" name="heure" id="voice-submit-time">
+              <input type="hidden" name="description" id="voice-submit-comment">
+              <input type="hidden" name="type_agenda" id="voice-submit-agenda" value="perso">
+              <input type="hidden" name="couleur_evenement" value="#d94f9b">
+              <input type="hidden" name="rappel" value="">
+            </form>
+          </div>
         <form method="POST" action="{{ url_for('add_event') }}" id="calendar-add-event-form">
             <div class="calendar-form-grid">
                 <div><label for="titre">Titre</label><input type="text" id="titre" name="titre" required></div>
@@ -529,6 +551,16 @@
 .calendar-day:focus { outline:2px solid #c5a15b; outline-offset:2px; }
 @media(max-width:650px) { .calendar-inline-add .calendar-form-grid { grid-template-columns:1fr; gap:5px; } .calendar-inline-add { padding:12px !important; } }
 
+
+.voice-assistant { background:rgba(255,255,255,.92); color:#17324d; padding:10px 13px; border-radius:8px; margin:8px 0 12px; }
+.voice-assistant h3,.voice-assistant h4,.voice-assistant p,.voice-assistant label { color:#17324d !important; }
+.voice-assistant h3 { margin:2px 0 5px; } .voice-controls { display:flex; gap:8px; flex-wrap:wrap; }
+.voice-preview { margin-top:10px; padding:10px; border:1px solid #c5a15b; border-radius:8px; background:#fff; }
+.voice-preview[hidden] { display:none; } .voice-preview label { display:block; margin:7px 0 3px; font-weight:bold; }
+.voice-preview input,.voice-preview textarea { width:100%; box-sizing:border-box; padding:8px; border:1px solid #bbb; border-radius:5px; color:#17324d; }
+.voice-preview button { margin:8px 6px 0 0; padding:8px 12px; font-size:14px; }
+.voice-transcript { font-size:13px; }
+
 </style>
 
 <script>
@@ -692,211 +724,36 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const button = document.getElementById("voice-button");
-    const status = document.getElementById("voice-status");
-    const transcript = document.getElementById("voice-transcript");
-    const titre = document.getElementById("titre");
-    const date = document.getElementById("date");
-    const heure = document.getElementById("heure");
-    const commentaire = document.getElementById("description");
-    const stopButton = document.getElementById("voice-stop-button");
-    const rappelCheckbox = document.getElementById("rappel");
-    const rappelDelai = document.getElementById("rappel-delai-container");
-
-    if (rappelCheckbox && rappelDelai) {
-        const updateReminder = () => { rappelDelai.hidden = !rappelCheckbox.checked; };
-        rappelCheckbox.addEventListener("change", updateReminder);
-        updateReminder();
-    }
-    if (!button || !stopButton || !status || !transcript) return;
-    let mediaRecorder = null;
-    let mediaStream = null;
-    let audioChunks = [];
-    let phrases = [];
-
-    const normalize = value => (value || "").toLocaleLowerCase("fr-FR")
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/[’']/g, " ").replace(/[^a-z0-9\s:-]/g, " ")
-        .replace(/\s+/g, " ").trim();
-    const months = {janvier:"01",fevrier:"02",mars:"03",avril:"04",mai:"05",juin:"06",juillet:"07",aout:"08",septembre:"09",octobre:"10",novembre:"11",decembre:"12"};
-    const numberWords = {un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,huit:8,neuf:9,dix:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16,dixsept:17,dixhuit:18,dixneuf:19,vingt:20,trente:30};
-    function parseNumber(value) {
-        const t = normalize(value).replace(/\s/g, "");
-        if (/^\d{1,2}$/.test(t)) return Number(t);
-        if (numberWords[t]) return numberWords[t];
-        const compound = t.match(/^(vingt|trente)(etun|un|deux|trois|quatre|cinq|six|sept|huit|neuf)?$/);
-        if (compound) return (compound[1] === "vingt" ? 20 : 30) + (compound[2] ? (compound[2] === "etun" || compound[2] === "un" ? 1 : numberWords[compound[2]] || 0) : 0);
-        return null;
-    }
-    function parseDate(text) {
-        let t = text;
-        const weekdays = {dimanche:0,lundi:1,mardi:2,mercredi:3,jeudi:4,vendredi:5,samedi:6};
-        const weekdayMatch = t.match(/\b(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?:\s+(prochain|prochaine|qui vient))?\b/);
-        if (weekdayMatch) {
-            const now = new Date();
-            const targetDay = weekdays[weekdayMatch[1]];
-            let daysAhead = (targetDay - now.getDay() + 7) % 7;
-            if (daysAhead === 0 || weekdayMatch[2]) daysAhead = daysAhead === 0 ? 7 : daysAhead;
-            const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysAhead);
-            date.value = `${targetDate.getFullYear()}-${String(targetDate.getMonth()+1).padStart(2,"0")}-${String(targetDate.getDate()).padStart(2,"0")}`;
-            t = t.replace(weekdayMatch[0], " ");
-        }
-        const relative = t.match(/\b(apres demain|demain|aujourd hui)\b/);
-        if (relative) {
-            const d = new Date(); d.setDate(d.getDate() + (relative[1] === "demain" ? 1 : relative[1] === "apres demain" ? 2 : 0));
-            date.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-            t = t.replace(relative[0], " ");
-        }
-        const numeric = t.match(/\b(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?\b/);
-        if (numeric) {
-            const y = numeric[3] ? (numeric[3].length === 2 ? "20" + numeric[3] : numeric[3]) : String(new Date().getFullYear());
-            date.value = `${y}-${numeric[2].padStart(2,"0")}-${numeric[1].padStart(2,"0")}`;
-            return t.replace(numeric[0], " ");
-        }
-        const monthPattern = Object.keys(months).join("|");
-        const named = t.match(new RegExp("\\b(\\d{1,2}|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|dix sept|dix huit|dix neuf|vingt(?: et un| deux| trois| quatre| cinq| six| sept| huit| neuf)?|trente(?: et un)?)\\s+("+monthPattern+")(?:\\s+(\\d{4}))?\\b"));
-        if (named) {
-            const day = parseNumber(named[1]);
-            if (day && day <= 31) {
-                date.value = `${named[3] || new Date().getFullYear()}-${months[named[2]]}-${String(day).padStart(2,"0")}`;
-                t = t.replace(named[0], " ");
-            }
-        }
-        return t;
-    }
-    function parseTime(text) {
-        let t = text;
-        let m = t.match(/\b(\d{1,2})\s*(?:h|heure|heures)(?:\s*(\d{1,2}))?\b/);
-        if (!m) {
-            const words = t.match(/\b(un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt|vingt et un|vingt deux|vingt trois)\s+heures?\b/);
-            if (words) m = [words[0], String(parseNumber(words[1])), "0"];
-        }
-        if (!m) m = t.match(/\b(\d{1,2}):(\d{2})\b/);
-        if (m) {
-            const hh = Number(m[1]), mm = Number(m[2] || 0);
-            if (hh <= 23 && mm <= 59) heure.value = `${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
-            t = t.replace(m[0], " ");
-        }
-        return t;
-    }
-    function parseRecipients(text) {
-        const labels = [...document.querySelectorAll('input[name="destinataire_ids"]')].map(input => ({input, label:input.closest("label"), name:normalize((input.closest("label")?.dataset.destinataireNom || input.closest("label")?.innerText || "").replace(/\(moi\)/g,""))})).filter(x => x.name);
-        const normalized = normalize(text);
-        const found = labels.filter(x => new RegExp("(^| )" + x.name.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + "( |$)").test(normalized));
-        if (found.length) {
-            labels.forEach(x => x.input.checked = false);
-            found.forEach(x => x.input.checked = true);
-        }
-        return found.length;
-    }
-    function parseAgendaType(text) {
-        const t = normalize(text);
-        const select = document.getElementById("type_agenda");
-        if (select && /\bagenda pro\b|\ben pro\b/.test(t)) select.value = "pro";
-        if (select && /\bagenda perso\b|\ben perso\b/.test(t)) select.value = "perso";
-    }
-    function parseComments(text) {
-        const patterns = [/(?:commentaires?|description|note|precisions?)\s*(?:[:,-]|sont|:)?\s*(.+)$/i, /(?:ne pas oublier|pense a|penser a|n oublie pas)\s+(.+)$/i];
-        for (const pattern of patterns) {
-            const m = text.match(pattern);
-            if (m && m[1]) { commentaire.value = m[1].trim().replace(/[.!?]+$/, ""); return text.replace(m[0], " "); }
-        }
-        return text;
-    }
-    function parseTitle(text) {
-        let t = normalize(text);
-        t = t.replace(/(?:dans )?(?:les )?agendas? (?:de|du|des) .+?(?=\s+(?:le|pour|a|chez|rendez|rdv|demain|apres demain|aujourd hui|\d|$))/g, " ");
-        t = t.replace(/\b(?:mets?|mettre|ajoute|ajouter|envoie|envoyer|planifie|planifier|cree|creer|inscris|inscrire|dans|agenda|agendas|de|du|des|pour|moi|mon|ma|mes|le|la|les|un|une|a|au|aux|rendez vous|rdv|s il te plait|chez|demain|apres demain|aujourd hui|agenda pro|agenda perso)\b/g, " ");
-        t = t.replace(/\s+/g," ").trim();
-        return t.replace(/^(?:un|une)\s+/, "").trim();
-    }
-    function fillForm() {
-        const full = normalize(phrases.join(" "));
-        let remaining = parseComments(full);
-        const recipientCount = parseRecipients(remaining);
-        parseAgendaType(remaining);
-        remaining = parseDate(remaining);
-        remaining = parseTime(remaining);
-        const extracted = parseTitle(remaining);
-        if (extracted && titre) {
-            // Conserve le titre existant quand la nouvelle dictée ne contient
-            // qu'une date, une heure ou des commentaires.
-            const onlyMeta = /^(?:le |a |pour |commentaire)/.test(extracted);
-            if (!onlyMeta && (!titre.value.trim() || extracted.length > titre.value.trim().length)) {
-                titre.value = extracted.charAt(0).toLocaleUpperCase("fr-FR") + extracted.slice(1);
-            }
-        }
-        const checked = document.querySelectorAll('input[name="destinataire_ids"]:checked').length;
-        const missing = [];
-        if (!titre.value.trim()) missing.push("titre");
-        if (!date.value) missing.push("date");
-        if (!checked) missing.push("agenda destinataire");
-        status.textContent = missing.length ? "J'ai rempli les informations reconnues. Il manque : " + missing.join(", ") + ". Vérifiez le formulaire." : "Formulaire rempli. Vérifiez les informations puis cliquez sur « Ajouter l'événement ».";
-    }
-    button.addEventListener("click", async function () {
-        if (button.disabled || mediaRecorder) return;
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-            status.textContent = "L'enregistrement vocal nécessite Chrome ou Edge à jour et une connexion sécurisée HTTPS.";
-            return;
-        }
-        try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioChunks = [];
-            const preferredType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-                ? "audio/webm;codecs=opus" : "audio/webm";
-            mediaRecorder = new MediaRecorder(mediaStream, { mimeType: preferredType });
-            mediaRecorder.addEventListener("dataavailable", event => {
-                if (event.data && event.data.size) audioChunks.push(event.data);
-            });
-            mediaRecorder.addEventListener("stop", async function () {
-                const recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
-                mediaStream.getTracks().forEach(track => track.stop());
-                mediaStream = null;
-                mediaRecorder = null;
-                stopButton.hidden = true;
-                button.disabled = true;
-                status.textContent = "Transcription en cours avec Google…";
-                try {
-                    const formData = new FormData();
-                    const extension = recordedBlob.type.includes("mp4") ? "m4a" : recordedBlob.type.includes("ogg") ? "ogg" : "webm";
-                    formData.append("audio", recordedBlob, "dictee." + extension);
-                    const response = await fetch("{{ url_for('transcribe_voice_event') }}", {
-                        method: "POST", body: formData, credentials: "same-origin"
-                    });
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || "La transcription a échoué.");
-                    const phrase = (data.transcript || "").trim();
-                    if (!phrase) throw new Error("Aucune parole reconnue. Réessayez.");
-                    phrases = [phrase];
-                    transcript.textContent = "Vous avez dit : " + phrase;
-                    fillForm();
-                } catch (error) {
-                    status.textContent = error.message || "Impossible de transcrire l'enregistrement.";
-                } finally {
-                    button.disabled = false;
-                    audioChunks = [];
-                }
-            }, { once: true });
-            mediaRecorder.start();
-            button.disabled = true;
-            stopButton.hidden = false;
-            status.textContent = "Je vous écoute… Appuyez sur ARRÊTER lorsque vous avez terminé.";
-        } catch (error) {
-            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
-            mediaStream = null;
-            mediaRecorder = null;
-            button.disabled = false;
-            status.textContent = error.name === "NotAllowedError"
-                ? "Autorisez l'accès au microphone dans votre navigateur."
-                : "Impossible d'activer le microphone. Vérifiez ses autorisations.";
-        }
-    });
-    stopButton.addEventListener("click", function () {
-        if (mediaRecorder && mediaRecorder.state === "recording") {
-            status.textContent = "Arrêt de l'enregistrement…";
-            mediaRecorder.stop();
-        }
-    });
+  const $ = id => document.getElementById(id);
+  const button=$("voice-button"), stopButton=$("voice-stop-button"), status=$("voice-status"), transcript=$("voice-transcript"), preview=$("voice-preview");
+  if (!button || !stopButton || !status || !preview) return;
+  let recorder=null, stream=null, chunks=[], parsedRecipients=[];
+  const normalize=s=>(s||"").toLocaleLowerCase("fr-FR").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[’']/g," ").replace(/[^a-z0-9\s:/.\-]/g," ").replace(/\s+/g," ").trim();
+  const months={janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12};
+  function parseDate(t){let date="";let m=t.match(/\b(apres demain|demain|aujourd hui)\b/);if(m){let d=new Date();d.setDate(d.getDate()+(m[1]==="demain"?1:m[1]==="apres demain"?2:0));date=fmt(d);t=t.replace(m[0]," ");}
+    if(!date){m=t.match(/\b(\d{1,2})[/.\-](\d{1,2})(?:[/.\-](\d{2,4}))?\b/);if(m){let y=m[3]?(m[3].length===2?"20"+m[3]:m[3]):new Date().getFullYear();date=`${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;t=t.replace(m[0]," ");}}
+    if(!date){m=t.match(/\b(\d{1,2})\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)(?:\s+(\d{4}))?\b/);if(m){let y=Number(m[3]||new Date().getFullYear()),mo=months[m[2]],day=Number(m[1]);date=`${y}-${String(mo).padStart(2,"0")}-${String(day).padStart(2,"0")}`;t=t.replace(m[0]," ");}}
+    return {text:t,date};}
+  function fmt(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+  function parseTime(t){let m=t.match(/\b(\d{1,2})(?:\s*h\s*(\d{1,2})?|\s+heures?(?:\s*(\d{1,2}))?)\b/);if(!m)m=t.match(/\b(\d{1,2}):(\d{2})\b/);if(!m)return {text:t,time:""};let h=Number(m[1]),min=Number(m[2]||m[3]||0);return {text:t.replace(m[0]," "),time:h<24&&min<60?`${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`:""};}
+  function extract(text){let t=normalize(text),comment="";let cm=t.match(/(?:commentaire|commentaires|note|ne pas oublier|penser a|pense a)\s*(?:[:,-])?\s*(.+)$/);if(cm){comment=cm[1].trim();t=t.replace(cm[0]," ");}
+    const candidates=[...document.querySelectorAll('input[name="destinataire_ids"]')].map(i=>({id:i.value,name:normalize(i.closest("label")?.dataset.destinataireNom||i.closest("label")?.innerText||"").replace(/\(moi\)/g,"")}));
+    parsedRecipients=candidates.filter(c=>c.name && t.includes(c.name));if(parsedRecipients.length){parsedRecipients.forEach(c=>{t=t.replace(c.name," ");});}else{parsedRecipients=candidates.filter(c=>document.querySelector(`input[name="destinataire_ids"][value="${CSS.escape(c.id)}"]`)?.checked);}
+    let agenda="perso";if(/agenda pro|en pro/.test(t))agenda="pro";t=t.replace(/agenda pro|agenda perso|en pro|en perso/g," ");
+    let d=parseDate(t);t=d.text;let tm=parseTime(t);t=tm.text;
+    t=t.replace(/\b(mets?|mettre|ajoute|ajouter|planifie|planifier|cree|creer|inscris|inscrire|dans|agenda|agendas|pour|moi|mon|ma|mes|le|la|les|un|une|a|au|aux|rendez vous|rdv|chez|demain|apres demain|aujourd hui)\b/g," ").replace(/\s+/g," ").trim();
+    t=t.replace(/^(de|du|des)\s+/,"");
+    return {title:t? t.charAt(0).toLocaleUpperCase("fr-FR")+t.slice(1):"",date:d.date,time:tm.time,comment,agenda};}
+  function showPreview(data){$("voice-title").value=data.title;$("voice-date").value=data.date;$("voice-time").value=data.time;$("voice-comment").value=data.comment;$("voice-agenda-label").textContent=data.agenda.toUpperCase();$("voice-submit-agenda").value=data.agenda;
+    const names=parsedRecipients.map(c=>c.name).filter(Boolean);$("voice-recipients").textContent=names.length?names.join(", "):"sélection par défaut";
+    preview.hidden=false;status.textContent="Récapitulatif prêt. Vérifiez ou corrigez les informations avant de confirmer.";}
+  button.addEventListener("click",async()=>{if(recorder)return;if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){status.textContent="Le microphone nécessite un navigateur récent et une connexion HTTPS.";return;}
+    try{stream=await navigator.mediaDevices.getUserMedia({audio:true});chunks=[];let type=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"audio/webm";recorder=new MediaRecorder(stream,{mimeType:type});recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data);};recorder.onstop=async()=>{let blob=new Blob(chunks,{type:recorder.mimeType||"audio/webm"});stream.getTracks().forEach(t=>t.stop());stream=null;recorder=null;stopButton.hidden=true;button.disabled=true;status.textContent="Transcription en cours…";try{let fd=new FormData();fd.append("audio",blob,"dictee.webm");let r=await fetch("{{ url_for('transcribe_voice_event') }}",{method:"POST",body:fd,credentials:"same-origin"});let data=await r.json();if(!r.ok)throw new Error(data.error||"Transcription impossible.");let phrase=(data.transcript||"").trim();if(!phrase)throw new Error("Aucune parole reconnue.");transcript.textContent="Vous avez dit : "+phrase;showPreview(extract(phrase));}catch(e){status.textContent=e.message||"Erreur de transcription.";}finally{button.disabled=false;chunks=[];}};recorder.start();button.disabled=true;stopButton.hidden=false;status.textContent="Je vous écoute… Appuyez sur ARRÊTER lorsque vous avez terminé.";
+    }catch(e){if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;recorder=null;button.disabled=false;status.textContent=e.name==="NotAllowedError"?"Autorisez l'accès au microphone.":"Impossible d'activer le microphone.";}});
+  stopButton.addEventListener("click",()=>{if(recorder?.state==="recording"){status.textContent="Arrêt de l'enregistrement…";recorder.stop();}});
+  $("voice-cancel").addEventListener("click",()=>{preview.hidden=true;transcript.textContent="";status.textContent="Dictée annulée. Le formulaire manuel reste indépendant.";});
+  $("voice-confirm").addEventListener("click",()=>{let title=$("voice-title").value.trim(),date=$("voice-date").value,recipients=parsedRecipients.map(c=>c.id);if(!title||!date){status.textContent="Complétez au minimum le titre et la date dans le récapitulatif.";return;}if(!recipients.length){recipients=[...document.querySelectorAll('input[name="destinataire_ids"]:checked')].map(i=>i.value);}if(!recipients.length){status.textContent="Aucun destinataire sélectionné. Vérifiez le formulaire manuel.";return;}
+    $("voice-submit-title").value=title;$("voice-submit-date").value=date;$("voice-submit-time").value=$("voice-time").value;$("voice-submit-comment").value=$("voice-comment").value;let form=$("voice-submit-form");form.querySelectorAll('input[name="destinataire_ids"]').forEach(x=>x.remove());recipients.forEach(id=>{let i=document.createElement("input");i.type="hidden";i.name="destinataire_ids";i.value=id;form.appendChild(i);});form.submit();});
 });
 </script>
 {% endblock %}
