@@ -1670,3 +1670,28 @@ html body .calendar-page:has(form[action*="add_event"]) form[action*="add_event"
         margin-bottom: 6px !important;
     }
 }
+
+/* PAGE AGENDAS — BOUTONS PERSO / PRO À LA DIMENSION DE LA NAVIGATION */
+@media (min-width: 769px) {
+    html body .calendar-page .calendar-switcher .agenda-tab {
+        flex: 0 0 168px !important;
+        width: 168px !important;
+        min-width: 168px !important;
+        max-width: 168px !important;
+        min-height: 36px !important;
+        height: 36px !important;
+        padding: 7px 10px !important;
+        font-size: 13px !important;
+        line-height: 1.2 !important;
+        box-sizing: border-box !important;
+    }
+}
+
+@media (max-width: 768px) {
+    html body .calendar-page .calendar-switcher .agenda-tab {
+        min-height: 34px !important;
+        height: auto !important;
+        padding: 7px 8px !important;
+        font-size: 12px !important;
+    }
+}
