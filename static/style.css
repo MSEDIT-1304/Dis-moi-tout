@@ -1857,3 +1857,20 @@ html body .calendar-page .calendar-view-card.pro-mode .agenda-date-heading {
 html body .site-header {
     background-color: #F8E7EF !important;
 }
+
+/* CORRECTION CIBLEE — PIED DE PAGE UNIQUEMENT */
+html body .site-footer {
+    background-color: #F8E7EF !important;
+    color: #244967 !important;
+}
+
+html body .site-footer p,
+html body .site-footer a,
+html body .site-footer span,
+html body .site-footer strong {
+    color: #244967 !important;
+}
+
+html body .site-footer a:hover {
+    color: #8B2457 !important;
+}
