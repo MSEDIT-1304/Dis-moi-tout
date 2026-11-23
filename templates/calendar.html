@@ -732,6 +732,166 @@ html body .calendar-page .agenda-no-events {
     html body .calendar-page .calendar-view-card { padding: 12px 9px !important; }
 }
 
+
+
+/* FINITION ÉLÉGANTE — AJUSTEMENTS DEMANDÉS (page agendas uniquement) */
+.calendar-page .calendar-switcher {
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin: 10px 0 15px !important;
+}
+.calendar-page .agenda-tab {
+    flex: 0 1 215px !important;
+    min-width: 0 !important;
+    min-height: 34px !important;
+    padding: 6px 13px !important;
+    border-width: 1px !important;
+    border-radius: 8px !important;
+    font-size: 13px !important;
+    letter-spacing: .2px !important;
+    box-shadow: 0 1px 4px rgba(36,73,103,.08) !important;
+}
+.calendar-page .agenda-tab.active {
+    outline: 1px solid #c5a15b !important;
+    outline-offset: 2px !important;
+}
+.calendar-page .calendar-toolbar {
+    position: relative !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    min-height: 42px !important;
+}
+.calendar-page .calendar-toolbar-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: 9px !important;
+    flex: 1 1 auto !important;
+}
+.calendar-page .calendar-toolbar h2 {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: max-content !important;
+    max-width: calc(100% - 260px) !important;
+    margin: 0 !important;
+    text-align: center !important;
+    font-size: 21px !important;
+    line-height: 1.2 !important;
+    pointer-events: none;
+}
+.calendar-page .view-picker {
+    position: relative !important;
+    z-index: 1 !important;
+    flex: 0 0 auto !important;
+}
+.calendar-page .calendar-inline-add {
+    max-width: 900px !important;
+    margin: 0 auto 16px !important;
+    padding: 15px 18px !important;
+    border-radius: 13px !important;
+}
+.calendar-page .calendar-inline-add-header {
+    margin-bottom: 7px !important;
+}
+.calendar-page .calendar-inline-add-header h2 {
+    margin: 0 !important;
+    font-size: 21px !important;
+    letter-spacing: .1px;
+}
+.calendar-page .calendar-inline-add .voice-command {
+    padding: 8px 11px !important;
+    margin: 6px 0 9px !important;
+    border: 1px solid rgba(36,73,103,.10);
+}
+.calendar-page .calendar-inline-add form#calendar-add-event-form {
+    padding: 12px 14px !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+}
+.calendar-page .calendar-inline-add .calendar-form-grid {
+    gap: 7px 13px !important;
+    margin: 8px 0 !important;
+}
+.calendar-page .calendar-inline-add .calendar-form-grid label,
+.calendar-page .calendar-inline-add .calendar-description label {
+    margin-bottom: 3px !important;
+    font-size: 13px !important;
+}
+.calendar-page .calendar-inline-add .calendar-form-grid input,
+.calendar-page .calendar-inline-add .calendar-form-grid select,
+.calendar-page .calendar-inline-add .calendar-description textarea,
+.calendar-page .calendar-inline-add #rappel-delai_minutes {
+    padding: 7px 9px !important;
+    margin: 0 0 5px !important;
+    min-height: 34px !important;
+    border-radius: 6px !important;
+}
+.calendar-page .calendar-inline-add .calendar-description textarea {
+    min-height: 44px !important;
+    height: 44px !important;
+}
+.calendar-page .calendar-inline-add .destinataires-list {
+    padding: 6px 9px !important;
+    gap: 5px 11px !important;
+}
+.calendar-page .calendar-inline-add .calendar-checkbox,
+.calendar-page .calendar-inline-add .destinataire-option {
+    margin: 3px 0 !important;
+}
+.calendar-page .calendar-inline-add .calendar-reminder-block {
+    margin: 6px 0 !important;
+}
+.calendar-page .calendar-inline-add .calendar-button {
+    padding: 7px 12px !important;
+    font-size: 13px !important;
+    border-radius: 7px !important;
+}
+@media (max-width: 650px) {
+    .calendar-page .agenda-tab {
+        flex: 1 1 0 !important;
+        min-height: 32px !important;
+        padding: 6px 4px !important;
+        font-size: 11px !important;
+    }
+    .calendar-page .calendar-toolbar {
+        display: grid !important;
+        grid-template-columns: 36px minmax(0,1fr) 36px !important;
+        min-height: 0 !important;
+    }
+    .calendar-page .calendar-toolbar-left { display: contents !important; }
+    .calendar-page #calendar-prev { grid-column:1; grid-row:1; }
+    .calendar-page #calendar-today { grid-column:2; grid-row:1; justify-self:center; }
+    .calendar-page #calendar-next { grid-column:3; grid-row:1; }
+    .calendar-page .calendar-toolbar h2 {
+        position: static !important;
+        transform: none !important;
+        grid-column: 1 / -1 !important;
+        grid-row: 2 !important;
+        justify-self: center !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        text-align: center !important;
+        font-size: 17px !important;
+        margin: 6px 0 3px !important;
+    }
+    .calendar-page .view-picker {
+        grid-column: 1 / -1 !important;
+        grid-row: 3 !important;
+        justify-self: center !important;
+        flex-direction: row !important;
+        margin: 2px 0 4px !important;
+    }
+    .calendar-page .calendar-inline-add {
+        padding: 10px 11px !important;
+    }
+    .calendar-page .calendar-inline-add form#calendar-add-event-form {
+        padding: 9px 10px !important;
+    }
+}
+
 </style>
 
 <script>
