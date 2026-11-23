@@ -122,7 +122,7 @@
         <div class="calendar-agenda-list" id="calendar-agenda-list" aria-live="polite"></div>
         <p class="calendar-legend">
             <span><i class="legend-dot" style="background:#4f8fc9"></i> Bleu</span>
-            <span><i class="legend-dot" style="background:#d94f9b"></i> Fuchsia</span>
+            <span><i class="legend-dot" style="background:#A52D68"></i> Fuchsia</span>
             <span><i class="legend-dot" style="background:#54a66b"></i> Vert</span>
             <span><i class="legend-dot" style="background:#e2a43b"></i> Doré</span>
         </p>
@@ -160,7 +160,7 @@
               <input type="hidden" name="heure" id="voice-submit-time">
               <input type="hidden" name="description" id="voice-submit-comment">
               <input type="hidden" name="type_agenda" id="voice-submit-agenda" value="perso">
-              <input type="hidden" name="couleur_evenement" value="#d94f9b">
+              <input type="hidden" name="couleur_evenement" value="#A52D68">
               <input type="hidden" name="rappel" value="">
             </form>
           </div>
@@ -206,7 +206,7 @@
                     <input type="date" id="recurrence_end" name="recurrence_end">
                 </div>
                 <div><label for="type_agenda">Agenda de destination</label><select id="type_agenda" name="type_agenda" required><option value="perso">PERSO</option>{% if afficher_pro %}<option value="pro">PRO</option>{% endif %}</select></div>
-                <div><label for="couleur_evenement">Couleur de l'événement</label><select id="couleur_evenement" name="couleur_evenement"><option value="#4f8fc9">Bleu</option><option value="#d94f9b">Fuchsia</option><option value="#54a66b">Vert</option><option value="#e2a43b">Doré</option></select></div>
+                <div><label for="couleur_evenement">Couleur de l'événement</label><select id="couleur_evenement" name="couleur_evenement"><option value="#4f8fc9">Bleu</option><option value="#A52D68">Fuchsia</option><option value="#54a66b">Vert</option><option value="#e2a43b">Doré</option></select></div>
             </div>
             <div class="calendar-description"><label for="description">Commentaires</label><textarea id="description" name="description" rows="3"></textarea></div>
             <div class="calendar-reminder-block">
@@ -272,7 +272,7 @@
         <label for="event-edit-color">Couleur de l'événement</label>
         <select id="event-edit-color" name="couleur_evenement">
             <option value="#4f8fc9">Bleu</option>
-            <option value="#d94f9b">Fuchsia</option>
+            <option value="#A52D68">Fuchsia</option>
             <option value="#54a66b">Vert</option>
             <option value="#e2a43b">Doré</option>
         </select>
@@ -304,10 +304,10 @@
 .calendar-button:hover { background:#dfbd78; }
 .calendar-small { padding:8px 13px; }
 .calendar-switcher { display:flex; gap:12px; margin:0 0 18px; }
-.agenda-tab { flex:1; border:2px solid #d94f9b; border-radius:10px; padding:15px; font-weight:bold; cursor:pointer; background:#d94f9b; color:white; }
-.agenda-tab[data-agenda="pro"] { background:#4f8fc9; border-color:#d94f9b; }
+.agenda-tab { flex:1; border:2px solid #A52D68; border-radius:10px; padding:15px; font-weight:bold; cursor:pointer; background:#A52D68; color:white; }
+.agenda-tab[data-agenda="pro"] { background:#4f8fc9; border-color:#A52D68; }
 .agenda-tab.active { outline:3px solid #c5a15b; outline-offset:2px; }
-.calendar-view-card { background:#d94f9b; }
+.calendar-view-card { background:#A52D68; }
 .calendar-view-card.pro-mode { background:#4f8fc9; }
 
 .calendar-agenda-list { display:flex; flex-direction:column; gap:9px; }
@@ -650,7 +650,7 @@ html body .calendar-page .agenda-tab {
     flex: 0 1 245px !important;
     min-height: 39px !important;
     padding: 8px 18px !important;
-    border: 1px solid #d94f9b !important;
+    border: 1px solid #A52D68 !important;
     border-radius: 9px !important;
     box-shadow: 0 2px 6px rgba(36,73,103,.08);
     font-size: 14px !important;
@@ -661,7 +661,7 @@ html body .calendar-page .agenda-tab {
 html body .calendar-page .agenda-tab[data-agenda="perso"] {
     background: #f8e3ed !important;
     color: #9f2f68 !important;
-    border-color: #d94f9b !important;
+    border-color: #A52D68 !important;
 }
 html body .calendar-page .agenda-tab[data-agenda="pro"] {
     background: #e5f0fa !important;
@@ -669,7 +669,7 @@ html body .calendar-page .agenda-tab[data-agenda="pro"] {
     border-color: #7eadd5 !important;
 }
 html body .calendar-page .agenda-tab[data-agenda="perso"].active {
-    background: #d94f9b !important;
+    background: #A52D68 !important;
     color: #ffffff !important;
     box-shadow: 0 3px 9px rgba(217,79,155,.22);
 }
@@ -941,10 +941,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const events = [
         {% for evenement in evenements_perso %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#A52D68','#54a66b','#e2a43b'] else '#A52D68')|tojson }}},
         {% endfor %}
         {% for evenement in evenements_pro %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#A52D68','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
         {% endfor %}
     ];
     const agendaList = document.getElementById("calendar-agenda-list");
@@ -1025,7 +1025,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const color = document.createElement("span");
                 color.className = "agenda-event-color";
                 // La couleur choisie pour le rendez-vous s'applique à toute sa bande.
-                const eventColor = ["#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"].includes((e.color || "").toLowerCase())
+                const eventColor = ["#4f8fc9", "#A52D68", "#54a66b", "#e2a43b"].includes((e.color || "").toLowerCase())
                     ? e.color.toLowerCase()
                     : "#4f8fc9";
                 row.style.setProperty("background-color", eventColor, "important");
