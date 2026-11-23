@@ -192,6 +192,22 @@
                 </div>
                 <div><label for="date">Date</label><input type="date" id="date" name="date" required></div>
                 <div><label for="heure">Heure</label><input type="time" id="heure" name="heure"></div>
+                <div class="calendar-recurrence-field">
+                    <label for="recurrence_rule">Répétition</label>
+                    <select id="recurrence_rule" name="recurrence_rule">
+                        <option value="none">1 seule fois</option>
+                        <option value="weekly">Toutes les semaines</option>
+                        <option value="fortnightly">Tous les 15 jours</option>
+                        <option value="monthly">Mensuel</option>
+                        <option value="quarterly">Trimestriel</option>
+                        <option value="six_monthly">Tous les 6 mois</option>
+                        <option value="yearly">Tous les ans</option>
+                    </select>
+                </div>
+                <div id="recurrence-end-container" hidden>
+                    <label for="recurrence_end">Date de fin (facultative)</label>
+                    <input type="date" id="recurrence_end" name="recurrence_end">
+                </div>
                 <div><label for="type_agenda">Agenda de destination</label><select id="type_agenda" name="type_agenda" required><option value="perso">PERSO</option>{% if afficher_pro %}<option value="pro">PRO</option>{% endif %}</select></div>
                 <div><label for="couleur_evenement">Couleur de l'événement</label><select id="couleur_evenement" name="couleur_evenement"><option value="#4f8fc9">Bleu</option><option value="#d94f9b">Fuchsia</option><option value="#54a66b">Vert</option><option value="#e2a43b">Doré</option></select></div>
             </div>
@@ -256,13 +272,23 @@
         <input id="event-edit-date" name="date" type="date" required>
         <label for="event-edit-time">Heure</label>
         <input id="event-edit-time" name="heure" type="time">
+        <div id="event-series-scope-container" hidden>
+            <label for="event-series-scope">Appliquer la modification à</label>
+            <select id="event-series-scope" name="series_scope">
+                <option value="single">Cette occurrence uniquement</option>
+                <option value="all">Toute la série</option>
+                <option value="future">Cette occurrence et les suivantes</option>
+            </select>
+        </div>
         <div class="calendar-event-dialog-actions">
             <button type="submit" class="calendar-button">Enregistrer</button>
             <button type="button" id="calendar-event-delete" class="calendar-delete">Supprimer</button>
             <button type="button" id="calendar-event-close" class="calendar-button">Fermer</button>
         </div>
     </form>
-    <form id="calendar-delete-form" method="POST" hidden></form>
+    <form id="calendar-delete-form" method="POST" hidden>
+        <input type="hidden" name="series_scope" id="delete-series-scope" value="single">
+    </form>
 </dialog>
 
 <style>
@@ -294,6 +320,8 @@
 .calendar-legend { display:flex; gap:16px; flex-wrap:wrap; margin:14px 0 0; }
 .calendar-legend span { display:flex; align-items:center; gap:6px; color:white; }
 .legend-dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+.calendar-recurrence-field select,#recurrence_end { width:100%; box-sizing:border-box; padding:9px 11px; border:1px solid #ccc; border-radius:6px; margin-bottom:6px; }
+#recurrence-end-container[hidden] { display:none !important; }
 .calendar-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:20px 0; }
 .calendar-form-grid label,.calendar-description label { display:block; margin-bottom:7px; }
 .calendar-form-grid input,.calendar-form-grid select,.calendar-description textarea,.event-actions input,.event-actions textarea,.event-actions select { width:100%; box-sizing:border-box; padding:11px; border:1px solid #ccc; border-radius:6px; margin-bottom:12px; }
@@ -603,10 +631,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const events = [
         {% for evenement in evenements_perso %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#d94f9b')|tojson }}},
         {% endfor %}
         {% for evenement in evenements_pro %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
         {% endfor %}
     ];
     const grid = document.getElementById("calendar-grid");
@@ -686,11 +714,25 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("event-edit-description").value = eventData.description || "";
         document.getElementById("event-edit-date").value = eventData.date || "";
         document.getElementById("event-edit-time").value = eventData.time || "";
+        const scopeBox = document.getElementById("event-series-scope-container");
+        scopeBox.hidden = !eventData.recurring;
+        document.getElementById("event-series-scope").value = "single";
+        document.getElementById("delete-series-scope").value = "single";
+        eventDialog.dataset.recurring = eventData.recurring ? "1" : "0";
         eventDialog.showModal();
     }
 
     deleteEventButton.addEventListener("click",()=>{
-        if (confirm("Supprimer cet événement de votre agenda ?")) deleteEventForm.submit();
+        const scope = eventDialog.dataset.recurring === "1"
+            ? document.getElementById("event-series-scope").value
+            : "single";
+        document.getElementById("delete-series-scope").value = scope;
+        const labels = {
+            single: "cette occurrence uniquement",
+            all: "toute la série",
+            future: "cette occurrence et les suivantes"
+        };
+        if (confirm("Supprimer " + labels[scope] + " ?")) deleteEventForm.submit();
     });
     document.getElementById("calendar-event-close").addEventListener("click",()=>eventDialog.close());
 
@@ -717,6 +759,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     if (openAddButton) openAddButton.addEventListener("click", () => showAddForm(ymd(new Date())));
     if (closeAddButton) closeAddButton.addEventListener("click", () => { inlineForm.hidden = true; });
+    const recurrenceSelect = document.getElementById("recurrence_rule");
+    const recurrenceEndContainer = document.getElementById("recurrence-end-container");
+    if (recurrenceSelect && recurrenceEndContainer) {
+        const syncRecurrenceEnd = () => { recurrenceEndContainer.hidden = recurrenceSelect.value === "none"; };
+        recurrenceSelect.addEventListener("change", syncRecurrenceEnd);
+        syncRecurrenceEnd();
+    }
     render();
 
 
