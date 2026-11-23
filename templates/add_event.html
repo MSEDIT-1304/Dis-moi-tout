@@ -81,6 +81,22 @@
                     <label for="heure">Heure</label>
                     <input type="time" id="heure" name="heure">
                 </div>
+                <div class="calendar-recurrence-field">
+                    <label for="recurrence_rule">Répétition</label>
+                    <select id="recurrence_rule" name="recurrence_rule">
+                        <option value="none">1 seule fois</option>
+                        <option value="weekly">Toutes les semaines</option>
+                        <option value="fortnightly">Tous les 15 jours</option>
+                        <option value="monthly">Mensuel</option>
+                        <option value="quarterly">Trimestriel</option>
+                        <option value="six_monthly">Tous les 6 mois</option>
+                        <option value="yearly">Tous les ans</option>
+                    </select>
+                </div>
+                <div id="recurrence-end-container" hidden>
+                    <label for="recurrence_end">Date de fin (facultative)</label>
+                    <input type="date" id="recurrence_end" name="recurrence_end">
+                </div>
                 <div>
                     <label for="type_agenda">Agenda de destination</label>
                     <select id="type_agenda" name="type_agenda" required>
@@ -156,6 +172,8 @@
 .destinataire-option { display:flex !important; align-items:center; gap:8px; margin:0; }
 .destinataire-option input { width:auto !important; margin:0 !important; }
 .destinataires-help { margin:8px 0 0; font-size:13px; opacity:.9; }
+.calendar-recurrence-field select,#recurrence_end { width:100%; box-sizing:border-box; padding:9px 11px; border:1px solid #ccc; border-radius:6px; margin-bottom:6px; }
+#recurrence-end-container[hidden] { display:none !important; }
 .calendar-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 16px; margin:12px 0; }
 .calendar-form-grid label,.calendar-description label { display:block; margin-bottom:7px; }
 .calendar-form-grid input,.calendar-form-grid select,.calendar-description textarea,.event-actions input,.event-actions textarea,.event-actions select { width:100%; box-sizing:border-box; padding:9px 11px; border:1px solid #ccc; border-radius:6px; margin-bottom:6px; }
@@ -284,6 +302,13 @@ html body .calendar-page:has(form[action*="add_event"]) form[action*="add_event"
 </style>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const recurrenceSelect = document.getElementById("recurrence_rule");
+  const recurrenceEndContainer = document.getElementById("recurrence-end-container");
+  if (recurrenceSelect && recurrenceEndContainer) {
+    const syncRecurrenceEnd = () => { recurrenceEndContainer.hidden = recurrenceSelect.value === "none"; };
+    recurrenceSelect.addEventListener("change", syncRecurrenceEnd);
+    syncRecurrenceEnd();
+  }
   const $ = id => document.getElementById(id);
   const button=$("voice-button"), stopButton=$("voice-stop-button"), status=$("voice-status"), transcript=$("voice-transcript"), preview=$("voice-preview");
   if (!button || !stopButton || !status || !preview) return;
