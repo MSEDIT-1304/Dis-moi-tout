@@ -3579,7 +3579,7 @@ def add_event():
     date = request.form.get("date", "").strip()
     heure = request.form.get("heure", "").strip()
     couleur = request.form.get("couleur_evenement", "#4f8fc9").strip()
-    if couleur not in {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}:
+    if couleur not in {"#4f8fc9", "#A52D68", "#54a66b", "#e2a43b"}:
         couleur = "#4f8fc9"
     if not titre or not date:
         flash("Veuillez saisir un titre et une date.")
@@ -3804,7 +3804,7 @@ def edit_event(event_id):
     date = request.form.get("date", "").strip()
     heure = request.form.get("heure", "").strip()
     couleur = request.form.get("couleur_evenement", evenement["calendrier"] or "#4f8fc9").strip()
-    couleurs_autorisees = {"#4f8fc9", "#d94f9b", "#54a66b", "#e2a43b"}
+    couleurs_autorisees = {"#4f8fc9", "#A52D68", "#54a66b", "#e2a43b"}
     if couleur not in couleurs_autorisees:
         couleur = evenement["calendrier"] if evenement["calendrier"] in couleurs_autorisees else "#4f8fc9"
 
