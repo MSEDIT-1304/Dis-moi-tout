@@ -119,10 +119,7 @@
                 </select>
             </label>
         </div>
-        <div class="calendar-weekdays" id="calendar-weekdays">
-            <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
-        </div>
-        <div class="calendar-grid" id="calendar-grid" aria-live="polite"></div>
+        <div class="calendar-agenda-list" id="calendar-agenda-list" aria-live="polite"></div>
         <p class="calendar-legend">
             <span><i class="legend-dot" style="background:#4f8fc9"></i> Bleu</span>
             <span><i class="legend-dot" style="background:#d94f9b"></i> Fuchsia</span>
@@ -305,6 +302,35 @@
 .agenda-tab.active { outline:3px solid #c5a15b; outline-offset:2px; }
 .calendar-view-card { background:#d94f9b; }
 .calendar-view-card.pro-mode { background:#4f8fc9; }
+
+.calendar-agenda-list { display:flex; flex-direction:column; gap:9px; }
+.agenda-date-group { margin:0; }
+.agenda-date-heading {
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    width:100%; border:0; border-radius:7px; padding:9px 13px;
+    background:#17324d; color:#fff; font-weight:bold; text-align:left;
+    cursor:pointer;
+}
+.agenda-date-heading:hover { background:#244b6d; }
+.agenda-date-events { display:flex; flex-direction:column; gap:7px; padding:7px 0 3px; }
+.agenda-event-row {
+    display:flex; align-items:stretch; gap:0; width:100%; min-width:0;
+    padding:0; border:1px solid rgba(23,50,77,.18); border-radius:8px;
+    background:rgba(255,255,255,.96); color:#17324d; text-align:left;
+    overflow:hidden; cursor:pointer;
+}
+.agenda-event-row:focus { outline:2px solid #c5a15b; outline-offset:2px; }
+.agenda-event-color { flex:0 0 5px; width:5px; }
+.agenda-event-time {
+    flex:0 0 82px; display:flex; align-items:center; justify-content:center;
+    padding:12px 8px; color:#17324d; font-weight:bold; border-right:1px solid #d8e0e8;
+}
+.agenda-event-content { min-width:0; flex:1; padding:10px 13px; }
+.agenda-event-title { display:block; font-weight:bold; color:#17324d; }
+.agenda-event-description { display:block; margin-top:3px; color:#52677a; font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.agenda-no-events { padding:18px 12px; border-radius:8px; background:rgba(255,255,255,.92); color:#17324d; text-align:center; }
+.agenda-date-add { font-size:12px; font-weight:normal; opacity:.85; white-space:nowrap; }
+
 .calendar-toolbar,.calendar-toolbar-left { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .calendar-toolbar { justify-content:space-between; margin-bottom:18px; }
 .calendar-toolbar h2 { margin:0; }
@@ -401,6 +427,12 @@
 }
 
 @media(max-width:650px) {
+ .agenda-event-time { flex-basis:62px; padding:10px 5px; font-size:12px; }
+ .agenda-event-content { padding:9px 10px; }
+ .agenda-event-title { font-size:13px; }
+ .agenda-event-description { font-size:12px; }
+ .agenda-date-heading { padding:9px 10px; font-size:12px; }
+ .agenda-date-add { font-size:10px; }
  .calendar-page { padding:15px 10px; }
  .calendar-card,.calendar-view-card { padding:18px; }
  .calendar-form-grid { grid-template-columns:1fr; }
@@ -637,7 +669,7 @@ document.addEventListener("DOMContentLoaded", function () {
         {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (evenement['calendrier'] if evenement['calendrier'] in ['#4f8fc9','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
         {% endfor %}
     ];
-    const grid = document.getElementById("calendar-grid");
+    const agendaList = document.getElementById("calendar-agenda-list");
     const title = document.getElementById("calendar-period-title");
     const viewSelect = document.getElementById("calendar-view");
     const tabs = document.querySelectorAll(".agenda-tab");
@@ -649,52 +681,104 @@ document.addEventListener("DOMContentLoaded", function () {
     function ymd(d) {
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
     }
+    function parseYmd(value) {
+        const parts = (value || "").split("-").map(Number);
+        return new Date(parts[0], (parts[1] || 1)-1, parts[2] || 1, 12);
+    }
     function monday(d) {
-        const x = new Date(d); x.setDate(x.getDate() - ((x.getDay()+6)%7)); x.setHours(12,0,0,0); return x;
+        const x = new Date(d);
+        x.setDate(x.getDate() - ((x.getDay()+6)%7));
+        x.setHours(12,0,0,0);
+        return x;
+    }
+    function addDays(d, amount) {
+        const result = new Date(d);
+        result.setDate(result.getDate()+amount);
+        return result;
     }
     function render() {
         const mode = viewSelect.value;
-        let start, count, heading;
+        let start, end, heading;
         if (mode === "month") {
-            start = monday(new Date(current.getFullYear(), current.getMonth(), 1));
-            const end = new Date(current.getFullYear(), current.getMonth()+1, 0);
-            count = Math.ceil(((end - start)/86400000 + 1)/7)*7;
+            start = new Date(current.getFullYear(), current.getMonth(), 1, 12);
+            end = new Date(current.getFullYear(), current.getMonth()+1, 0, 12);
             heading = current.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
         } else if (mode === "week") {
-            start = monday(current); count = 7;
-            heading = `Semaine du ${start.toLocaleDateString("fr-FR")}`;
+            start = monday(current);
+            end = addDays(start, 6);
+            heading = `Semaine du ${start.toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"})}`;
         } else {
-            start = new Date(current); count = 1;
+            start = new Date(current);
+            end = new Date(current);
             heading = current.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
         }
-        title.textContent = heading.charAt(0).toUpperCase()+heading.slice(1);
-        document.getElementById("calendar-weekdays").style.display = mode === "day" ? "none" : "grid";
-        grid.style.gridTemplateColumns = mode === "day" ? "1fr" : "repeat(7,minmax(0,1fr))";
-        grid.innerHTML = "";
-        for (let i=0;i<count;i++) {
-            const day = new Date(start); day.setDate(start.getDate()+i);
-            const key = ymd(day);
-            const cell = document.createElement("div");
-            cell.className = "calendar-day";
-            if (mode === "month" && day.getMonth() !== current.getMonth()) cell.classList.add("outside");
-            if (key === ymd(new Date())) cell.classList.add("today");
-            const number = document.createElement("div"); number.className="calendar-day-number"; number.textContent=day.getDate(); cell.appendChild(number);
-            cell.tabIndex = 0;
-            cell.setAttribute("role", "button");
-            cell.setAttribute("aria-label", "Ajouter un événement le " + day.toLocaleDateString("fr-FR"));
-            cell.addEventListener("click", (event) => { if (event.target === cell || event.target === number) showAddForm(key); });
-            cell.addEventListener("keydown", (event) => { if ((event.key === "Enter" || event.key === " ") && event.target === cell) { event.preventDefault(); showAddForm(key); } });
-            events.filter(e=>e.agenda===activeAgenda && e.date===key).sort((a,b)=>(a.time||"").localeCompare(b.time||"")).forEach(e=>{
-                const item=document.createElement("button");
-                item.type="button"; item.className="calendar-day-event"; item.style.background=e.color;
-                item.textContent=(e.time ? e.time+" " : "")+e.title; item.title=e.title;
-                item.addEventListener("click",()=>openEvent(e));
-                cell.appendChild(item);
+        title.textContent = heading.charAt(0).toLocaleUpperCase("fr-FR")+heading.slice(1);
+        agendaList.innerHTML = "";
+
+        const visibleEvents = events
+            .filter(e => e.agenda === activeAgenda && e.date >= ymd(start) && e.date <= ymd(end))
+            .sort((a,b) => a.date.localeCompare(b.date) || (a.time||"").localeCompare(b.time||"") || String(a.id).localeCompare(String(b.id)));
+
+        const byDate = new Map();
+        visibleEvents.forEach(e => {
+            if (!byDate.has(e.date)) byDate.set(e.date, []);
+            byDate.get(e.date).push(e);
+        });
+
+        [...byDate.keys()].sort().forEach(key => {
+            const day = parseYmd(key);
+            const group = document.createElement("section");
+            group.className = "agenda-date-group";
+
+            const dateButton = document.createElement("button");
+            dateButton.type = "button";
+            dateButton.className = "agenda-date-heading";
+            dateButton.innerHTML = `<span>${day.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toLocaleUpperCase("fr-FR")}</span><span class="agenda-date-add">+ Ajouter</span>`;
+            dateButton.addEventListener("click", () => showAddForm(key));
+            group.appendChild(dateButton);
+
+            const eventContainer = document.createElement("div");
+            eventContainer.className = "agenda-date-events";
+            (byDate.get(key) || []).forEach(e => {
+                const row = document.createElement("button");
+                row.type = "button";
+                row.className = "agenda-event-row";
+                row.setAttribute("aria-label", `${e.time ? e.time + " " : ""}${e.title}`);
+                const color = document.createElement("span");
+                color.className = "agenda-event-color";
+                color.style.background = e.color;
+                const time = document.createElement("span");
+                time.className = "agenda-event-time";
+                time.textContent = e.time || "—";
+                const content = document.createElement("span");
+                content.className = "agenda-event-content";
+                const eventTitle = document.createElement("span");
+                eventTitle.className = "agenda-event-title";
+                eventTitle.textContent = e.title || "Événement";
+                content.appendChild(eventTitle);
+                if (e.description) {
+                    const description = document.createElement("span");
+                    description.className = "agenda-event-description";
+                    description.textContent = e.description;
+                    content.appendChild(description);
+                }
+                row.append(color, time, content);
+                row.addEventListener("click", () => openEvent(e));
+                eventContainer.appendChild(row);
             });
-            grid.appendChild(cell);
+            group.appendChild(eventContainer);
+            agendaList.appendChild(group);
+        });
+
+        if (!visibleEvents.length) {
+            const empty = document.createElement("div");
+            empty.className = "agenda-no-events";
+            empty.textContent = "Aucun événement enregistré pour cette période. Cliquez sur une date pour en ajouter un.";
+            agendaList.appendChild(empty);
         }
+
         viewCard.classList.toggle("pro-mode",activeAgenda==="pro");
-        document.querySelectorAll(".agenda-tab").forEach(tab=>tab.classList.toggle("active",tab.dataset.agenda===activeAgenda));
+        tabs.forEach(tab=>tab.classList.toggle("active",tab.dataset.agenda===activeAgenda));
         const agendaSelect=document.getElementById("type_agenda");
         if (agendaSelect) agendaSelect.value=activeAgenda;
     }
@@ -766,9 +850,6 @@ document.addEventListener("DOMContentLoaded", function () {
         recurrenceSelect.addEventListener("change", syncRecurrenceEnd);
         syncRecurrenceEnd();
     }
-    render();
-
-
 });
 </script>
 <script>
