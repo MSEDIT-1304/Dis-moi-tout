@@ -269,6 +269,13 @@
         <input id="event-edit-date" name="date" type="date" required>
         <label for="event-edit-time">Heure</label>
         <input id="event-edit-time" name="heure" type="time">
+        <label for="event-edit-color">Couleur de l'événement</label>
+        <select id="event-edit-color" name="couleur_evenement">
+            <option value="#4f8fc9">Bleu</option>
+            <option value="#d94f9b">Fuchsia</option>
+            <option value="#54a66b">Vert</option>
+            <option value="#e2a43b">Doré</option>
+        </select>
         <div id="event-series-scope-container" hidden>
             <label for="event-series-scope">Appliquer la modification à</label>
             <select id="event-series-scope" name="series_scope">
@@ -1081,6 +1088,7 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("event-edit-description").value = eventData.description || "";
         document.getElementById("event-edit-date").value = eventData.date || "";
         document.getElementById("event-edit-time").value = eventData.time || "";
+        document.getElementById("event-edit-color").value = eventData.color || "#4f8fc9";
         const scopeBox = document.getElementById("event-series-scope-container");
         scopeBox.hidden = !eventData.recurring;
         document.getElementById("event-series-scope").value = "single";
