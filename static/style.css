@@ -1654,3 +1654,19 @@ html body .calendar-page:has(form[action*="add_event"]) form[action*="add_event"
     html body .calendar-page:has(form[action*="add_event"]) form[action*="add_event"] { padding: 5px 6px !important; }
     html body .calendar-page:has(form[action*="add_event"]) .calendar-form-grid { gap: 3px !important; }
 }
+
+
+/* PAGE AGENDAS — respiration entre le bandeau rose et la navigation */
+@media (min-width: 769px) {
+    body:has(.calendar-page) .navigation {
+        margin-top: 14px !important;
+        margin-bottom: 8px !important;
+        row-gap: 10px !important;
+    }
+}
+@media (max-width: 768px) {
+    body:has(.calendar-page) .navigation {
+        margin-top: 9px !important;
+        margin-bottom: 6px !important;
+    }
+}
