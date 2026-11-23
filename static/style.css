@@ -1874,3 +1874,20 @@ html body .site-footer strong {
 html body .site-footer a:hover {
     color: #8B2457 !important;
 }
+
+/* CORRECTIONS CIBLEES — demande du 23/11/2026 */
+html body .calendar-page .agenda-date-heading {
+    background: #c9def0 !important;
+    border-color: rgba(79,143,201,.28) !important;
+    color: #244967 !important;
+}
+html body .calendar-page .calendar-weekdays span {
+    background: #c9def0 !important;
+    color: #244967 !important;
+    border-radius: 7px;
+}
+.legal-page-return {
+    display: flex;
+    justify-content: center;
+    margin-top: 28px;
+}
