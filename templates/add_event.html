@@ -299,6 +299,70 @@ html body .calendar-page:has(form[action*="add_event"]) form[action*="add_event"
 .voice-preview button { margin:8px 6px 0 0; padding:8px 12px; font-size:14px; }
 .voice-transcript { font-size:13px; }
 
+
+
+/* FORMULAIRE AJOUT ÉVÉNEMENT — présentation plus fine */
+.calendar-page .calendar-card {
+    max-width: 900px;
+    margin: 0 auto 14px !important;
+    padding: 15px 18px !important;
+    border-radius: 13px !important;
+}
+.calendar-page .calendar-card > h2 {
+    margin: 0 0 7px !important;
+    font-size: 21px !important;
+}
+.calendar-page .calendar-header {
+    margin-bottom: 10px !important;
+}
+.calendar-page .calendar-header h1 {
+    font-size: 26px !important;
+}
+.calendar-page .calendar-form-grid {
+    gap: 7px 13px !important;
+    margin: 8px 0 !important;
+}
+.calendar-page .calendar-form-grid label,
+.calendar-page .calendar-description label {
+    margin-bottom: 3px !important;
+    font-size: 13px !important;
+}
+.calendar-page .calendar-form-grid input,
+.calendar-page .calendar-form-grid select,
+.calendar-page .calendar-description textarea {
+    padding: 7px 9px !important;
+    margin-bottom: 5px !important;
+    min-height: 34px !important;
+    border-radius: 6px !important;
+}
+.calendar-page .calendar-description textarea {
+    min-height: 44px !important;
+    height: 44px !important;
+}
+.calendar-page .destinataires-list {
+    padding: 6px 9px !important;
+    gap: 5px 11px !important;
+}
+.calendar-page .destinataire-option,
+.calendar-page .calendar-checkbox {
+    margin: 4px 0 !important;
+}
+.calendar-page .voice-command {
+    padding: 8px 11px !important;
+    margin: 6px 0 9px !important;
+}
+.calendar-page .voice-command h3 { margin: 1px 0 4px !important; }
+.calendar-page .voice-command p { margin: 3px 0 !important; }
+.calendar-page .calendar-button {
+    padding: 7px 12px !important;
+    font-size: 13px !important;
+    border-radius: 7px !important;
+}
+@media (max-width: 650px) {
+    .calendar-page .calendar-card { padding: 10px 11px !important; }
+    .calendar-page .calendar-form-grid { gap: 4px !important; }
+}
+
 </style>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -342,4 +406,3 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 {% endblock %}
-
