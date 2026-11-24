@@ -2066,25 +2066,28 @@ def create_member(
 # ==========================================================
 
 def read_member_photo_upload(upload):
-    """Retourne (octets, mime) pour une image sûre et légère, ou (None, None)."""
+    """Lit une image en identifiant son vrai format, même si le navigateur
+    transmet un type MIME générique. Retourne (octets, mime) ou (None, None)."""
     if not upload or not upload.filename:
         return None, None
-    mime = (upload.mimetype or "").lower()
-    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-    if mime not in allowed:
-        raise ValueError("Choisissez une image JPG, PNG, WEBP ou GIF.")
+
     data = upload.read(5 * 1024 * 1024 + 1)
     if not data or len(data) > 5 * 1024 * 1024:
         raise ValueError("La photo doit faire 5 Mo maximum.")
-    # Vérification légère des signatures, sans dépendance supplémentaire.
-    signatures = {
-        "image/jpeg": data.startswith(b"\xff\xd8\xff"),
-        "image/png": data.startswith(b"\x89PNG\r\n\x1a\n"),
-        "image/gif": data.startswith((b"GIF87a", b"GIF89a")),
-        "image/webp": len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
-    }
-    if not signatures.get(mime, False):
-        raise ValueError("Le fichier choisi n'est pas une image valide.")
+
+    # Détection par signature du fichier : plus fiable que upload.mimetype,
+    # qui peut être vide ou application/octet-stream selon le navigateur.
+    if data.startswith(b"\\xff\\xd8\\xff"):
+        mime = "image/jpeg"
+    elif data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        mime = "image/png"
+    elif data.startswith((b"GIF87a", b"GIF89a")):
+        mime = "image/gif"
+    elif len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        mime = "image/webp"
+    else:
+        raise ValueError("Le fichier choisi n'est pas une image JPG, PNG, WEBP ou GIF valide.")
+
     return data, mime
 
 
@@ -2097,6 +2100,10 @@ def membre_photo(membre_id):
         famille_id = get_family_id(session.get("admin_id"))
     else:
         _, _, famille_id = identity
+
+    if famille_id is None:
+        return "Accès refusé", 403
+
     conn = get_connection()
     row = conn.execute(
         "SELECT photo_data, photo_mime FROM membres WHERE id=? AND famille_id=?",
@@ -2105,19 +2112,49 @@ def membre_photo(membre_id):
     conn.close()
     if not row or not row["photo_data"]:
         return "Photo introuvable", 404
-    return send_file(io.BytesIO(row["photo_data"]), mimetype=row["photo_mime"] or "image/jpeg", max_age=300)
+    response = send_file(io.BytesIO(row["photo_data"]),
+                         mimetype=row["photo_mime"] or "image/jpeg")
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
 
 
 @app.route("/admin/photo")
-def admin_photo():
-    if not admin_required():
-        return "Accès refusé", 403
+@app.route("/admin/photo/<int:requested_admin_id>")
+def admin_photo(requested_admin_id=None):
+    # Sans identifiant, seule l'administratrice connectée peut voir sa photo.
+    if requested_admin_id is None:
+        if not admin_required():
+            return "Accès refusé", 403
+        admin_id = session.get("admin_id")
+    else:
+        # Dans une conversation, les membres peuvent voir la photo de
+        # l'administrateur de leur propre famille, jamais celle d'une autre.
+        identity = current_messaging_identity()
+        if identity is None:
+            return "Accès refusé", 403
+        _, _, famille_id = identity
+        if famille_id is None:
+            return "Accès refusé", 403
+        conn = get_connection()
+        family_admin = conn.execute(
+            "SELECT admin_id FROM famille WHERE id=?", (famille_id,)
+        ).fetchone()
+        conn.close()
+        if not family_admin or family_admin["admin_id"] != requested_admin_id:
+            return "Accès refusé", 403
+        admin_id = requested_admin_id
+
     conn = get_connection()
-    row = conn.execute("SELECT photo_data, photo_mime FROM admin WHERE id=?", (session.get("admin_id"),)).fetchone()
+    row = conn.execute(
+        "SELECT photo_data, photo_mime FROM admin WHERE id=?", (admin_id,)
+    ).fetchone()
     conn.close()
     if not row or not row["photo_data"]:
         return "Photo introuvable", 404
-    return send_file(io.BytesIO(row["photo_data"]), mimetype=row["photo_mime"] or "image/jpeg", max_age=300)
+    response = send_file(io.BytesIO(row["photo_data"]),
+                         mimetype=row["photo_mime"] or "image/jpeg")
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
 
 
 # ==========================================================
@@ -3169,8 +3206,13 @@ def messagerie():
             CASE WHEN m.sender_type='admin' THEN
                 (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
             ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=m.sender_id) END AS sender_name,
-            CASE WHEN m.sender_type='membre' THEN
-                (SELECT photo_data IS NOT NULL FROM membres WHERE id=m.sender_id) ELSE 0 END AS sender_has_photo,
+            CASE
+                WHEN m.sender_type='membre' THEN
+                    COALESCE((SELECT photo_data IS NOT NULL FROM membres WHERE id=m.sender_id), 0)
+                WHEN m.sender_type='admin' THEN
+                    COALESCE((SELECT photo_data IS NOT NULL FROM admin WHERE id=m.sender_id), 0)
+                ELSE 0
+            END AS sender_has_photo,
             rm.id AS reply_id,
             rm.contenu AS reply_contenu,
             rm.fichier_nom AS reply_fichier_nom,
@@ -4458,40 +4500,52 @@ def calendar():
 def update_member_photo():
     if not session.get("logged"):
         return redirect(url_for("home"))
+
+    is_admin = session.get("admin_logged") is True
+    identity = current_messaging_identity()
+    if not is_admin and (identity is None or identity[0] != "membre"):
+        flash("Impossible d'identifier votre compte membre. Reconnectez-vous.")
+        return redirect(url_for("profile"))
+
+    supprimer = request.form.get("supprimer_photo") == "oui"
     try:
         photo_data, photo_mime = read_member_photo_upload(request.files.get("photo"))
     except ValueError as error:
         flash(str(error))
-        return redirect(url_for("edit_profile") if session.get("admin_logged") is True else url_for("profile"))
-    supprimer = request.form.get("supprimer_photo") == "oui"
+        return redirect(url_for("edit_profile") if is_admin else url_for("profile"))
+
+    if not supprimer and photo_data is None:
+        flash("Choisissez une photo avant de cliquer sur Enregistrer.")
+        return redirect(url_for("edit_profile") if is_admin else url_for("profile"))
+
     conn = get_connection()
-    if session.get("admin_logged") is True:
-        conn.execute("""
-            UPDATE admin
-            SET photo_data=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
-                photo_mime=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END
-            WHERE id=?
-        """, (1 if supprimer else 0, photo_data, photo_data,
-              1 if supprimer else 0, photo_mime, photo_mime, session.get("admin_id")))
+    if is_admin:
+        cursor = conn.execute(
+            "UPDATE admin SET photo_data=?, photo_mime=? WHERE id=?",
+            (None if supprimer else photo_data, None if supprimer else photo_mime,
+             session.get("admin_id"))
+        )
         destination = "edit_profile"
     else:
-        identity = current_messaging_identity()
-        if identity is None or identity[0] != "membre":
-            conn.close()
-            return redirect(url_for("profile"))
         _, membre_id, famille_id = identity
-        conn.execute("""
-            UPDATE membres
-            SET photo_data=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
-                photo_mime=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END,
-                avatar=NULL
-            WHERE id=? AND famille_id=?
-        """, (1 if supprimer else 0, photo_data, photo_data,
-              1 if supprimer else 0, photo_mime, photo_mime, membre_id, famille_id))
+        cursor = conn.execute(
+            """UPDATE membres SET photo_data=?, photo_mime=?, avatar=NULL
+               WHERE id=? AND famille_id=?""",
+            (None if supprimer else photo_data, None if supprimer else photo_mime,
+             membre_id, famille_id)
+        )
         destination = "profile"
+
+    if cursor.rowcount != 1:
+        conn.rollback()
+        conn.close()
+        flash("La photo n'a pas pu être enregistrée. Vérifiez votre compte puis réessayez.")
+        return redirect(url_for(destination))
+
     conn.commit()
     conn.close()
-    flash("Votre photo de profil a été mise à jour.")
+    flash("Votre photo de profil a été supprimée." if supprimer
+          else "Votre photo de profil a bien été enregistrée.")
     return redirect(url_for(destination))
 
 
