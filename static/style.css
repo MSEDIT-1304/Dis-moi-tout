@@ -1935,3 +1935,15 @@ html body .calendar-page .calendar-weekdays span {
         font-size: 12px !important;
     }
 }
+
+
+/* AJUSTEMENT CIBLE — FORMULAIRE PHOTO/AVATAR MEMBRE UNIQUEMENT */
+@media (min-width: 601px) {
+    html body .profile-member-page .profile-photo-form {
+        width: 650px !important;
+        max-width: calc(100% - 40px) !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        box-sizing: border-box !important;
+    }
+}
