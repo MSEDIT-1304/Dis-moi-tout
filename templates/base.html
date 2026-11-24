@@ -45,7 +45,7 @@
                 <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint == 'members' else '' }}">Gérer les membres</a>
             {% endif %}
             <a href="{{ url_for('messagerie') }}" class="{{ 'active' if request.endpoint == 'messagerie' else '' }}">Messagerie <span id="message-unread-badge" style="display:none;background:#a52d68;color:#fff;border-radius:12px;padding:1px 6px;font-size:11px;margin-left:3px"></span></a>
-            <a href="{{ url_for('liste_courses') }}" class="{{ 'active' if request.endpoint == 'liste_courses' else '' }}">Liste des courses</a>
+            <a href="{{ url_for('liste_courses') }}" class="{{ 'active' if request.endpoint == 'liste_courses' else '' }}">Liste des courses{% if not session.get("admin_logged") and pending_count|default(0) > 0 %} <span style="display:inline-block;background:#A52D68;color:#fff;border-radius:50%;min-width:18px;height:18px;line-height:18px;text-align:center;font-size:11px;font-weight:700;margin-left:4px;">{{ pending_count }}</span>{% endif %}</a>
             <a href="{{ url_for('profile') }}" class="{{ 'active' if request.endpoint == 'profile' else '' }}">Profil</a>
         </nav>
     {% endif %}
@@ -112,4 +112,203 @@
                 window.location.href = data.redirect || "{{ url_for('login', abonnement='expire') }}";
             }
         } catch (error) {
-            cons
+            console.warn("Vérification abonnement reportée :", error);
+        }
+    }
+    window.setInterval(verifySubscription, 15 * 60 * 1000);
+    const badge = document.getElementById("message-unread-badge");
+    async function updateMessageBadge() {
+        if (!badge) return;
+        try {
+            const response = await fetch("{{ url_for('messagerie_non_lus') }}", {credentials:"same-origin", cache:"no-store"});
+            if (!response.ok) return;
+            const data = await response.json();
+            badge.textContent = data.count > 99 ? "99+" : data.count;
+            badge.style.display = data.count > 0 ? "inline-block" : "none";
+            // Badge sur l'icône de l'application installée (si pris en charge).
+            if ("setAppBadge" in navigator) {
+                if (data.count > 0) await navigator.setAppBadge(data.count);
+                else if ("clearAppBadge" in navigator) await navigator.clearAppBadge();
+            }
+        } catch (error) { console.warn("Notification messagerie indisponible", error); }
+    }
+    updateMessageBadge();
+    window.setInterval(updateMessageBadge, 15000);
+
+    // Activation volontaire des notifications sur cet appareil.
+    const pushButton = document.getElementById("enable-push-notifications");
+    const pushStatus = document.getElementById("push-notification-status");
+
+    function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const raw = window.atob(base64);
+        return Uint8Array.from([...raw].map(char => char.charCodeAt(0)));
+    }
+
+    async function savePushSubscription(subscription) {
+        const saveResponse = await fetch("{{ url_for('push_subscribe') }}", {
+            method: "POST",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(subscription)
+        });
+        if (!saveResponse.ok) {
+            const details = await saveResponse.json().catch(() => ({}));
+            throw new Error(details.error || "Impossible d'enregistrer cet appareil sur le serveur.");
+        }
+        return true;
+    }
+
+    async function getVapidPublicKey() {
+        const keyResponse = await fetch("{{ url_for('push_vapid_public_key') }}", {
+            credentials: "same-origin",
+            cache: "no-store"
+        });
+        if (!keyResponse.ok) {
+            throw new Error("Le service de notifications n'est pas disponible sur le serveur.");
+        }
+        const keyData = await keyResponse.json();
+        if (!keyData.publicKey) throw new Error("Clé publique de notification absente.");
+        return keyData.publicKey;
+    }
+
+    const pushBannerPreferenceKey = "dis-moi-tout-push-activated-v1";
+
+    function hidePushBanner() {
+        const banner = document.getElementById("push-notification-banner");
+        if (banner) banner.style.display = "none";
+    }
+
+    function showPushBanner() {
+        const banner = document.getElementById("push-notification-banner");
+        if (banner) banner.style.display = "flex";
+    }
+
+    async function refreshPushButton() {
+        if (!pushButton) return;
+
+        if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+            pushButton.disabled = true;
+            pushButton.textContent = "Notifications non disponibles";
+            showPushBanner();
+            return;
+        }
+
+        try {
+            // La demande initiale reste déclenchée par le bouton (geste utilisateur).
+            // Dès que l'autorisation est accordée, le bandeau ne réapparaît plus,
+            // y compris après F5, fermeture ou réouverture de l'application.
+            if (Notification.permission !== "granted") {
+                showPushBanner();
+                return;
+            }
+
+            hidePushBanner();
+            localStorage.setItem(pushBannerPreferenceKey, "1");
+
+            // À chaque ouverture, on vérifie et synchronise l'abonnement de cet appareil.
+            const registration = await navigator.serviceWorker.ready;
+            let subscription = await registration.pushManager.getSubscription();
+
+            if (!subscription) {
+                const publicKey = await getVapidPublicKey();
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicKey)
+                });
+            }
+
+            await savePushSubscription(subscription);
+        } catch (error) {
+            console.warn("Synchronisation automatique des notifications impossible :", error);
+            // Ne pas réafficher le bandeau si l'autorisation a déjà été accordée.
+            if (Notification.permission === "granted") hidePushBanner();
+            if (pushStatus) pushStatus.textContent = "La synchronisation des notifications sera retentée à la prochaine ouverture.";
+        }
+    }
+
+    if (pushButton) {
+        refreshPushButton();
+        pushButton.addEventListener("click", async function () {
+            pushButton.disabled = true;
+            if (pushStatus) pushStatus.textContent = "";
+
+            try {
+                if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+                    throw new Error("Ce navigateur ne prend pas en charge les notifications Push.");
+                }
+
+                const permission = await Notification.requestPermission();
+                if (permission !== "granted") {
+                    throw new Error("Autorisation des notifications non accordée.");
+                }
+
+                const keyResponse = await fetch("{{ url_for('push_vapid_public_key') }}", {
+                    credentials: "same-origin",
+                    cache: "no-store"
+                });
+                if (!keyResponse.ok) {
+                    throw new Error("Le service de notifications n'est pas encore configuré.");
+                }
+                const keyData = await keyResponse.json();
+                const registration = await navigator.serviceWorker.ready;
+                let subscription = await registration.pushManager.getSubscription();
+
+                if (!subscription) {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+                    });
+                }
+
+                await savePushSubscription(subscription);
+
+                // Mémoriser l'activation sur cet appareil pour ne plus
+                // réafficher le bandeau à chaque F5.
+                localStorage.setItem(pushBannerPreferenceKey, "1");
+                hidePushBanner();
+            } catch (error) {
+                if (pushStatus) pushStatus.textContent = error.message || "Activation impossible.";
+                console.warn("Activation des notifications impossible", error);
+            } finally {
+                pushButton.disabled = false;
+            }
+        });
+    }
+})();
+</script>
+{% endif %}
+{% if request.endpoint == "calendar" %}
+<script>
+(function () {
+    const flashContainer = document.querySelector(".flash-messages");
+    if (!flashContainer) return;
+
+    window.setTimeout(function () {
+        flashContainer.style.transition = "opacity 0.5s ease";
+        flashContainer.style.opacity = "0";
+        window.setTimeout(function () {
+            flashContainer.remove();
+        }, 500);
+    }, 4000);
+})();
+</script>
+{% endif %}
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+        navigator.serviceWorker.register(
+            "/service-worker.js",
+            { scope: "/", updateViaCache: "none" }
+        ).catch(function (error) {
+            console.warn("Enregistrement du service worker impossible", error);
+        });
+    });
+}
+</script>
+
+</body>
+</html>
+
