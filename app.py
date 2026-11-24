@@ -2889,22 +2889,7 @@ def liste_courses():
                 validated = conn.execute("SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE list_id=? AND validated=1", (list_id,)).fetchone()["n"]
                 if total and total == validated:
                     conn.execute("UPDATE shopping_lists SET status='validated',updated_at=CURRENT_TIMESTAMP WHERE id=?", (list_id,))
-                    admin_row = conn.execute(
-                        "SELECT created_by_admin_id FROM shopping_lists WHERE id=?", (list_id,)
-                    ).fetchone()
-                    conversation_id = _shopping_direct_conversation(
-                        conn, family_id, admin_row["created_by_admin_id"], member_id
-                    )
-                    conn.execute(
-                        "INSERT INTO messages (conversation_id,sender_type,sender_id,contenu) VALUES (?, 'membre', ?, ?)",
-                        (conversation_id, member_id, f"[[LISTE_COURSES_ADMIN:{list_id}:validated]]")
-                    )
-                    conn.execute("DELETE FROM conversation_hidden WHERE conversation_id=?", (conversation_id,))
                 conn.commit()
-                if total and total == validated:
-                    send_message_push_notifications(
-                        conn, conversation_id, ("membre", member_id, family_id)
-                    )
             conn.close()
             return redirect(url_for("liste_courses", liste_id=list_id))
 
@@ -2986,13 +2971,6 @@ def liste_courses():
         """, (list_id, family_id, member_id)).fetchone() if list_id else (lists[0] if lists else None)
         members = []
         recipients = []
-        pending_count = conn.execute(
-            "SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE membre_id=? AND validated=0",
-            (member_id,)
-        ).fetchone()["n"]
-
-    if is_admin:
-        pending_count = 0
 
     items = conn.execute("SELECT * FROM shopping_list_items WHERE list_id=? ORDER BY id", (active_list["id"],)).fetchall() if active_list else []
     if is_admin and active_list:
@@ -3008,8 +2986,7 @@ def liste_courses():
         items=items,
         members=members,
         recipients=recipients,
-        validated_all=validated_all,
-        pending_count=pending_count
+        validated_all=validated_all
     )
 
 
@@ -3217,65 +3194,6 @@ def push_subscribe():
         conn.rollback()
         app.logger.exception("Push : impossible d'enregistrer l'appareil.")
         return jsonify({"success": False, "error": "Enregistrement impossible"}), 500
-    finally:
-        conn.close()
-
-
-@app.route("/push/auto-sync", methods=["GET", "POST"])
-def push_auto_sync():
-    """
-    Synchronisation automatique dédiée aux appareils.
-    La table est partagée avec les notifications de messagerie ;
-    la fonction d'envoi des messages reste inchangée.
-    """
-    identity = current_messaging_identity()
-    if identity is None:
-        return jsonify({"success": False, "error": "Authentification requise"}), 401
-
-    kind, user_id, family_id = identity
-    if not user_id or not family_id:
-        return jsonify({"success": False, "error": "Compte familial incomplet"}), 409
-
-    if request.method == "GET":
-        public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
-        if not public_key:
-            return jsonify({"success": False, "error": "Notifications Push non configurées"}), 503
-        return jsonify({"success": True, "publicKey": public_key})
-
-    subscription = request.get_json(silent=True)
-    if not isinstance(subscription, dict):
-        return jsonify({"success": False, "error": "Données invalides"}), 400
-
-    endpoint = subscription.get("endpoint")
-    keys = subscription.get("keys")
-    if not isinstance(endpoint, str) or not endpoint.startswith("https://"):
-        return jsonify({"success": False, "error": "Adresse Push invalide"}), 400
-    if not isinstance(keys, dict) or not keys.get("p256dh") or not keys.get("auth"):
-        return jsonify({"success": False, "error": "Clés Push manquantes"}), 400
-
-    conn = get_connection()
-    try:
-        conn.execute("""
-            INSERT INTO push_subscriptions
-                (endpoint, subscription_json, user_type, user_id, famille_id, updated_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(endpoint) DO UPDATE SET
-                subscription_json = excluded.subscription_json,
-                user_type = excluded.user_type,
-                user_id = excluded.user_id,
-                famille_id = excluded.famille_id,
-                updated_at = CURRENT_TIMESTAMP
-        """, (endpoint, json.dumps(subscription), kind, user_id, family_id))
-        conn.commit()
-        app.logger.info(
-            "Push auto-sync : appareil synchronisé pour %s %s (famille %s).",
-            kind, user_id, family_id
-        )
-        return jsonify({"success": True})
-    except Exception:
-        conn.rollback()
-        app.logger.exception("Push auto-sync : échec de synchronisation.")
-        return jsonify({"success": False, "error": "Synchronisation impossible"}), 500
     finally:
         conn.close()
 
