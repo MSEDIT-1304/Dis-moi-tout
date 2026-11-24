@@ -1947,3 +1947,11 @@ html body .calendar-page .calendar-weekdays span {
         box-sizing: border-box !important;
     }
 }
+/* PROFIL ADMIN ET MEMBRES — PHOTO LÉGÈREMENT AGRANDIE UNIQUEMENT */
+html body .profile-card .profile-avatar,
+html body .profile-edit-card .profile-avatar,
+html body .profile-page .profile-avatar {
+    width: 95px !important;
+    height: 95px !important;
+    flex-basis: 95px !important;
+}
