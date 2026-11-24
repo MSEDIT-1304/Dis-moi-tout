@@ -3078,13 +3078,16 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
     public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
     private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
     if not public_key or not private_key:
-        app.logger.info("Notifications Push non configurées : clés VAPID absentes.")
+        app.logger.warning(
+            "LISTE_PUSH_DIAG: envoi impossible, clés VAPID absentes; public_key=%s private_key=%s",
+            bool(public_key), bool(private_key)
+        )
         return
 
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
-        app.logger.exception("Dépendance pywebpush absente.")
+        app.logger.exception("LISTE_PUSH_DIAG: dépendance pywebpush absente.")
         return
 
     sender_type, sender_id, family_id = sender_identity
@@ -3175,24 +3178,29 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
             finally:
                 if key_path and os.path.exists(key_path):
                     os.remove(key_path)
-            app.logger.info(
-                "Push : notification envoyée à un appareil (type %s, utilisateur %s).",
-                row["user_type"], row["user_id"]
+            app.logger.warning(
+                "LISTE_PUSH_DIAG: service Push a accepté l'envoi pour l'appareil; "
+                "subscription_id=%s user_type=%s user_id=%s conversation_id=%s",
+                row["id"], row["user_type"], row["user_id"], conversation_id
             )
         except WebPushException as exc:
             status_code = getattr(
                 getattr(exc, "response", None), "status_code", None
             )
             app.logger.warning(
-                "Échec Web Push pour l'abonnement %s (HTTP %s) : %s",
-                row["id"], status_code, exc
+                "LISTE_PUSH_DIAG: échec Web Push; subscription_id=%s user_type=%s "
+                "user_id=%s conversation_id=%s HTTP=%s erreur=%s",
+                row["id"], row["user_type"], row["user_id"],
+                conversation_id, status_code, exc
             )
             if status_code in (404, 410):
                 conn.execute("DELETE FROM push_subscriptions WHERE id = ?", (row["id"],))
                 conn.commit()
         except Exception:
             app.logger.exception(
-                "Erreur lors de l'envoi Push pour l'abonnement %s.", row["id"]
+                "LISTE_PUSH_DIAG: erreur inattendue pendant l'envoi; "
+                "subscription_id=%s user_type=%s user_id=%s conversation_id=%s",
+                row["id"], row["user_type"], row["user_id"], conversation_id
             )
 
 
