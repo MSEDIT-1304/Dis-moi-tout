@@ -21,7 +21,7 @@
 .message-list{align-items:stretch;justify-content:flex-start}
 .message audio{max-width:100%;box-sizing:border-box}
 .message.mine{align-self:flex-end;background:#fff0f6;border:1px solid #f0c5d8;border-radius:15px 15px 5px 15px}
-.message small{display:block;color:#8a7890;font-size:10px;margin-bottom:3px;font-weight:600}.message-meta{display:flex!important;align-items:center;gap:6px}.message-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:0 0 24px}.message-avatar-emoji{display:inline-flex;align-items:center;justify-content:center;background:#fce8f1;font-size:16px}.message audio{display:block;width:min(280px,100%);height:36px;margin-top:5px}
+.message small{display:block;color:#8a7890;font-size:10px;margin-bottom:3px;font-weight:600}.message-meta{display:flex!important;align-items:center;gap:6px}.message-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;flex:0 0 24px}.message audio{display:block;width:min(280px,100%);height:36px;margin-top:5px}
 .message-list{align-items:stretch;background:linear-gradient(180deg,#fbfcff 0%,#fff 100%)}
 .conversation-box .message-list{border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}
 .conversation-box .send-form{display:flex;flex:0 0 auto;width:100%;box-sizing:border-box;margin:0;padding:12px;border:0!important;border-top:1px solid #f0e4eb!important;border-radius:0!important;outline:0!important;box-shadow:none!important;background:#fff!important}
@@ -115,7 +115,7 @@
           <div class="message {{ 'mine' if mine else '' }}" id="message-{{ message.id }}" data-message-id="{{ message.id }}" data-message-author="{{ message.sender_name or 'Membre' }}">
             <small class="message-meta">
               {% if message.sender_type == 'membre' and message.sender_has_photo %}<img class="message-avatar" src="{{ url_for('membre_photo', membre_id=message.sender_id) }}" alt="">
-              {% elif message.sender_avatar %}<span class="message-avatar message-avatar-emoji">{{ message.sender_avatar }}</span>{% endif %}
+              {% endif %}
               <span>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</span>
             </small>
             {% if message.reply_to_message_id %}
