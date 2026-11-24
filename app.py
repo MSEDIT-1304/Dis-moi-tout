@@ -2077,9 +2077,12 @@ def read_member_photo_upload(upload):
 
     # Détection par signature du fichier : plus fiable que upload.mimetype,
     # qui peut être vide ou application/octet-stream selon le navigateur.
-    if data.startswith(b"\\xff\\xd8\\xff"):
+    # Les séquences d'échappement doivent représenter les octets réels du fichier
+    # (et non les caractères littéraux « \\xff »). Sans cela, aucune photo
+    # JPG/PNG n'est reconnue et l'enregistrement échoue systématiquement.
+    if data.startswith(b"\xff\xd8\xff"):
         mime = "image/jpeg"
-    elif data.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    elif data.startswith(b"\x89PNG\r\n\x1a\n"):
         mime = "image/png"
     elif data.startswith((b"GIF87a", b"GIF89a")):
         mime = "image/gif"
@@ -2711,7 +2714,14 @@ def current_messaging_identity():
     if not session.get("logged"):
         return None
     if session.get("admin_logged"):
-        return ("admin", session.get("admin_id"), session.get("famille_id"))
+        admin_id = session.get("admin_id")
+        # La session administrateur peut ne pas encore contenir famille_id
+        # (notamment après certaines reconnexions). Résoudre la famille depuis
+        # le compte évite de bloquer l'affichage des photos dans la messagerie.
+        famille_id = session.get("famille_id")
+        if famille_id is None and admin_id is not None:
+            famille_id = get_family_id(admin_id)
+        return ("admin", admin_id, famille_id)
     if session.get("membre_id"):
         return ("membre", session.get("membre_id"), session.get("famille_id"))
     return None
