@@ -83,6 +83,12 @@
                 <label for="profile-photo">Choisir ma photo (facultatif, 5 Mo maximum)</label>
                 <input type="file" id="profile-photo" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
                 <span id="profile-photo-filename" class="profile-photo-filename" aria-live="polite">Aucun fichier choisi</span>
+                <div class="photo-crop-panel" id="member-photo-crop" hidden>
+                    <p class="photo-crop-title">Recadrer ma photo : faites glisser l’image et ajustez le zoom.</p>
+                    <div class="photo-crop-viewport" id="member-photo-crop-viewport"><img id="member-photo-crop-image" alt="Recadrage de ma photo"></div>
+                    <label class="photo-crop-zoom" for="member-photo-zoom">Zoom</label>
+                    <input type="range" id="member-photo-zoom" min="1" max="3" step="0.01" value="1">
+                </div>
                 {% if membre['photo_data'] %}<label class="profile-photo-delete"><input type="checkbox" name="supprimer_photo" value="oui"><span>Supprimer ma photo</span></label>{% endif %}
                 <button type="submit" class="profile-button">Enregistrer ma photo</button>
             </form>
@@ -164,8 +170,8 @@
 .profile-photo-delete{display:flex!important;align-items:center;gap:7px;width:max-content;max-width:100%;margin:2px 0 4px!important;color:#fff!important;font-size:13px!important;font-weight:normal!important}
 .profile-photo-delete input[type="checkbox"]{display:inline-block!important;flex:0 0 16px;width:16px!important;min-width:16px;height:16px!important;padding:0!important;margin:0!important;accent-color:#A9CBEA}
 .profile-avatar {
-    width: 62px;
-    height: 62px;
+    width: 80px;
+    height: 80px;
     margin: 0 auto 9px;
     border-radius: 50%;
     background: #c5a15b;
@@ -281,36 +287,131 @@
     background: #84251d;
 }
 
+
+.photo-crop-panel{flex:1 1 100%;margin:6px 0 2px;color:inherit}
+.photo-crop-title{margin:0 0 7px;color:inherit;font-size:12px}
+.photo-crop-viewport{position:relative;width:190px;height:190px;max-width:100%;overflow:hidden;border-radius:50%;background:#f5f5f5;border:2px solid #A9CBEA;touch-action:none;cursor:grab}
+.photo-crop-viewport:active{cursor:grabbing}
+.photo-crop-viewport img{position:absolute;max-width:none;max-height:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.photo-crop-zoom{display:block!important;width:auto!important;margin:7px 0 2px!important;color:inherit!important;font-size:12px!important}
+.photo-crop-panel input[type="range"]{display:block;width:190px;max-width:100%;height:20px!important;margin:0!important;padding:0!important}
+
 </style>
 
 <script>
 (function () {
-    const input = document.getElementById("profile-photo");
-    const avatar = document.querySelector(".profile-member-page .profile-avatar-photo");
-    const filename = document.getElementById("profile-photo-filename");
-    if (!input || !avatar || !filename) return;
+    
+function installerRecadragePhoto(inputId, filenameId, panelId, viewportId, imageId, zoomId) {
+    const input = document.getElementById(inputId);
+    const filename = document.getElementById(filenameId);
+    const panel = document.getElementById(panelId);
+    const viewport = document.getElementById(viewportId);
+    const image = document.getElementById(imageId);
+    const zoom = document.getElementById(zoomId);
+    if (!input || !filename || !panel || !viewport || !image || !zoom) return;
+
+    const size = 190;
+    let sourceFile = null, naturalWidth = 0, naturalHeight = 0;
+    let baseWidth = 0, baseHeight = 0, scale = 1, x = 0, y = 0;
+    let dragging = false, startX = 0, startY = 0, startOffsetX = 0, startOffsetY = 0;
+    let objectUrl = null;
+
+    function updateImage() {
+        const w = baseWidth * scale, h = baseHeight * scale;
+        x = Math.min(0, Math.max(size - w, x));
+        y = Math.min(0, Math.max(size - h, y));
+        image.style.width = w + "px";
+        image.style.height = h + "px";
+        image.style.left = x + "px";
+        image.style.top = y + "px";
+    }
 
     input.addEventListener("change", function () {
         const file = this.files && this.files[0];
         if (!file) {
             filename.textContent = "Aucun fichier choisi";
+            panel.hidden = true;
+            sourceFile = null;
             return;
         }
         filename.textContent = file.name;
-        if (!file.type.startsWith("image/")) return;
-        const reader = new FileReader();
-        reader.onload = function (event) {
-            let preview = avatar.querySelector("img");
-            if (!preview) {
-                avatar.textContent = "";
-                preview = document.createElement("img");
-                preview.alt = "Aperçu de ma nouvelle photo";
-                avatar.appendChild(preview);
-            }
-            preview.src = event.target.result;
+        if (!file.type.startsWith("image/")) {
+            panel.hidden = true;
+            sourceFile = null;
+            return;
+        }
+        sourceFile = file;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(file);
+        image.onload = function () {
+            naturalWidth = image.naturalWidth;
+            naturalHeight = image.naturalHeight;
+            const fit = Math.max(size / naturalWidth, size / naturalHeight);
+            baseWidth = naturalWidth * fit;
+            baseHeight = naturalHeight * fit;
+            scale = 1;
+            x = (size - baseWidth) / 2;
+            y = (size - baseHeight) / 2;
+            zoom.value = "1";
+            updateImage();
+            panel.hidden = false;
         };
-        reader.readAsDataURL(file);
+        image.src = objectUrl;
     });
+
+    zoom.addEventListener("input", function () {
+        const oldScale = scale;
+        scale = Number(this.value);
+        x = size / 2 - (size / 2 - x) * (scale / oldScale);
+        y = size / 2 - (size / 2 - y) * (scale / oldScale);
+        updateImage();
+    });
+
+    viewport.addEventListener("pointerdown", function (event) {
+        dragging = true;
+        startX = event.clientX;
+        startY = event.clientY;
+        startOffsetX = x;
+        startOffsetY = y;
+        viewport.setPointerCapture(event.pointerId);
+    });
+    viewport.addEventListener("pointermove", function (event) {
+        if (!dragging) return;
+        x = startOffsetX + event.clientX - startX;
+        y = startOffsetY + event.clientY - startY;
+        updateImage();
+    });
+    viewport.addEventListener("pointerup", function () { dragging = false; });
+    viewport.addEventListener("pointercancel", function () { dragging = false; });
+
+    const form = input.closest("form");
+    if (form) {
+        form.addEventListener("submit", function (event) {
+            if (!sourceFile || !naturalWidth || panel.hidden) return;
+            event.preventDefault();
+            const canvas = document.createElement("canvas");
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext("2d");
+            const rw = baseWidth * scale, rh = baseHeight * scale;
+            const sx = (-x / rw) * naturalWidth;
+            const sy = (-y / rh) * naturalHeight;
+            const sw = (size / rw) * naturalWidth;
+            const sh = (size / rh) * naturalHeight;
+            ctx.drawImage(image, sx, sy, sw, sh, 0, 0, 512, 512);
+            canvas.toBlob(function (blob) {
+                if (!blob) { form.submit(); return; }
+                const cropped = new File([blob], sourceFile.name.replace(/\.[^.]+$/, "") + ".jpg", {type: "image/jpeg"});
+                const dt = new DataTransfer();
+                dt.items.add(cropped);
+                input.files = dt.files;
+                form.submit();
+            }, "image/jpeg", 0.92);
+        });
+    }
+}
+
+    installerRecadragePhoto("profile-photo", "profile-photo-filename", "member-photo-crop", "member-photo-crop-viewport", "member-photo-crop-image", "member-photo-zoom");
 })();
 </script>
 
