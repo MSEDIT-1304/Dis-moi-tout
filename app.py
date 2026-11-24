@@ -1065,6 +1065,14 @@ def init_database():
         """
     )
 
+    # Photo de profil de l'administrateur (migration additive, sans perte).
+    cursor.execute("PRAGMA table_info(admin)")
+    colonnes_admin = {ligne[1] for ligne in cursor.fetchall()}
+    if "photo_data" not in colonnes_admin:
+        cursor.execute("ALTER TABLE admin ADD COLUMN photo_data BLOB")
+    if "photo_mime" not in colonnes_admin:
+        cursor.execute("ALTER TABLE admin ADD COLUMN photo_mime TEXT")
+
     # ======================================================
     # FAMILLE
     # ======================================================
@@ -1390,6 +1398,8 @@ def init_database():
     if "avatar" not in colonnes_membres:
         cursor.execute("ALTER TABLE membres ADD COLUMN avatar TEXT")
         colonnes_membres.add("avatar")
+    # Les anciens avatars emoji ne sont plus utilisés dans l'application.
+    cursor.execute("UPDATE membres SET avatar=NULL WHERE avatar IS NOT NULL")
 
     colonnes_partage = {
         "partage_vers_admin_pro": "INTEGER DEFAULT 0",
@@ -2098,6 +2108,18 @@ def membre_photo(membre_id):
     return send_file(io.BytesIO(row["photo_data"]), mimetype=row["photo_mime"] or "image/jpeg", max_age=300)
 
 
+@app.route("/admin/photo")
+def admin_photo():
+    if not admin_required():
+        return "Accès refusé", 403
+    conn = get_connection()
+    row = conn.execute("SELECT photo_data, photo_mime FROM admin WHERE id=?", (session.get("admin_id"),)).fetchone()
+    conn.close()
+    if not row or not row["photo_data"]:
+        return "Photo introuvable", 404
+    return send_file(io.BytesIO(row["photo_data"]), mimetype=row["photo_mime"] or "image/jpeg", max_age=300)
+
+
 # ==========================================================
 # ROUTE AJOUT D'UN MEMBRE
 # ==========================================================
@@ -2145,11 +2167,6 @@ def add_member():
     except ValueError as error:
         flash(str(error))
         return redirect(url_for("members"))
-    avatar = request.form.get("avatar", "").strip()
-    avatars_autorises = {"", "😊", "👩", "👨", "👵", "👴", "🧒", "👶", "🐱", "🐶", "🌸", "⭐"}
-    if avatar not in avatars_autorises:
-        avatar = ""
-
     acces_agenda_admin_pro = (
         request.form.get("partage_agenda_pro") == "oui"
         and role == "conjoint"
@@ -2181,8 +2198,8 @@ def add_member():
     ).fetchone()
     if nouveau_membre:
         conn_pseudo.execute(
-            "UPDATE membres SET pseudo=?, photo_data=?, photo_mime=?, avatar=? WHERE id=? AND famille_id=?",
-            (pseudo or None, photo_data, photo_mime, avatar or None, nouveau_membre["id"], famille_id)
+            "UPDATE membres SET pseudo=?, photo_data=?, photo_mime=?, avatar=NULL WHERE id=? AND famille_id=?",
+            (pseudo or None, photo_data, photo_mime, nouveau_membre["id"], famille_id)
         )
         conn_pseudo.commit()
     conn_pseudo.close()
@@ -2237,10 +2254,6 @@ def edit_member_route(membre_id):
     except ValueError as error:
         flash(str(error))
         return redirect(url_for("members"))
-    avatar = request.form.get("avatar", "").strip()
-    avatars_autorises = {"", "😊", "👩", "👨", "👵", "👴", "🧒", "👶", "🐱", "🐶", "🌸", "⭐"}
-    if avatar not in avatars_autorises:
-        avatar = ""
     supprimer_photo = request.form.get("supprimer_photo") == "oui"
 
     conn = get_connection()
@@ -2290,7 +2303,7 @@ def edit_member_route(membre_id):
             garde_partagee = ?, frequence_garde = ?, prochaine_date_garde = ?,
             photo_data = CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
             photo_mime = CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END,
-            avatar = ?
+            avatar = NULL
         WHERE id = ? AND famille_id = ?
         """,
         (
@@ -2299,7 +2312,6 @@ def edit_member_route(membre_id):
             1 if garde_partagee else 0, frequence_garde, prochaine_date_garde,
             1 if supprimer_photo else 0, photo_data, photo_data,
             1 if supprimer_photo else 0, photo_mime, photo_mime,
-            avatar or None,
             membre_id, famille_id
         )
     )
@@ -3157,8 +3169,6 @@ def messagerie():
             CASE WHEN m.sender_type='admin' THEN
                 (SELECT prenom || ' ' || nom FROM admin WHERE id=m.sender_id)
             ELSE (SELECT COALESCE(NULLIF(pseudo,''), prenom) FROM membres WHERE id=m.sender_id) END AS sender_name,
-            CASE WHEN m.sender_type='membre' THEN
-                (SELECT avatar FROM membres WHERE id=m.sender_id) ELSE NULL END AS sender_avatar,
             CASE WHEN m.sender_type='membre' THEN
                 (SELECT photo_data IS NOT NULL FROM membres WHERE id=m.sender_id) ELSE 0 END AS sender_has_photo,
             rm.id AS reply_id,
@@ -4446,34 +4456,43 @@ def calendar():
 
 @app.route("/profile/photo", methods=["POST"])
 def update_member_photo():
-    identity = current_messaging_identity()
-    if identity is None or identity[0] != "membre":
-        return redirect(url_for("profile"))
-    _, membre_id, famille_id = identity
+    if not session.get("logged"):
+        return redirect(url_for("home"))
     try:
         photo_data, photo_mime = read_member_photo_upload(request.files.get("photo"))
     except ValueError as error:
         flash(str(error))
-        return redirect(url_for("profile"))
-    avatar = request.form.get("avatar", "").strip()
-    avatars_autorises = {"", "😊", "👩", "👨", "👵", "👴", "🧒", "👶", "🐱", "🐶", "🌸", "⭐"}
-    if avatar not in avatars_autorises:
-        avatar = ""
+        return redirect(url_for("edit_profile") if session.get("admin_logged") is True else url_for("profile"))
     supprimer = request.form.get("supprimer_photo") == "oui"
     conn = get_connection()
-    conn.execute("""
-        UPDATE membres
-        SET photo_data=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
-            photo_mime=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END,
-            avatar=?
-        WHERE id=? AND famille_id=?
-    """, (1 if supprimer else 0, photo_data, photo_data,
-          1 if supprimer else 0, photo_mime, photo_mime, avatar or None,
-          membre_id, famille_id))
+    if session.get("admin_logged") is True:
+        conn.execute("""
+            UPDATE admin
+            SET photo_data=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
+                photo_mime=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END
+            WHERE id=?
+        """, (1 if supprimer else 0, photo_data, photo_data,
+              1 if supprimer else 0, photo_mime, photo_mime, session.get("admin_id")))
+        destination = "edit_profile"
+    else:
+        identity = current_messaging_identity()
+        if identity is None or identity[0] != "membre":
+            conn.close()
+            return redirect(url_for("profile"))
+        _, membre_id, famille_id = identity
+        conn.execute("""
+            UPDATE membres
+            SET photo_data=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
+                photo_mime=CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END,
+                avatar=NULL
+            WHERE id=? AND famille_id=?
+        """, (1 if supprimer else 0, photo_data, photo_data,
+              1 if supprimer else 0, photo_mime, photo_mime, membre_id, famille_id))
+        destination = "profile"
     conn.commit()
     conn.close()
-    flash("Votre photo ou avatar a été mis à jour.")
-    return redirect(url_for("profile"))
+    flash("Votre photo de profil a été mise à jour.")
+    return redirect(url_for(destination))
 
 
 @app.route("/profile")
@@ -4745,6 +4764,13 @@ def edit_profile():
         garde_partagee = request.form.get("garde_partagee", "non")
         frequence_garde = request.form.get("frequence_garde", "").strip()
         prochaine_date_garde = request.form.get("prochaine_date_garde", "").strip()
+        try:
+            photo_data, photo_mime = read_member_photo_upload(request.files.get("photo"))
+        except ValueError as error:
+            conn.close()
+            flash(str(error))
+            return redirect(url_for("edit_profile"))
+        supprimer_photo = request.form.get("supprimer_photo") == "oui"
 
         if not prenom or not nom:
             conn.close()
@@ -4763,7 +4789,9 @@ def edit_profile():
                 conjoint = ?,
                 garde_partagee = ?,
                 frequence_garde = ?,
-                prochaine_date_garde = ?
+                prochaine_date_garde = ?,
+                photo_data = CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_data END,
+                photo_mime = CASE WHEN ? THEN NULL WHEN ? IS NOT NULL THEN ? ELSE photo_mime END
             WHERE id = ?
             """,
             (
@@ -4773,6 +4801,8 @@ def edit_profile():
                 1 if garde_partagee == "oui" else 0,
                 frequence_garde,
                 prochaine_date_garde,
+                1 if supprimer_photo else 0, photo_data, photo_data,
+                1 if supprimer_photo else 0, photo_mime, photo_mime,
                 admin_id
             )
         )
