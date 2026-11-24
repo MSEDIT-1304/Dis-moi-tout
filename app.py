@@ -3564,6 +3564,17 @@ def _ensure_recurrence_occurrences(conn, famille_id):
             current = nxt
 
 
+def _calendar_return_redirect(default_agenda="perso"):
+    """Retourne au même agenda et au même mode d'affichage après une action."""
+    agenda = (request.form.get("return_agenda") or default_agenda or "perso").strip().lower()
+    if agenda not in {"pro", "perso"}:
+        agenda = "perso"
+    view = (request.form.get("return_view") or "month").strip().lower()
+    if view not in {"day", "week", "month"}:
+        view = "month"
+    return redirect(url_for("calendar", agenda=agenda, view=view))
+
+
 @app.route("/add_event", methods=["POST"])
 def add_event():
     if not session.get("logged"):
@@ -3585,7 +3596,7 @@ def add_event():
         couleur = "#4f8fc9"
     if not titre or not date:
         flash("Veuillez saisir un titre et une date.")
-        return redirect(url_for("add_event_page"))
+        return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
 
     rappel = 1 if request.form.get("rappel") == "oui" else 0
     delais_autorises = {60, 4320, 10080, 21600}
@@ -3609,7 +3620,7 @@ def add_event():
                 raise ValueError
         except ValueError:
             flash("La date de fin de répétition doit être égale ou postérieure à la première date.")
-            return redirect(url_for("add_event_page"))
+            return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
 
     est_admin = session.get("admin_logged") is True
     admin_id = session.get("admin_id")
@@ -3617,12 +3628,12 @@ def add_event():
     agenda = request.form.get("type_agenda", "perso").strip().lower()
     if agenda not in ("pro", "perso"):
         flash("Agenda invalide.")
-        return redirect(url_for("add_event_page"))
+        return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
 
     destinataires = list(dict.fromkeys(request.form.getlist("destinataire_ids")))
     if not destinataires:
         flash("Sélectionnez au moins un agenda destinataire.")
-        return redirect(url_for("add_event_page"))
+        return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -3642,7 +3653,7 @@ def add_event():
         if not valeur.isdigit() or valeur not in membres_famille:
             conn.close()
             flash("Un destinataire sélectionné n'appartient pas à votre famille.")
-            return redirect(url_for("add_event_page"))
+            return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
         if int(valeur) not in membres_cibles:
             membres_cibles.append(int(valeur))
 
@@ -3650,7 +3661,7 @@ def add_event():
         if agenda == "pro" and membres_cibles:
             conn.close()
             flash("L'agenda PRO de l'administratrice ne peut pas être proposé dans l'agenda d'un membre.")
-            return redirect(url_for("add_event_page"))
+            return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
         auteur_role = None
         auteur_id = admin_id
     else:
@@ -3664,16 +3675,16 @@ def add_event():
         if agenda == "pro" and auteur_role != "conjoint":
             conn.close()
             flash("Seul le conjoint actuel dispose d'un agenda PRO.")
-            return redirect(url_for("add_event_page"))
+            return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
         if agenda == "pro" and any(mid != auteur_membre_id for mid in membres_cibles):
             conn.close()
             flash("Un membre peut proposer un rendez-vous PRO uniquement dans son propre agenda ou celui de l'administratrice.")
-            return redirect(url_for("add_event_page"))
+            return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
 
     if not cible_admin and not membres_cibles:
         conn.close()
         flash("Sélectionnez au moins un destinataire.")
-        return redirect(url_for("add_event_page"))
+        return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
 
     created_by_admin_id = admin_id if est_admin else None
     created_by_membre_id = None if est_admin else auteur_membre_id
@@ -3737,7 +3748,7 @@ def add_event():
         flash(f"Proposition envoyée. {nombre_attente} destinataire(s) doivent accepter l'événement.")
     else:
         flash("Événement ajouté dans votre agenda.")
-    return redirect(url_for("calendar"))
+    return _calendar_return_redirect(agenda)
 
 
 # ==========================================================
@@ -3776,12 +3787,12 @@ def edit_event(event_id):
     if evenement is None:
         conn.close()
         flash("Événement introuvable.")
-        return redirect(url_for("calendar"))
+        return _calendar_return_redirect()
 
     if evenement["type_evenement"] == "garde_partagee":
         conn.close()
         flash("Les gardes partagées sont générées automatiquement.")
-        return redirect(url_for("calendar"))
+        return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
 
     # Un utilisateur peut gérer les événements présents dans son propre
     # agenda. Les agendas consultés uniquement par partage restent en lecture seule.
@@ -3799,23 +3810,27 @@ def edit_event(event_id):
     if not autorise:
         conn.close()
         flash("Vous n'avez pas l'autorisation de modifier ce rendez-vous.")
-        return redirect(url_for("calendar"))
+        return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
 
     titre = request.form.get("titre", "").strip()
     description = request.form.get("description", "").strip()
     date = request.form.get("date", "").strip()
     heure = request.form.get("heure", "").strip()
     couleur = request.form.get("couleur_evenement", evenement["calendrier"] or "#4f8fc9").strip()
-    if couleur.lower() == "#d94f9b":
-        couleur = "#A52D68"
-    couleurs_autorisees = {"#4f8fc9", "#A52D68", "#54a66b", "#e2a43b"}
+    couleur = couleur.lower()
+    if couleur == "#d94f9b":
+        couleur = "#a52d68"
+    couleurs_autorisees = {"#4f8fc9", "#a52d68", "#54a66b", "#e2a43b"}
+    ancienne_couleur = (evenement["calendrier"] or "#4f8fc9").lower()
+    if ancienne_couleur == "#d94f9b":
+        ancienne_couleur = "#a52d68"
     if couleur not in couleurs_autorisees:
-        couleur = evenement["calendrier"] if evenement["calendrier"] in couleurs_autorisees else "#4f8fc9"
+        couleur = ancienne_couleur if ancienne_couleur in couleurs_autorisees else "#4f8fc9"
 
     if not titre or not date:
         conn.close()
         flash("Veuillez saisir un titre et une date.")
-        return redirect(url_for("calendar"))
+        return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
 
     scope = request.form.get("series_scope", "single")
     series_id = evenement["recurrence_series_id"] if "recurrence_series_id" in evenement.keys() else None
@@ -3827,7 +3842,7 @@ def edit_event(event_id):
         except (TypeError, ValueError):
             conn.close()
             flash("Date invalide.")
-            return redirect(url_for("calendar"))
+            return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
 
         if scope == "all":
             targets = cursor.execute(
@@ -3885,7 +3900,7 @@ def edit_event(event_id):
     conn.close()
 
     flash("Événement modifié.")
-    return redirect(url_for("calendar"))
+    return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
 # ==========================================================
 # SUPPRESSION D'UN ÉVÉNEMENT
 # ==========================================================
@@ -3922,12 +3937,12 @@ def delete_event(event_id):
     if evenement is None:
         conn.close()
         flash("Événement introuvable.")
-        return redirect(url_for("calendar"))
+        return _calendar_return_redirect()
 
     if evenement["type_evenement"] == "garde_partagee":
         conn.close()
         flash("Les gardes partagées automatiques ne peuvent pas être supprimées ici.")
-        return redirect(url_for("calendar"))
+        return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
 
     # Un utilisateur peut gérer les événements présents dans son propre
     # agenda. Les agendas consultés uniquement par partage restent en lecture seule.
@@ -3945,7 +3960,7 @@ def delete_event(event_id):
     if not autorise:
         conn.close()
         flash("Vous ne pouvez pas supprimer ce rendez-vous.")
-        return redirect(url_for("calendar"))
+        return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
 
     scope = request.form.get("series_scope", "single")
     series_id = evenement["recurrence_series_id"] if "recurrence_series_id" in evenement.keys() else None
@@ -3985,7 +4000,7 @@ def delete_event(event_id):
     conn.close()
 
     flash("Événement supprimé.")
-    return redirect(url_for("calendar"))
+    return _calendar_return_redirect("pro" if (evenement["type_agenda"] or "").endswith("_pro") else "perso")
     
 # ==========================================================
 # VALIDATION DES RENDEZ-VOUS PROPOSÉS
@@ -4411,7 +4426,9 @@ def calendar():
         google_calendars=google_calendars,
         google_error=google_error,
         google_connections=google_connections,
-        google_connection_id=google_connection_id
+        google_connection_id=google_connection_id,
+        active_agenda=("pro" if afficher_pro and request.args.get("agenda", "perso").lower() == "pro" else "perso"),
+        calendar_view=(request.args.get("view", "month").lower() if request.args.get("view", "month").lower() in {"day", "week", "month"} else "month")
     )
 
 
