@@ -3599,7 +3599,7 @@ def add_event():
         return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
 
     rappel = 1 if request.form.get("rappel") == "oui" else 0
-    delais_autorises = {60, 4320, 10080, 21600}
+    delais_autorises = {60, 1440, 21600, 43200}
     try:
         rappel_delai_minutes = int(request.form.get("rappel_delai_minutes", "60"))
     except (TypeError, ValueError):
@@ -3827,6 +3827,14 @@ def edit_event(event_id):
     if couleur not in couleurs_autorisees:
         couleur = ancienne_couleur if ancienne_couleur in couleurs_autorisees else "#4f8fc9"
 
+    rappel = 1 if request.form.get("rappel") == "oui" else 0
+    try:
+        rappel_delai_minutes = int(request.form.get("rappel_delai_minutes", evenement["rappel_delai_minutes"] or 60))
+    except (TypeError, ValueError):
+        rappel_delai_minutes = int(evenement["rappel_delai_minutes"] or 60)
+    if rappel_delai_minutes not in {60, 1440, 21600, 43200}:
+        rappel_delai_minutes = 60
+
     if not titre or not date:
         conn.close()
         flash("Veuillez saisir un titre et une date.")
@@ -3852,8 +3860,8 @@ def edit_event(event_id):
             for target in targets:
                 shifted = (__import__("datetime").date.fromisoformat(target["date"]) + timedelta(days=shift_days)).isoformat()
                 cursor.execute(
-                    "UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=? WHERE id=? AND famille_id=?",
-                    (titre, description, shifted, heure, couleur, target["id"], famille_id)
+                    "UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=?, rappel=?, rappel_delai_minutes=? WHERE id=? AND famille_id=?",
+                    (titre, description, shifted, heure, couleur, rappel, rappel_delai_minutes, target["id"], famille_id)
                 )
         else:
             previous_day = (old_date - timedelta(days=1)).isoformat()
@@ -3869,9 +3877,9 @@ def edit_event(event_id):
             for new_index, target in enumerate(targets):
                 shifted = (__import__("datetime").date.fromisoformat(target["date"]) + timedelta(days=shift_days)).isoformat()
                 cursor.execute(
-                    """UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=?,
+                    """UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=?, rappel=?, rappel_delai_minutes=?,
                        recurrence_series_id=?, recurrence_index=? WHERE id=? AND famille_id=?""",
-                    (titre, description, shifted, heure, couleur, new_series_id, new_index, target["id"], famille_id)
+                    (titre, description, shifted, heure, couleur, rappel, rappel_delai_minutes, new_series_id, new_index, target["id"], famille_id)
                 )
     else:
         if series_id:
@@ -3888,10 +3896,10 @@ def edit_event(event_id):
                 cursor.execute("UPDATE evenements SET recurrence_skips=? WHERE id=?",
                                (json.dumps(sorted(skips)), master["id"]))
         cursor.execute(
-            """UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=?,
+            """UPDATE evenements SET titre=?, description=?, date=?, heure=?, calendrier=?, rappel=?, rappel_delai_minutes=?,
                recurrence_rule=NULL, recurrence_end=NULL, recurrence_series_id=NULL,
                recurrence_index=0 WHERE id=? AND famille_id=?""",
-            (titre, description, date, heure, couleur, event_id, famille_id)
+            (titre, description, date, heure, couleur, rappel, rappel_delai_minutes, event_id, famille_id)
         )
         if series_id and int(evenement["recurrence_index"] or 0) == 0:
             _promote_recurrence_master(cursor, series_id, famille_id)
