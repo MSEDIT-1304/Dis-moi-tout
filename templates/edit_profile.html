@@ -22,6 +22,7 @@
                 </div>
                 <label for="admin-profile-photo">Ajouter ou remplacer ma photo (5 Mo maximum)</label>
                 <input type="file" id="admin-profile-photo" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
+                <span id="admin-photo-filename" class="admin-photo-filename" aria-live="polite">Aucun fichier choisi</span>
                 {% if admin['photo_data'] %}<label><input type="checkbox" name="supprimer_photo" value="oui"> Supprimer ma photo</label>{% endif %}
             </div>
 
@@ -116,7 +117,9 @@
 </div>
 
 <style>
-.profile-photo-edit-admin{display:grid;gap:7px;max-width:420px;margin:0 0 18px;padding:12px;border:1px solid #ead5e0;border-radius:10px;background:#fff9fc;color:#244967}
+.profile-photo-edit-admin{display:grid;gap:6px;max-width:420px;margin:0 0 14px;padding:0;border:0;border-radius:0;background:transparent;color:white}
+.profile-photo-edit-admin .admin-photo-filename{font-size:12px;color:white;overflow-wrap:anywhere}
+.profile-photo-edit-admin input[type="file"]{max-width:100%;background:#fff;color:#244967;border-radius:7px;padding:6px}
 .profile-photo-edit-admin .profile-avatar{width:62px;height:62px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#c5a15b;color:#172b40;font-weight:bold;margin:0 auto 6px}
 .profile-photo-edit-admin .profile-avatar img{width:100%;height:100%;object-fit:cover}
 .profile-photo-edit-admin input[type=file]{max-width:100%}
@@ -415,6 +418,33 @@ document.getElementById("garde_partagee").addEventListener(
 );
 
 afficherOptionsGarde();
+    const adminPhotoInput = document.getElementById("admin-profile-photo");
+    const adminPhotoAvatar = document.querySelector(".profile-photo-edit-admin .profile-avatar");
+    const adminPhotoFilename = document.getElementById("admin-photo-filename");
+
+    if (adminPhotoInput && adminPhotoAvatar && adminPhotoFilename) {
+        adminPhotoInput.addEventListener("change", function () {
+            const file = this.files && this.files[0];
+            if (!file) {
+                adminPhotoFilename.textContent = "Aucun fichier choisi";
+                return;
+            }
+            adminPhotoFilename.textContent = file.name;
+            if (!file.type.startsWith("image/")) return;
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                let preview = adminPhotoAvatar.querySelector("img");
+                if (!preview) {
+                    adminPhotoAvatar.textContent = "";
+                    preview = document.createElement("img");
+                    preview.alt = "Aperçu de ma nouvelle photo";
+                    adminPhotoAvatar.appendChild(preview);
+                }
+                preview.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
 </script>
 
 {% endblock %}
