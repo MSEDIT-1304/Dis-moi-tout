@@ -23,7 +23,7 @@
                 <label for="admin-profile-photo">Ajouter ou remplacer ma photo (5 Mo maximum)</label>
                 <input type="file" id="admin-profile-photo" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
                 <span id="admin-photo-filename" class="admin-photo-filename" aria-live="polite">Aucun fichier choisi</span>
-                {% if admin['photo_data'] %}<label><input type="checkbox" name="supprimer_photo" value="oui"> Supprimer ma photo</label>{% endif %}
+                {% if admin['photo_data'] %}<label class="profile-photo-delete"><input type="checkbox" name="supprimer_photo" value="oui"><span>Supprimer ma photo</span></label>{% endif %}
             </div>
 
             <h2>Mes informations</h2>
@@ -117,12 +117,13 @@
 </div>
 
 <style>
-.profile-photo-edit-admin{display:grid;gap:6px;max-width:420px;margin:0 0 14px;padding:0;border:0;border-radius:0;background:transparent;color:white}
-.profile-photo-edit-admin .admin-photo-filename{font-size:12px;color:white;overflow-wrap:anywhere}
-.profile-photo-edit-admin input[type="file"]{max-width:100%;background:#fff;color:#244967;border-radius:7px;padding:6px}
-.profile-photo-edit-admin .profile-avatar{width:62px;height:62px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#c5a15b;color:#172b40;font-weight:bold;margin:0 auto 6px}
+.profile-photo-edit-admin{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;width:100%;max-width:none;margin:0 0 12px;padding:0;border:0;border-radius:0;background:transparent;color:white}
+.profile-photo-edit-admin .admin-photo-filename{flex:1 1 100%;font-size:12px;color:white;overflow-wrap:anywhere}
+.profile-photo-edit-admin input[type="file"]{flex:1 1 280px;max-width:480px;min-width:0;background:#fff;color:#244967;border:1px solid #d2dce8;border-radius:7px;padding:6px}
+.profile-photo-edit-admin .profile-avatar{flex:0 0 62px;width:62px;height:62px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#c5a15b;color:#172b40;font-weight:bold;margin:0}
 .profile-photo-edit-admin .profile-avatar img{width:100%;height:100%;object-fit:cover}
-.profile-photo-edit-admin input[type=file]{max-width:100%}
+.profile-photo-edit-admin .profile-photo-delete{display:inline-flex!important;align-items:center;gap:7px;width:auto!important;margin:0!important;color:white!important;font-size:13px!important;font-weight:normal!important}
+.profile-photo-edit-admin .profile-photo-delete input[type="checkbox"]{display:inline-block!important;flex:0 0 16px;width:16px!important;height:16px!important;min-width:16px;padding:0!important;margin:0!important;accent-color:#A9CBEA}
 .profile-edit-page {
     width: 100%;
     max-width: 1000px;
@@ -252,14 +253,27 @@ html body .profile-edit-card .edit-field label {
 }
 
 html body .profile-edit-card form {
-    padding: 12px !important;
+    width: 100% !important;
+    padding: 0 !important;
     margin: 0 !important;
-    background: #FFFFFF !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
 }
 
 html body .profile-edit-card input,
 html body .profile-edit-card select {
     margin: 3px 0 7px !important;
+}
+
+html body .profile-edit-card .profile-photo-delete input[type="checkbox"] {
+    display: inline-block !important;
+    width: 16px !important;
+    min-width: 16px !important;
+    height: 16px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    accent-color: #A9CBEA;
 }
 
 /* MOBILE — PROFIL ADMIN COMPACT */
@@ -337,7 +351,7 @@ html body .profile-edit-card select {
 @media (min-width: 769px) {
 
     html body .profile-edit-page {
-        max-width: 780px !important;
+        max-width: 900px !important;
         padding: 8px 12px !important;
     }
 
@@ -365,8 +379,12 @@ html body .profile-edit-card select {
     }
 
     html body .profile-edit-card form {
-        padding: 10px !important;
+        width: 100% !important;
+        padding: 0 !important;
         margin: 0 !important;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
     }
 
     html body .profile-edit-grid {
