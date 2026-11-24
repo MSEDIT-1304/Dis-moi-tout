@@ -114,7 +114,12 @@
           {% set mine = (message.sender_type == current_kind and message.sender_id == current_user_id) %}
           <div class="message {{ 'mine' if mine else '' }}" id="message-{{ message.id }}" data-message-id="{{ message.id }}" data-message-author="{{ message.sender_name or 'Membre' }}">
             <small class="message-meta">
-              {% if message.sender_type == 'membre' and message.sender_has_photo %}<img class="message-avatar" src="{{ url_for('membre_photo', membre_id=message.sender_id) }}" alt="">
+              {% if message.sender_has_photo %}
+                {% if message.sender_type == 'membre' %}
+                  <img class="message-avatar" src="{{ url_for('membre_photo', membre_id=message.sender_id) }}" alt="">
+                {% elif message.sender_type == 'admin' %}
+                  <img class="message-avatar" src="{{ url_for('admin_photo', requested_admin_id=message.sender_id) }}" alt="">
+                {% endif %}
               {% endif %}
               <span>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</span>
             </small>
