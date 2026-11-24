@@ -29,7 +29,8 @@ import io
 import calendar as pycal
 from werkzeug.utils import secure_filename
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
+from zoneinfo import ZoneInfo
 from urllib.parse import urlencode
 
 from config import (
@@ -3585,6 +3586,23 @@ def messagerie():
         messages = []
         for message in messages_raw:
             message_dict = dict(message)
+            # Les dates SQLite CURRENT_TIMESTAMP sont stockées en UTC.
+            # Convertir uniquement la valeur destinée à l'affichage, sans
+            # modifier created_at ni les données enregistrées en base.
+            created_at_value = message_dict.get("created_at")
+            message_dict["created_at_local"] = created_at_value
+            if created_at_value:
+                try:
+                    parsed_created_at = datetime.fromisoformat(str(created_at_value))
+                    if parsed_created_at.tzinfo is None:
+                        parsed_created_at = parsed_created_at.replace(tzinfo=timezone.utc)
+                    message_dict["created_at_local"] = parsed_created_at.astimezone(
+                        ZoneInfo("Europe/Paris")
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+                except (ValueError, TypeError):
+                    # En cas de format historique inattendu, conserver
+                    # l'affichage d'origine plutôt que masquer l'heure.
+                    message_dict["created_at_local"] = created_at_value
             message_dict["sender_name"] = messaging_name_for_viewer(
                 conn, identity, message["sender_type"], message["sender_id"], message["sender_name"]
             )
