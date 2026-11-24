@@ -2889,7 +2889,22 @@ def liste_courses():
                 validated = conn.execute("SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE list_id=? AND validated=1", (list_id,)).fetchone()["n"]
                 if total and total == validated:
                     conn.execute("UPDATE shopping_lists SET status='validated',updated_at=CURRENT_TIMESTAMP WHERE id=?", (list_id,))
+                    admin_row = conn.execute(
+                        "SELECT created_by_admin_id FROM shopping_lists WHERE id=?", (list_id,)
+                    ).fetchone()
+                    conversation_id = _shopping_direct_conversation(
+                        conn, family_id, admin_row["created_by_admin_id"], member_id
+                    )
+                    conn.execute(
+                        "INSERT INTO messages (conversation_id,sender_type,sender_id,contenu) VALUES (?, 'membre', ?, ?)",
+                        (conversation_id, member_id, f"[[LISTE_COURSES_ADMIN:{list_id}:validated]]")
+                    )
+                    conn.execute("DELETE FROM conversation_hidden WHERE conversation_id=?", (conversation_id,))
                 conn.commit()
+                if total and total == validated:
+                    send_message_push_notifications(
+                        conn, conversation_id, ("membre", member_id, family_id)
+                    )
             conn.close()
             return redirect(url_for("liste_courses", liste_id=list_id))
 
@@ -2971,6 +2986,13 @@ def liste_courses():
         """, (list_id, family_id, member_id)).fetchone() if list_id else (lists[0] if lists else None)
         members = []
         recipients = []
+        pending_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE membre_id=? AND validated=0",
+            (member_id,)
+        ).fetchone()["n"]
+
+    if is_admin:
+        pending_count = 0
 
     items = conn.execute("SELECT * FROM shopping_list_items WHERE list_id=? ORDER BY id", (active_list["id"],)).fetchall() if active_list else []
     if is_admin and active_list:
@@ -2986,7 +3008,8 @@ def liste_courses():
         items=items,
         members=members,
         recipients=recipients,
-        validated_all=validated_all
+        validated_all=validated_all,
+        pending_count=pending_count
     )
 
 
