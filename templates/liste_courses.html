@@ -2,14 +2,14 @@
 {% block title %}Liste des courses — Dis-moi tout{% endblock %}
 {% block content %}
 <style>
-.shopping-wrap{max-width:1050px;margin:14px auto;padding:0 14px}
-.shopping-card{background:#fff;border:1px solid #A52D68;border-radius:12px;padding:11px 14px;margin:9px 0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
-.shopping-card h2,.shopping-card h3{margin-top:0;margin-bottom:9px;color:#71304f}
+.shopping-wrap{max-width:1050px;margin:22px auto;padding:0 14px}
+.shopping-card{background:#fff;border:1px solid #eadce4;border-radius:14px;padding:18px;margin:14px 0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.shopping-card h2,.shopping-card h3{margin-top:0;color:#71304f}
 .shopping-field{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d8cbd2;border-radius:8px;font:inherit;margin:6px 0 12px}
 .shopping-button{display:inline-block;border:0;border-radius:8px;padding:9px 15px;background:#a52d68;color:#fff;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
 .shopping-button.secondary{background:#596575}
-.shopping-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:6px;margin:7px 0 10px}
-.shopping-checks label{padding:6px 8px;border:1px solid #eadce4;border-radius:8px}
+.shopping-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;margin:10px 0 14px}
+.shopping-checks label{padding:8px 10px;border:1px solid #eadce4;border-radius:8px}
 .shopping-list-items{padding-left:22px}
 .shopping-list-items li{padding:5px 0}
 .shopping-status{font-weight:700;color:#26834a}
@@ -17,10 +17,31 @@
 .shopping-layout{display:grid;grid-template-columns:minmax(210px,280px) 1fr;gap:14px}
 .shopping-history a{display:block;padding:9px 10px;border-radius:8px;color:#71304f;text-decoration:none;margin:3px 0}
 .shopping-history a.active,.shopping-history a:hover{background:#fbedf3}
-@media(max-width:700px){.shopping-layout{grid-template-columns:1fr}.shopping-card{padding:10px 12px}}
+@media(max-width:700px){.shopping-layout{grid-template-columns:1fr}.shopping-card{padding:14px}}
 </style>
 <div class="shopping-wrap">
   <h1>Liste des courses</h1>
+  {% if is_admin %}
+    <section class="shopping-card">
+      <h2>Créer une liste</h2>
+      <form method="post">
+        <input type="hidden" name="action" value="create">
+        <label><strong>Articles de départ</strong></label>
+        <textarea class="shopping-field" name="articles" rows="4" placeholder="Un article par ligne"></textarea>
+        <label><strong>Message aux membres (facultatif)</strong></label>
+        <textarea class="shopping-field" name="message_admin" rows="2" maxlength="2000" placeholder="Votre message..."></textarea>
+        <strong>Destinataires</strong>
+        <div class="shopping-checks">
+          <label><input type="checkbox" name="tous_membres" value="1" id="shopping-all"> Tous les membres</label>
+          {% for member in members %}
+            <label><input type="checkbox" name="membres" value="{{ member.id }}" class="shopping-member"> {{ member.prenom }} {{ member.nom or '' }}{% if member.pseudo %} ({{ member.pseudo }}){% endif %}</label>
+          {% endfor %}
+        </div>
+        <button class="shopping-button" type="submit">Envoyer la liste</button>
+      </form>
+    </section>
+  {% endif %}
+
   <div class="shopping-layout">
     <aside class="shopping-card shopping-history">
       <h3>{% if is_admin %}Listes créées{% else %}Mes listes{% endif %}</h3>
@@ -107,26 +128,6 @@
       {% endif %}
     </main>
   </div>
-  {% if is_admin %}
-    <section class="shopping-card">
-      <h2>Créer une liste</h2>
-      <form method="post">
-        <input type="hidden" name="action" value="create">
-        <label><strong>Articles de départ</strong></label>
-        <textarea class="shopping-field" name="articles" rows="4" placeholder="Un article par ligne"></textarea>
-        <label><strong>Message aux membres (facultatif)</strong></label>
-        <textarea class="shopping-field" name="message_admin" rows="2" maxlength="2000" placeholder="Votre message..."></textarea>
-        <strong>Destinataires</strong>
-        <div class="shopping-checks">
-          <label><input type="checkbox" name="tous_membres" value="1" id="shopping-all"> Tous les membres</label>
-          {% for member in members %}
-            <label><input type="checkbox" name="membres" value="{{ member.id }}" class="shopping-member"> {{ member.prenom }} {{ member.nom or '' }}{% if member.pseudo %} ({{ member.pseudo }}){% endif %}</label>
-          {% endfor %}
-        </div>
-        <button class="shopping-button" type="submit">Envoyer la liste</button>
-      </form>
-    </section>
-  {% endif %}
 </div>
 <script>
 (function(){
