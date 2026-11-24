@@ -121,7 +121,7 @@
                   <img class="message-avatar" src="{{ url_for('admin_photo', requested_admin_id=message.sender_id) }}" alt="">
                 {% endif %}
               {% endif %}
-              <span>{{ message.sender_name or 'Membre' }} · {{ message.created_at_local or message.created_at }}</span>
+              <span>{{ message.sender_name or 'Membre' }} · {{ message.created_at }}</span>
             </small>
             {% if message.reply_to_message_id %}
               <button type="button" class="reply-quote" data-target-message="{{ message.reply_to_message_id }}">
