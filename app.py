@@ -1431,6 +1431,46 @@ def init_database():
     )
 
     # ======================================================
+    # LISTES DE COURSES (fonction indépendante de la messagerie)
+    # ======================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS shopping_lists (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            created_by_admin_id INTEGER NOT NULL,
+            titre TEXT NOT NULL DEFAULT 'Liste des courses',
+            message_admin TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            assigned_member_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS shopping_list_recipients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            list_id INTEGER NOT NULL,
+            membre_id INTEGER NOT NULL,
+            validated INTEGER NOT NULL DEFAULT 0,
+            validated_at TIMESTAMP,
+            UNIQUE(list_id, membre_id),
+            FOREIGN KEY(list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE,
+            FOREIGN KEY(membre_id) REFERENCES membres(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS shopping_list_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            list_id INTEGER NOT NULL,
+            item_text TEXT NOT NULL,
+            added_by_type TEXT NOT NULL,
+            added_by_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(list_id) REFERENCES shopping_lists(id) ON DELETE CASCADE
+        )
+    """)
+
+    # ======================================================
     # MESSAGERIE INTERNE
     # ======================================================
     cursor.execute("""
@@ -2706,6 +2746,249 @@ def family():
         total_membres=total_membres,
         est_admin=est_admin
     )
+
+
+# ==========================================================
+# LISTE DES COURSES
+# ==========================================================
+def _shopping_admin_identity():
+    if not session.get("logged") or not session.get("admin_logged"):
+        return None
+    return session.get("admin_id"), session.get("famille_id")
+
+
+def _shopping_direct_conversation(conn, family_id, admin_id, member_id):
+    """Retrouve ou crée la conversation privée ADMIN/membre."""
+    rows = conn.execute("""
+        SELECT c.id
+        FROM conversations c
+        JOIN conversation_participants p ON p.conversation_id=c.id
+        WHERE c.famille_id=?
+        GROUP BY c.id
+        HAVING COUNT(*)=2
+           AND SUM(CASE WHEN p.user_type='admin' AND p.user_id=? THEN 1 ELSE 0 END)=1
+           AND SUM(CASE WHEN p.user_type='membre' AND p.user_id=? THEN 1 ELSE 0 END)=1
+        ORDER BY c.id DESC
+    """, (family_id, admin_id, member_id)).fetchall()
+    if rows:
+        conversation_id = rows[0]["id"]
+    else:
+        conn.execute("INSERT INTO conversations (famille_id) VALUES (?)", (family_id,))
+        conversation_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute("""
+            INSERT INTO conversation_participants (conversation_id,user_type,user_id)
+            VALUES (?, 'admin', ?), (?, 'membre', ?)
+        """, (conversation_id, admin_id, conversation_id, member_id))
+    return conversation_id
+
+
+def _shopping_send_internal_message(conn, family_id, admin_id, member_id, list_id, final=False):
+    conversation_id = _shopping_direct_conversation(conn, family_id, admin_id, member_id)
+    marker = f"[[LISTE_COURSES:{list_id}:{'final' if final else 'validation'}]]"
+    conn.execute("""
+        INSERT INTO messages (conversation_id,sender_type,sender_id,contenu)
+        VALUES (?, 'admin', ?, ?)
+    """, (conversation_id, admin_id, marker))
+    conn.execute("""
+        DELETE FROM conversation_hidden WHERE conversation_id=?
+    """, (conversation_id,))
+    conn.commit()
+    # Réutilise le déclenchement existant des messages reçus, sans modifier son code.
+    send_message_push_notifications(conn, conversation_id, ("admin", admin_id, family_id))
+
+
+@app.route("/liste-courses", methods=["GET", "POST"])
+def liste_courses():
+    if not session.get("logged"):
+        return redirect(url_for("home"))
+
+    is_admin = session.get("admin_logged") is True
+    family_id = session.get("famille_id")
+    member_id = session.get("membre_id")
+    if not family_id:
+        return redirect(url_for("home"))
+
+    conn = get_connection()
+    list_id = request.values.get("liste_id", type=int)
+
+    if request.method == "POST":
+        action = request.form.get("action", "").strip()
+
+        if action == "create" and is_admin:
+            selected_ids = request.form.getlist("membres")
+            all_members = request.form.get("tous_membres") == "1"
+            if all_members:
+                selected_ids = [str(r["id"]) for r in conn.execute(
+                    "SELECT id FROM membres WHERE famille_id=? ORDER BY prenom, nom",
+                    (family_id,)
+                ).fetchall()]
+            valid_ids = []
+            for raw_id in selected_ids:
+                try:
+                    mid = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if conn.execute("SELECT 1 FROM membres WHERE id=? AND famille_id=?", (mid, family_id)).fetchone():
+                    if mid not in valid_ids:
+                        valid_ids.append(mid)
+            if not valid_ids:
+                flash("Sélectionnez au moins un membre.")
+                conn.close()
+                return redirect(url_for("liste_courses"))
+            titre = "Liste des courses"
+            message_admin = request.form.get("message_admin", "").strip()[:2000]
+            conn.execute("""
+                INSERT INTO shopping_lists (famille_id,created_by_admin_id,titre,message_admin,status)
+                VALUES (?,?,?,?,'pending')
+            """, (family_id, session.get("admin_id"), titre, message_admin))
+            new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            for mid in valid_ids:
+                conn.execute("INSERT INTO shopping_list_recipients (list_id,membre_id) VALUES (?,?)", (new_id, mid))
+            for item in request.form.get("articles", "").splitlines():
+                item = item.strip()
+                if item:
+                    conn.execute("""
+                        INSERT INTO shopping_list_items (list_id,item_text,added_by_type,added_by_id)
+                        VALUES (?,?,'admin',?)
+                    """, (new_id, item[:250], session.get("admin_id")))
+            conn.commit()
+            for mid in valid_ids:
+                _shopping_send_internal_message(conn, family_id, session.get("admin_id"), mid, new_id, final=False)
+            conn.close()
+            flash("La liste a été envoyée aux membres sélectionnés.")
+            return redirect(url_for("liste_courses", liste_id=new_id))
+
+        if action == "add_item" and not is_admin:
+            row = conn.execute("""
+                SELECT l.id FROM shopping_lists l
+                JOIN shopping_list_recipients r ON r.list_id=l.id
+                WHERE l.id=? AND l.famille_id=? AND r.membre_id=? AND r.validated=0
+            """, (list_id, family_id, member_id)).fetchone()
+            item = request.form.get("item_text", "").strip()
+            if row and item:
+                conn.execute("""
+                    INSERT INTO shopping_list_items (list_id,item_text,added_by_type,added_by_id)
+                    VALUES (?,?,'membre',?)
+                """, (list_id, item[:250], member_id))
+                conn.commit()
+            conn.close()
+            return redirect(url_for("liste_courses", liste_id=list_id))
+
+        if action == "validate" and not is_admin:
+            row = conn.execute("""
+                SELECT r.id FROM shopping_list_recipients r
+                JOIN shopping_lists l ON l.id=r.list_id
+                WHERE r.list_id=? AND l.famille_id=? AND r.membre_id=? AND r.validated=0
+            """, (list_id, family_id, member_id)).fetchone()
+            if row:
+                conn.execute("""
+                    UPDATE shopping_list_recipients SET validated=1, validated_at=CURRENT_TIMESTAMP
+                    WHERE list_id=? AND membre_id=?
+                """, (list_id, member_id))
+                total = conn.execute("SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE list_id=?", (list_id,)).fetchone()["n"]
+                validated = conn.execute("SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE list_id=? AND validated=1", (list_id,)).fetchone()["n"]
+                if total and total == validated:
+                    conn.execute("UPDATE shopping_lists SET status='validated',updated_at=CURRENT_TIMESTAMP WHERE id=?", (list_id,))
+                conn.commit()
+            conn.close()
+            return redirect(url_for("liste_courses", liste_id=list_id))
+
+        if action == "edit" and is_admin:
+            allowed = conn.execute("SELECT id FROM shopping_lists WHERE id=? AND famille_id=?", (list_id, family_id)).fetchone()
+            if allowed:
+                conn.execute("DELETE FROM shopping_list_items WHERE list_id=?", (list_id,))
+                for item in request.form.get("articles", "").splitlines():
+                    item = item.strip()
+                    if item:
+                        conn.execute("""
+                            INSERT INTO shopping_list_items (list_id,item_text,added_by_type,added_by_id)
+                            VALUES (?,?,'admin',?)
+                        """, (list_id, item[:250], session.get("admin_id")))
+                conn.execute("""
+                    UPDATE shopping_lists SET message_admin=?,updated_at=CURRENT_TIMESTAMP
+                    WHERE id=?
+                """, (request.form.get("message_admin", "").strip()[:2000], list_id))
+                conn.commit()
+                flash("La liste a été modifiée. Les validations déjà reçues sont conservées.")
+            conn.close()
+            return redirect(url_for("liste_courses", liste_id=list_id))
+
+        if action == "assign" and is_admin:
+            target_id = request.form.get("membre_id", type=int)
+            allowed = conn.execute("""
+                SELECT id FROM shopping_lists
+                WHERE id=? AND famille_id=? AND status='validated'
+            """, (list_id, family_id)).fetchone()
+            target = conn.execute("SELECT id FROM membres WHERE id=? AND famille_id=?", (target_id, family_id)).fetchone()
+            if allowed and target:
+                conn.execute("UPDATE shopping_lists SET assigned_member_id=?,status='assigned',updated_at=CURRENT_TIMESTAMP WHERE id=?", (target_id, list_id))
+                conn.execute("""
+                    INSERT OR IGNORE INTO shopping_list_recipients (list_id,membre_id,validated,validated_at)
+                    VALUES (?,?,1,CURRENT_TIMESTAMP)
+                """, (list_id, target_id))
+                conn.commit()
+                _shopping_send_internal_message(conn, family_id, session.get("admin_id"), target_id, list_id, final=True)
+                flash("La liste finale a été envoyée dans la messagerie du membre.")
+            else:
+                flash("La liste doit être validée par tous avant attribution.")
+            conn.close()
+            return redirect(url_for("liste_courses", liste_id=list_id))
+
+        conn.close()
+        return redirect(url_for("liste_courses", liste_id=list_id) if list_id else url_for("liste_courses"))
+
+    # GET : contrôle de l'accès à la liste et préparation de l'affichage.
+    if is_admin:
+        lists = conn.execute("""
+            SELECT l.*,
+                   (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id) AS total_recipients,
+                   (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id AND r.validated=1) AS validated_recipients
+            FROM shopping_lists l WHERE l.famille_id=?
+            ORDER BY l.created_at DESC, l.id DESC
+        """, (family_id,)).fetchall()
+        active_list = conn.execute("""
+            SELECT l.*,
+                   (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id) AS total_recipients,
+                   (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id AND r.validated=1) AS validated_recipients
+            FROM shopping_lists l WHERE l.id=? AND l.famille_id=?
+        """, (list_id, family_id)).fetchone() if list_id else (lists[0] if lists else None)
+        members = conn.execute("SELECT id,prenom,nom,pseudo FROM membres WHERE famille_id=? ORDER BY prenom,nom", (family_id,)).fetchall()
+        recipients = conn.execute("""
+            SELECT r.*,m.prenom,m.nom FROM shopping_list_recipients r
+            JOIN membres m ON m.id=r.membre_id WHERE r.list_id=? ORDER BY m.prenom,m.nom
+        """, (active_list["id"],)).fetchall() if active_list else []
+    else:
+        lists = conn.execute("""
+            SELECT l.*,r.validated,r.validated_at
+            FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
+            WHERE l.famille_id=? AND r.membre_id=?
+            ORDER BY l.created_at DESC,l.id DESC
+        """, (family_id, member_id)).fetchall()
+        active_list = conn.execute("""
+            SELECT l.*,r.validated,r.validated_at
+            FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
+            WHERE l.id=? AND l.famille_id=? AND r.membre_id=?
+        """, (list_id, family_id, member_id)).fetchone() if list_id else (lists[0] if lists else None)
+        members = []
+        recipients = []
+
+    items = conn.execute("SELECT * FROM shopping_list_items WHERE list_id=? ORDER BY id", (active_list["id"],)).fetchall() if active_list else []
+    if is_admin and active_list:
+        validated_all = active_list["status"] in ("validated", "assigned")
+    else:
+        validated_all = False
+    conn.close()
+    return render_template(
+        "liste_courses.html",
+        is_admin=is_admin,
+        lists=lists,
+        active_list=active_list,
+        items=items,
+        members=members,
+        recipients=recipients,
+        validated_all=validated_all
+    )
+
 
 # ==========================================================
 # MESSAGERIE INTERNE
