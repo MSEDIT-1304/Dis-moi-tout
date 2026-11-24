@@ -129,15 +129,12 @@
                 <span>{% if message.reply_id %}{{ (message.reply_contenu or ('📎 ' ~ (message.reply_fichier_nom or 'Pièce jointe')))[:150] }}{% else %}Message d’origine indisponible{% endif %}</span>
               </button>
             {% endif %}
-            {% if message.contenu and message.contenu.startswith('[[LISTE_COURSES_ADMIN:') %}
-              <div class="message-content">
-                <strong>Liste des courses validée par tous les membres</strong>
-              </div>
-            {% elif message.contenu and message.contenu.startswith('[[LISTE_COURSES:') %}
+            {% if message.contenu and message.contenu.startswith('[[LISTE_COURSES:') %}
               {% set course_parts = message.contenu[16:-2].split(':') %}
               <div class="message-content">
                 <strong>{% if course_parts|length > 1 and course_parts[1] == 'final' %}Liste des courses{% else %}Liste des courses à valider{% endif %}</strong>
-                <p>Une liste de courses vous a été transmise. Retrouvez-la dans l'onglet « Liste des courses ».</p>
+                <p>Une liste de courses vous a été transmise.</p>
+                <a class="message-file" href="{{ url_for('liste_courses', liste_id=course_parts[0]|int) }}">Ouvrir la liste des courses</a>
               </div>
             {% elif message.contenu %}<div class="message-content">{{ message.contenu }}</div>{% endif %}
             {% if message.fichier_stockage %}
