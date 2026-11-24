@@ -23,6 +23,12 @@
                 <label for="admin-profile-photo">Ajouter ou remplacer ma photo (5 Mo maximum)</label>
                 <input type="file" id="admin-profile-photo" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
                 <span id="admin-photo-filename" class="admin-photo-filename" aria-live="polite">Aucun fichier choisi</span>
+                <div class="photo-crop-panel" id="admin-photo-crop" hidden>
+                    <p class="photo-crop-title">Recadrer ma photo : faites glisser l’image et ajustez le zoom.</p>
+                    <div class="photo-crop-viewport" id="admin-photo-crop-viewport"><img id="admin-photo-crop-image" alt="Recadrage de ma photo"></div>
+                    <label class="photo-crop-zoom" for="admin-photo-zoom">Zoom</label>
+                    <input type="range" id="admin-photo-zoom" min="1" max="3" step="0.01" value="1">
+                </div>
                 {% if admin['photo_data'] %}<label class="profile-photo-delete"><input type="checkbox" name="supprimer_photo" value="oui"><span>Supprimer ma photo</span></label>{% endif %}
             </div>
 
@@ -120,7 +126,7 @@
 .profile-photo-edit-admin{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px;width:100%;max-width:none;margin:0 0 12px;padding:0;border:0;border-radius:0;background:transparent;color:white}
 .profile-photo-edit-admin .admin-photo-filename{flex:1 1 100%;font-size:12px;color:white;overflow-wrap:anywhere}
 .profile-photo-edit-admin input[type="file"]{flex:1 1 280px;max-width:480px;min-width:0;background:#fff;color:#244967;border:1px solid #d2dce8;border-radius:7px;padding:6px}
-.profile-photo-edit-admin .profile-avatar{flex:0 0 62px;width:62px;height:62px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#c5a15b;color:#172b40;font-weight:bold;margin:0}
+.profile-photo-edit-admin .profile-avatar{flex:0 0 80px;width:80px;height:80px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#c5a15b;color:#172b40;font-weight:bold;margin:0}
 .profile-photo-edit-admin .profile-avatar img{width:100%;height:100%;object-fit:cover}
 .profile-photo-edit-admin .profile-photo-delete{display:inline-flex!important;align-items:center;gap:7px;width:auto!important;margin:0!important;color:white!important;font-size:13px!important;font-weight:normal!important}
 .profile-photo-edit-admin .profile-photo-delete input[type="checkbox"]{display:inline-block!important;flex:0 0 16px;width:16px!important;height:16px!important;min-width:16px;padding:0!important;margin:0!important;accent-color:#A9CBEA}
@@ -420,6 +426,15 @@ html body .profile-edit-card .profile-photo-delete input[type="checkbox"] {
     }
 }
 
+
+.photo-crop-panel{flex:1 1 100%;margin:6px 0 2px;color:inherit}
+.photo-crop-title{margin:0 0 7px;color:inherit;font-size:12px}
+.photo-crop-viewport{position:relative;width:190px;height:190px;max-width:100%;overflow:hidden;border-radius:50%;background:#f5f5f5;border:2px solid #A9CBEA;touch-action:none;cursor:grab}
+.photo-crop-viewport:active{cursor:grabbing}
+.photo-crop-viewport img{position:absolute;max-width:none;max-height:none;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.photo-crop-zoom{display:block!important;width:auto!important;margin:7px 0 2px!important;color:inherit!important;font-size:12px!important}
+.photo-crop-panel input[type="range"]{display:block;width:190px;max-width:100%;height:20px!important;margin:0!important;padding:0!important}
+
 </style>
 
 <script>
@@ -436,33 +451,118 @@ document.getElementById("garde_partagee").addEventListener(
 );
 
 afficherOptionsGarde();
-    const adminPhotoInput = document.getElementById("admin-profile-photo");
-    const adminPhotoAvatar = document.querySelector(".profile-photo-edit-admin .profile-avatar");
-    const adminPhotoFilename = document.getElementById("admin-photo-filename");
+    
+function installerRecadragePhoto(inputId, filenameId, panelId, viewportId, imageId, zoomId) {
+    const input = document.getElementById(inputId);
+    const filename = document.getElementById(filenameId);
+    const panel = document.getElementById(panelId);
+    const viewport = document.getElementById(viewportId);
+    const image = document.getElementById(imageId);
+    const zoom = document.getElementById(zoomId);
+    if (!input || !filename || !panel || !viewport || !image || !zoom) return;
 
-    if (adminPhotoInput && adminPhotoAvatar && adminPhotoFilename) {
-        adminPhotoInput.addEventListener("change", function () {
-            const file = this.files && this.files[0];
-            if (!file) {
-                adminPhotoFilename.textContent = "Aucun fichier choisi";
-                return;
-            }
-            adminPhotoFilename.textContent = file.name;
-            if (!file.type.startsWith("image/")) return;
-            const reader = new FileReader();
-            reader.onload = function (event) {
-                let preview = adminPhotoAvatar.querySelector("img");
-                if (!preview) {
-                    adminPhotoAvatar.textContent = "";
-                    preview = document.createElement("img");
-                    preview.alt = "Aperçu de ma nouvelle photo";
-                    adminPhotoAvatar.appendChild(preview);
-                }
-                preview.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+    const size = 190;
+    let sourceFile = null, naturalWidth = 0, naturalHeight = 0;
+    let baseWidth = 0, baseHeight = 0, scale = 1, x = 0, y = 0;
+    let dragging = false, startX = 0, startY = 0, startOffsetX = 0, startOffsetY = 0;
+    let objectUrl = null;
+
+    function updateImage() {
+        const w = baseWidth * scale, h = baseHeight * scale;
+        x = Math.min(0, Math.max(size - w, x));
+        y = Math.min(0, Math.max(size - h, y));
+        image.style.width = w + "px";
+        image.style.height = h + "px";
+        image.style.left = x + "px";
+        image.style.top = y + "px";
+    }
+
+    input.addEventListener("change", function () {
+        const file = this.files && this.files[0];
+        if (!file) {
+            filename.textContent = "Aucun fichier choisi";
+            panel.hidden = true;
+            sourceFile = null;
+            return;
+        }
+        filename.textContent = file.name;
+        if (!file.type.startsWith("image/")) {
+            panel.hidden = true;
+            sourceFile = null;
+            return;
+        }
+        sourceFile = file;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(file);
+        image.onload = function () {
+            naturalWidth = image.naturalWidth;
+            naturalHeight = image.naturalHeight;
+            const fit = Math.max(size / naturalWidth, size / naturalHeight);
+            baseWidth = naturalWidth * fit;
+            baseHeight = naturalHeight * fit;
+            scale = 1;
+            x = (size - baseWidth) / 2;
+            y = (size - baseHeight) / 2;
+            zoom.value = "1";
+            updateImage();
+            panel.hidden = false;
+        };
+        image.src = objectUrl;
+    });
+
+    zoom.addEventListener("input", function () {
+        const oldScale = scale;
+        scale = Number(this.value);
+        x = size / 2 - (size / 2 - x) * (scale / oldScale);
+        y = size / 2 - (size / 2 - y) * (scale / oldScale);
+        updateImage();
+    });
+
+    viewport.addEventListener("pointerdown", function (event) {
+        dragging = true;
+        startX = event.clientX;
+        startY = event.clientY;
+        startOffsetX = x;
+        startOffsetY = y;
+        viewport.setPointerCapture(event.pointerId);
+    });
+    viewport.addEventListener("pointermove", function (event) {
+        if (!dragging) return;
+        x = startOffsetX + event.clientX - startX;
+        y = startOffsetY + event.clientY - startY;
+        updateImage();
+    });
+    viewport.addEventListener("pointerup", function () { dragging = false; });
+    viewport.addEventListener("pointercancel", function () { dragging = false; });
+
+    const form = input.closest("form");
+    if (form) {
+        form.addEventListener("submit", function (event) {
+            if (!sourceFile || !naturalWidth || panel.hidden) return;
+            event.preventDefault();
+            const canvas = document.createElement("canvas");
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext("2d");
+            const rw = baseWidth * scale, rh = baseHeight * scale;
+            const sx = (-x / rw) * naturalWidth;
+            const sy = (-y / rh) * naturalHeight;
+            const sw = (size / rw) * naturalWidth;
+            const sh = (size / rh) * naturalHeight;
+            ctx.drawImage(image, sx, sy, sw, sh, 0, 0, 512, 512);
+            canvas.toBlob(function (blob) {
+                if (!blob) { form.submit(); return; }
+                const cropped = new File([blob], sourceFile.name.replace(/\.[^.]+$/, "") + ".jpg", {type: "image/jpeg"});
+                const dt = new DataTransfer();
+                dt.items.add(cropped);
+                input.files = dt.files;
+                form.submit();
+            }, "image/jpeg", 0.92);
         });
     }
+}
+
+    installerRecadragePhoto("admin-profile-photo", "admin-photo-filename", "admin-photo-crop", "admin-photo-crop-viewport", "admin-photo-crop-image", "admin-photo-zoom");
 </script>
 
 {% endblock %}
