@@ -83,7 +83,7 @@
                 <label for="profile-photo">Choisir ma photo (facultatif, 5 Mo maximum)</label>
                 <input type="file" id="profile-photo" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
                 <span id="profile-photo-filename" class="profile-photo-filename" aria-live="polite">Aucun fichier choisi</span>
-                {% if membre['photo_data'] %}<label><input type="checkbox" name="supprimer_photo" value="oui"> Supprimer ma photo</label>{% endif %}
+                {% if membre['photo_data'] %}<label class="profile-photo-delete"><input type="checkbox" name="supprimer_photo" value="oui"><span>Supprimer ma photo</span></label>{% endif %}
                 <button type="submit" class="profile-button">Enregistrer ma photo</button>
             </form>
 
@@ -161,6 +161,8 @@
 .profile-photo-form{display:grid;gap:6px;max-width:340px;margin:0 auto 12px;padding:0;text-align:left;color:#fff;background:transparent!important;border:0!important;box-shadow:none!important}
 .profile-photo-form input[type="file"]{max-width:100%;padding:6px;border-radius:8px;background:#fff;color:#244967}
 .profile-photo-filename{font-size:13px;color:#fff;overflow-wrap:anywhere}
+.profile-photo-delete{display:flex!important;align-items:center;gap:7px;width:max-content;max-width:100%;margin:2px 0 4px!important;color:#fff!important;font-size:13px!important;font-weight:normal!important}
+.profile-photo-delete input[type="checkbox"]{display:inline-block!important;flex:0 0 16px;width:16px!important;min-width:16px;height:16px!important;padding:0!important;margin:0!important;accent-color:#A9CBEA}
 .profile-avatar {
     width: 62px;
     height: 62px;
