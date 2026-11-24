@@ -3,7 +3,7 @@
 
 {% block content %}
 
-<div class="profile-page">
+<div class="profile-page{% if not admin %} profile-member-page{% endif %}">
 
     <header class="profile-header">
         <h1>Mon profil</h1>
