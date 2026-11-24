@@ -49,14 +49,6 @@
                     <label for="photo-nouveau">Photo (facultative, 5 Mo max.)</label>
                     <input type="file" id="photo-nouveau" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
                 </div>
-                <div>
-                    <label for="avatar-nouveau">Ou choisir un avatar</label>
-                    <select id="avatar-nouveau" name="avatar">
-                        <option value="">Aucun</option><option>😊</option><option>👩</option><option>👨</option>
-                        <option>👵</option><option>👴</option><option>🧒</option><option>👶</option>
-                        <option>🐱</option><option>🐶</option><option>🌸</option><option>⭐</option>
-                    </select>
-                </div>
             </div>
 
             <div id="partage-agendas" style="display: none;">
@@ -112,8 +104,7 @@
                         <div class="member-info">
                             <div class="member-photo-preview">
                                 {% if membre['photo_data'] %}<img src="{{ url_for('membre_photo', membre_id=membre['id']) }}" alt="Photo de {{ membre['prenom'] }}">
-                                {% elif membre['avatar'] %}<span>{{ membre['avatar'] }}</span>
-                                {% else %}<span>👤</span>{% endif %}
+                                {% else %}<span>{{ (membre['prenom'] or '?')[0] }}{{ (membre['nom'] or '?')[0] }}</span>{% endif %}
                             </div>
                             <h3>{{ membre['prenom'] }} {{ membre['nom'] }}</h3>
                             <p class="member-category">
@@ -168,22 +159,7 @@
                                     <div class="member-photo-edit">
                                         <label for="photo-{{ membre['id'] }}">Remplacer la photo (facultatif, 5 Mo max.)</label>
                                         <input type="file" id="photo-{{ membre['id'] }}" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
-                                        <label for="avatar-{{ membre['id'] }}">Ou choisir un avatar</label>
-                                        <select id="avatar-{{ membre['id'] }}" name="avatar">
-                                            <option value="">Aucun avatar</option>
-                                            <option {% if membre['avatar'] == '😊' %}selected{% endif %}>😊</option>
-                                            <option {% if membre['avatar'] == '👩' %}selected{% endif %}>👩</option>
-                                            <option {% if membre['avatar'] == '👨' %}selected{% endif %}>👨</option>
-                                            <option {% if membre['avatar'] == '👵' %}selected{% endif %}>👵</option>
-                                            <option {% if membre['avatar'] == '👴' %}selected{% endif %}>👴</option>
-                                            <option {% if membre['avatar'] == '🧒' %}selected{% endif %}>🧒</option>
-                                            <option {% if membre['avatar'] == '👶' %}selected{% endif %}>👶</option>
-                                            <option {% if membre['avatar'] == '🐱' %}selected{% endif %}>🐱</option>
-                                            <option {% if membre['avatar'] == '🐶' %}selected{% endif %}>🐶</option>
-                                            <option {% if membre['avatar'] == '🌸' %}selected{% endif %}>🌸</option>
-                                            <option {% if membre['avatar'] == '⭐' %}selected{% endif %}>⭐</option>
-                                        </select>
-                                        {% if membre['photo_data'] or membre['avatar'] %}<label class="members-checkbox"><input type="checkbox" name="supprimer_photo" value="oui"> Supprimer la photo / l'avatar</label>{% endif %}
+                                        {% if membre['photo_data'] %}<label class="members-checkbox"><input type="checkbox" name="supprimer_photo" value="oui"> Supprimer la photo</label>{% endif %}
                                     </div>
                                     <div id="partage-agendas-{{ membre['id'] }}" class="member-agenda-permissions" style="display: none;">
                                         <label class="members-checkbox">
