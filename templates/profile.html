@@ -22,8 +22,9 @@
 
         {% if admin %}
 
-            <div class="profile-avatar">
-                {{ admin['prenom'][0] }}{{ admin['nom'][0] }}
+            <div class="profile-avatar profile-avatar-photo">
+                {% if admin['photo_data'] %}<img src="{{ url_for('admin_photo') }}" alt="Ma photo">
+                {% else %}{{ (admin['prenom'] or '?')[0] }}{{ (admin['nom'] or '?')[0] }}{% endif %}
             </div>
 
             <h2>{{ admin['prenom'] }} {{ admin['nom'] }}</h2>
@@ -76,20 +77,12 @@
 
             <div class="profile-avatar profile-avatar-photo">
                 {% if membre['photo_data'] %}<img src="{{ url_for('membre_photo', membre_id=membre['id']) }}" alt="Ma photo">
-                {% elif membre['avatar'] %}{{ membre['avatar'] }}
                 {% else %}{{ (membre['prenom'] or '?')[0] }}{{ (membre['nom'] or '?')[0] }}{% endif %}
             </div>
             <form method="POST" action="{{ url_for('update_member_photo') }}" enctype="multipart/form-data" class="profile-photo-form">
                 <label for="profile-photo">Choisir ma photo (facultatif, 5 Mo maximum)</label>
                 <input type="file" id="profile-photo" name="photo" accept="image/jpeg,image/png,image/webp,image/gif">
-                <label for="profile-avatar-choice">Ou choisir un avatar</label>
-                <select id="profile-avatar-choice" name="avatar">
-                    <option value="">Aucun avatar</option>
-                    {% for avatar in ['😊','👩','👨','👵','👴','🧒','👶','🐱','🐶','🌸','⭐'] %}
-                    <option value="{{ avatar }}" {% if membre['avatar'] == avatar %}selected{% endif %}>{{ avatar }}</option>
-                    {% endfor %}
-                </select>
-                {% if membre['photo_data'] or membre['avatar'] %}<label><input type="checkbox" name="supprimer_photo" value="oui"> Supprimer ma photo / mon avatar</label>{% endif %}
+                {% if membre['photo_data'] %}<label><input type="checkbox" name="supprimer_photo" value="oui"> Supprimer ma photo</label>{% endif %}
                 <button type="submit" class="profile-button">Enregistrer ma photo</button>
             </form>
 
