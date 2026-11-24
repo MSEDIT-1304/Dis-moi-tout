@@ -38,13 +38,14 @@
         <div class="site-name">Dis-moi tout</div>
     </header>
 
-    {% if session.get("logged") and request.endpoint in ["calendar", "members", "profile", "add_event_page", "messagerie"] %}
+    {% if session.get("logged") and request.endpoint in ["calendar", "members", "profile", "add_event_page", "messagerie", "liste_courses"] %}
         <nav class="navigation" aria-label="Navigation principale">
             <a href="{{ url_for('calendar') }}" class="{{ 'active' if request.endpoint == 'calendar' else '' }}">Calendrier</a>
             {% if session.get("admin_logged") %}
                 <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint == 'members' else '' }}">Gérer les membres</a>
             {% endif %}
             <a href="{{ url_for('messagerie') }}" class="{{ 'active' if request.endpoint == 'messagerie' else '' }}">Messagerie <span id="message-unread-badge" style="display:none;background:#a52d68;color:#fff;border-radius:12px;padding:1px 6px;font-size:11px;margin-left:3px"></span></a>
+            <a href="{{ url_for('liste_courses') }}" class="{{ 'active' if request.endpoint == 'liste_courses' else '' }}">Liste des courses</a>
             <a href="{{ url_for('profile') }}" class="{{ 'active' if request.endpoint == 'profile' else '' }}">Profil</a>
         </nav>
     {% endif %}
