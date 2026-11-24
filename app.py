@@ -2902,9 +2902,26 @@ def liste_courses():
                     conn.execute("DELETE FROM conversation_hidden WHERE conversation_id=?", (conversation_id,))
                 conn.commit()
                 if total and total == validated:
-                    send_message_push_notifications(
-                        conn, conversation_id, ("membre", member_id, family_id)
+                    # Diagnostic ciblé : validation de liste de courses.
+                    # Ces traces permettent de distinguer le déclenchement serveur
+                    # de l'envoi effectif au service Push, sans modifier le Push existant.
+                    app.logger.warning(
+                        "LISTE_PUSH_DIAG: validation complète; list_id=%s conversation_id=%s family_id=%s sender_type=membre sender_id=%s",
+                        list_id, conversation_id, family_id, member_id
                     )
+                    try:
+                        send_message_push_notifications(
+                            conn, conversation_id, ("membre", member_id, family_id)
+                        )
+                        app.logger.warning(
+                            "LISTE_PUSH_DIAG: retour de la fonction Push; list_id=%s conversation_id=%s",
+                            list_id, conversation_id
+                        )
+                    except Exception:
+                        app.logger.exception(
+                            "LISTE_PUSH_DIAG: exception pendant l'appel Push; list_id=%s conversation_id=%s",
+                            list_id, conversation_id
+                        )
             conn.close()
             return redirect(url_for("liste_courses", liste_id=list_id))
 
@@ -3071,6 +3088,10 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
         return
 
     sender_type, sender_id, family_id = sender_identity
+    app.logger.warning(
+        "LISTE_PUSH_DIAG: fonction Push appelée; conversation_id=%s family_id=%s sender_type=%s sender_id=%s",
+        conversation_id, family_id, sender_type, sender_id
+    )
     rows = conn.execute("""
         SELECT DISTINCT s.id, s.user_type, s.user_id, s.endpoint, s.subscription_json
         FROM push_subscriptions s
@@ -3084,11 +3105,20 @@ def send_message_push_notifications(conn, conversation_id, sender_identity):
 
     if not rows:
         app.logger.warning(
+            "LISTE_PUSH_DIAG: aucun abonnement trouvé; conversation_id=%s family_id=%s sender_type=%s sender_id=%s",
+            conversation_id, family_id, sender_type, sender_id
+        )
+        app.logger.warning(
             "Push : aucun appareil enregistré pour les destinataires de la conversation %s (famille %s).",
             conversation_id, family_id
         )
         return
 
+    app.logger.warning(
+        "LISTE_PUSH_DIAG: %s abonnement(s) destinataire(s) trouvé(s); conversation_id=%s destinataires=%s",
+        len(rows), conversation_id,
+        ",".join(f"{row['user_type']}:{row['user_id']}" for row in rows)
+    )
     app.logger.info(
         "Push : tentative d'envoi pour %s appareil(s), conversation %s.",
         len(rows), conversation_id
