@@ -96,9 +96,9 @@
     </section>
 
     <section class="calendar-switcher" aria-label="Choisir un agenda">
-        <button type="button" class="agenda-tab active" data-agenda="perso">AGENDA PERSO</button>
+        <button type="button" class="agenda-tab {% if active_agenda != 'pro' %}active{% endif %}" data-agenda="perso">AGENDA PERSO</button>
         {% if afficher_pro %}
-        <button type="button" class="agenda-tab" data-agenda="pro">AGENDA PRO</button>
+        <button type="button" class="agenda-tab {% if active_agenda == 'pro' %}active{% endif %}" data-agenda="pro">AGENDA PRO</button>
         {% endif %}
     </section>
 
@@ -113,9 +113,9 @@
             <label class="view-picker">
                 Affichage
                 <select id="calendar-view">
-                    <option value="month">Mois</option>
-                    <option value="week">Semaine</option>
-                    <option value="day">Jour</option>
+                    <option value="month" {% if calendar_view == 'month' %}selected{% endif %}>Mois</option>
+                    <option value="week" {% if calendar_view == 'week' %}selected{% endif %}>Semaine</option>
+                    <option value="day" {% if calendar_view == 'day' %}selected{% endif %}>Jour</option>
                 </select>
             </label>
         </div>
@@ -155,6 +155,8 @@
               <button type="button" id="voice-cancel" class="calendar-button calendar-small">Annuler</button>
             </div>
             <form id="voice-submit-form" method="POST" action="{{ url_for('add_event') }}" hidden>
+              <input type="hidden" name="return_agenda" id="voice-return-agenda" value="{{ active_agenda }}">
+              <input type="hidden" name="return_view" id="voice-return-view" value="{{ calendar_view }}">
               <input type="hidden" name="titre" id="voice-submit-title">
               <input type="hidden" name="date" id="voice-submit-date">
               <input type="hidden" name="heure" id="voice-submit-time">
@@ -165,6 +167,8 @@
             </form>
           </div>
         <form method="POST" action="{{ url_for('add_event') }}" id="calendar-add-event-form">
+            <input type="hidden" name="return_agenda" id="add-return-agenda" value="{{ active_agenda }}">
+            <input type="hidden" name="return_view" id="add-return-view" value="{{ calendar_view }}">
             <div class="calendar-form-grid">
                 <div><label for="titre">Titre</label><input type="text" id="titre" name="titre" required></div>
                 <div class="destinataires-field">
@@ -260,6 +264,8 @@
 
 <dialog id="calendar-event-dialog" class="calendar-event-dialog">
     <form id="calendar-edit-form" method="POST">
+        <input type="hidden" name="return_agenda" id="edit-return-agenda" value="{{ active_agenda }}">
+        <input type="hidden" name="return_view" id="edit-return-view" value="{{ calendar_view }}">
         <h2>Modifier l'événement</h2>
         <label for="event-edit-title">Titre</label>
         <input id="event-edit-title" name="titre" type="text" required>
@@ -291,6 +297,8 @@
         </div>
     </form>
     <form id="calendar-delete-form" method="POST" hidden>
+        <input type="hidden" name="return_agenda" id="delete-return-agenda" value="{{ active_agenda }}">
+        <input type="hidden" name="return_view" id="delete-return-view" value="{{ calendar_view }}">
         <input type="hidden" name="series_scope" id="delete-series-scope" value="single">
     </form>
 </dialog>
@@ -702,15 +710,11 @@ html body .calendar-page .calendar-view-card .view-picker {
     color: #244967 !important;
 }
 html body .calendar-page .agenda-date-heading {
-    background: #f0c9dc !important;
+    background: #c9def0 !important;
     color: #244967 !important;
-    border: 1px solid rgba(165,45,104,.12) !important;
+    border: 1px solid rgba(79,143,201,.18) !important;
     border-radius: 7px !important;
     padding: 9px 13px !important;
-}
-html body .calendar-page .calendar-view-card.pro-mode .agenda-date-heading {
-    background: #c9def0 !important;
-    border-color: rgba(79,143,201,.18) !important;
 }
 html body .calendar-page .agenda-event-row {
     border: 1px solid rgba(36,73,103,.12) !important;
@@ -941,10 +945,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const events = [
         {% for evenement in evenements_perso %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (('#A52D68' if evenement['calendrier'] == '#d94f9b' else evenement['calendrier']) if evenement['calendrier'] in ['#4f8fc9','#A52D68','#d94f9b','#54a66b','#e2a43b'] else '#A52D68')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "perso", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (('#A52D68' if (evenement['calendrier'] or '').lower() in ['#a52d68','#d94f9b'] else (evenement['calendrier'] or '').lower()) if (evenement['calendrier'] or '').lower() in ['#4f8fc9','#a52d68','#d94f9b','#54a66b','#e2a43b'] else '#A52D68')|tojson }}},
         {% endfor %}
         {% for evenement in evenements_pro %}
-        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (('#A52D68' if evenement['calendrier'] == '#d94f9b' else evenement['calendrier']) if evenement['calendrier'] in ['#4f8fc9','#A52D68','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
+        {id: {{ evenement['id']|tojson }}, date: {{ evenement['date']|tojson }}, title: {{ evenement['titre']|tojson }}, description: {{ (evenement['description'] or '')|tojson }}, time: {{ (evenement['heure'] or '')|tojson }}, agenda: "pro", editable: {{ evenement['peut_gerer']|tojson }}, recurring: {{ (evenement['recurrence_series_id'] is not none)|tojson }}, color: {{ (('#A52D68' if (evenement['calendrier'] or '').lower() in ['#a52d68','#d94f9b'] else (evenement['calendrier'] or '').lower()) if (evenement['calendrier'] or '').lower() in ['#4f8fc9','#a52d68','#d94f9b','#54a66b','#e2a43b'] else '#4f8fc9')|tojson }}},
         {% endfor %}
     ];
     const agendaList = document.getElementById("calendar-agenda-list");
@@ -952,7 +956,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const viewSelect = document.getElementById("calendar-view");
     const tabs = document.querySelectorAll(".agenda-tab");
     const viewCard = document.getElementById("calendar-view-card");
-    let activeAgenda = "perso";
+    let activeAgenda = {{ active_agenda|tojson }};
     let current = new Date();
     current.setHours(12,0,0,0);
 
@@ -974,6 +978,18 @@ document.addEventListener("DOMContentLoaded", function () {
         result.setDate(result.getDate()+amount);
         return result;
     }
+    viewSelect.value = {{ calendar_view|tojson }};
+
+    function syncReturnState() {
+        const view = viewSelect.value;
+        ["add-return-view", "voice-return-view", "edit-return-view", "delete-return-view"].forEach(id => {
+            const field = document.getElementById(id); if (field) field.value = view;
+        });
+        ["add-return-agenda", "voice-return-agenda", "edit-return-agenda", "delete-return-agenda"].forEach(id => {
+            const field = document.getElementById(id); if (field) field.value = activeAgenda;
+        });
+    }
+
     function render() {
         const mode = viewSelect.value;
         let start, end, heading;
@@ -1025,8 +1041,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 const color = document.createElement("span");
                 color.className = "agenda-event-color";
                 // La couleur choisie pour le rendez-vous s'applique à toute sa bande.
-                const eventColor = ["#4f8fc9", "#A52D68", "#54a66b", "#e2a43b"].includes((e.color || "").toLowerCase())
-                    ? e.color.toLowerCase()
+                const normalizedEventColor = (e.color || "").toLowerCase();
+                const eventColor = ["#4f8fc9", "#a52d68", "#54a66b", "#e2a43b", "#d94f9b"].includes(normalizedEventColor)
+                    ? (normalizedEventColor === "#d94f9b" ? "#a52d68" : normalizedEventColor)
                     : "#4f8fc9";
                 row.style.setProperty("background-color", eventColor, "important");
                 const darkText = eventColor === "#e2a43b";
@@ -1071,6 +1088,7 @@ document.addEventListener("DOMContentLoaded", function () {
         tabs.forEach(tab=>tab.classList.toggle("active",tab.dataset.agenda===activeAgenda));
         const agendaSelect=document.getElementById("type_agenda");
         if (agendaSelect) agendaSelect.value=activeAgenda;
+        syncReturnState();
     }
     const eventDialog = document.getElementById("calendar-event-dialog");
     const editEventForm = document.getElementById("calendar-edit-form");
