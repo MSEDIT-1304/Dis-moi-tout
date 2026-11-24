@@ -128,9 +128,9 @@
                     <label for="rappel_delai_minutes">Quand souhaitez-vous recevoir le rappel ?</label>
                     <select id="rappel_delai_minutes" name="rappel_delai_minutes">
                         <option value="60">1 heure avant</option>
-                        <option value="4320">3 jours avant</option>
-                        <option value="10080">1 semaine avant</option>
+                        <option value="1440">1 jour avant</option>
                         <option value="21600">15 jours avant</option>
+                        <option value="43200">1 mois avant</option>
                     </select>
                 </div>
             </div>
@@ -366,6 +366,13 @@ html body .calendar-page:has(form[action*="add_event"]) form[action*="add_event"
 </style>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  const reminderCheckbox = document.getElementById("rappel");
+  const reminderContainer = document.getElementById("rappel-delai-container");
+  if (reminderCheckbox && reminderContainer) {
+    const syncReminder = () => { reminderContainer.hidden = !reminderCheckbox.checked; };
+    reminderCheckbox.addEventListener("change", syncReminder);
+    syncReminder();
+  }
   const recurrenceSelect = document.getElementById("recurrence_rule");
   const recurrenceEndContainer = document.getElementById("recurrence-end-container");
   if (recurrenceSelect && recurrenceEndContainer) {
