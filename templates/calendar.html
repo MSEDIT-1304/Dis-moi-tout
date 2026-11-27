@@ -10,19 +10,14 @@
         <button type="button" id="open-add-event" class="calendar-button">Ajouter un événement</button>
     </header>
 
-    {% if notifications_agenda %}
-    <section class="agenda-reminder-notifications" aria-label="Notifications de rappel">
+    <section class="agenda-reminder-notifications" id="agenda-reminder-notifications" aria-label="Notifications de rappel" {% if not notifications_agenda %}hidden{% endif %}>
         <h3>Rappels de l'agenda</h3>
-        <ul>
+        <ul id="agenda-reminder-list">
             {% for notification in notifications_agenda %}
-            <li>
-                <strong>{{ notification["titre"] }}</strong>
-                <span>{{ notification["message"] }}</span>
-            </li>
+            <li><strong>{{ notification["titre"] }}</strong> <span>{{ notification["message"] }}</span></li>
             {% endfor %}
         </ul>
     </section>
-    {% endif %}
 
 
     <div class="calendar-import-links" aria-label="Importer des événements">
@@ -1174,6 +1169,37 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("calendar-next").addEventListener("click",()=>{const mode=viewSelect.value;if(mode==="month")current=new Date(current.getFullYear(),current.getMonth()+1,1,12);else current.setDate(current.getDate()+(mode==="week"?7:1));render();});
     document.getElementById("calendar-today").addEventListener("click",()=>{current=new Date();current.setHours(12,0,0,0);render();});
     render();
+
+    // Actualise uniquement les rappels de l'agenda toutes les 5 secondes,
+    // sans recharger la page ni perturber le calendrier ou la messagerie.
+    const reminderBox = document.getElementById("agenda-reminder-notifications");
+    const reminderList = document.getElementById("agenda-reminder-list");
+    async function refreshAgendaReminders() {
+        if (!reminderBox || !reminderList) return;
+        try {
+            const response = await fetch("{{ url_for('agenda_reminders_status') }}", {
+                credentials: "same-origin", cache: "no-store"
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (!data.success || !Array.isArray(data.reminders)) return;
+            reminderList.replaceChildren();
+            data.reminders.forEach(item => {
+                const li = document.createElement("li");
+                const strong = document.createElement("strong");
+                strong.textContent = item.titre || "Rappel";
+                const span = document.createElement("span");
+                span.textContent = " " + (item.message || "");
+                li.append(strong, span);
+                reminderList.appendChild(li);
+            });
+            reminderBox.hidden = data.reminders.length === 0;
+        } catch (error) {
+            console.warn("Actualisation des rappels agenda reportée :", error);
+        }
+    }
+    refreshAgendaReminders();
+    window.setInterval(refreshAgendaReminders, 5 * 1000);
 
     // Formulaire manuel intégré directement à l'agenda.
     const inlineForm = document.getElementById("calendar-inline-add");
