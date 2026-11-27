@@ -146,11 +146,11 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 # ==========================================================
 
 def get_connection():
-
-    conn = sqlite3.connect(DATABASE)
-
+    # Laisse SQLite attendre brièvement la fin d'une autre écriture au lieu
+    # de faire échouer immédiatement les actions du calendrier.
+    conn = sqlite3.connect(DATABASE, timeout=30)
+    conn.execute("PRAGMA busy_timeout = 30000")
     conn.row_factory = sqlite3.Row
-
     return conn
 
 
@@ -1659,6 +1659,32 @@ def process_agenda_reminders():
     return created
 
 
+@app.route("/internal/process-agenda-reminders", methods=["POST"])
+def trigger_agenda_reminders_from_cron():
+    """Point d'entrée sécurisé appelé par un Cron Job Render via HTTP.
+
+    Le Cron Job ne lit jamais directement le fichier SQLite (Render ne permet
+    pas à un Cron Job d'accéder au disque persistant du service web).
+    Le traitement est donc exécuté par le processus web qui possède la base.
+    """
+    expected_secret = os.environ.get("AGENDA_REMINDER_CRON_SECRET", "")
+    received_secret = request.headers.get("X-Agenda-Reminder-Key", "")
+    if not expected_secret or not secrets.compare_digest(received_secret, expected_secret):
+        return jsonify({"success": False, "error": "Accès refusé"}), 403
+
+    try:
+        total = process_agenda_reminders()
+        app.logger.info("Cron agenda : %s notification(s) créée(s).", total)
+        return jsonify({"success": True, "created": total}), 200
+    except sqlite3.OperationalError as exc:
+        app.logger.exception("Cron agenda : erreur SQLite")
+        # Le Cron pourra réessayer à la prochaine exécution.
+        return jsonify({"success": False, "error": "database_busy"}), 503
+    except Exception:
+        app.logger.exception("Cron agenda : erreur inattendue")
+        return jsonify({"success": False, "error": "internal_error"}), 500
+
+
 def _agenda_reminder_worker():
     """Vérifie les rappels toutes les 60 secondes dans le processus web."""
     while True:
@@ -1671,15 +1697,20 @@ def _agenda_reminder_worker():
         time.sleep(60)
 
 
-# Un worker autonome évite de dépendre de l'ouverture du calendrier.
-# Plusieurs workers Gunicorn peuvent démarrer ce contrôle : la contrainte
-# UNIQUE de agenda_notifications empêche les doublons par destinataire.
-if os.environ.get("DISABLE_AGENDA_REMINDER_WORKER", "").lower() not in {"1", "true", "yes"}:
-    threading.Thread(
-        target=_agenda_reminder_worker,
-        name="agenda-reminder-worker",
-        daemon=True
-    ).start()
+# IMPORTANT :
+# Ne pas lancer le traitement des rappels dans chaque processus web.
+# Render/Gunicorn peut démarrer plusieurs processus : leurs threads concurrents
+# écrivaient dans le même fichier SQLite et provoquaient "database is locked",
+# notamment pendant l'ajout ou la modification d'événements.
+# Le traitement process_agenda_reminders() est appelé par un Cron Job Render
+# via la route HTTP sécurisée /internal/process-agenda-reminders. Le Cron ne
+# doit pas ouvrir directement SQLite : les disques persistants Render ne sont
+# pas accessibles aux services Cron.
+if os.environ.get("ENABLE_AGENDA_REMINDER_WORKER", "").lower() in {"1", "true", "yes"}:
+    app.logger.warning(
+        "Worker de rappels activé dans le processus web : à éviter avec SQLite/Gunicorn. "
+        "Préférer un Cron Job Render dédié."
+    )
 
 
 
@@ -4347,9 +4378,13 @@ def add_event():
 
 @app.route(
     "/edit_event/<int:event_id>",
-    methods=["POST"]
+    methods=["GET", "POST"]
 )
 def edit_event(event_id):
+
+    if request.method == "GET":
+        flash("Pour modifier un événement, utilisez le bouton de modification dans le calendrier.")
+        return _calendar_return_redirect()
 
     if not session.get("logged"):
         return redirect(url_for("home"))
