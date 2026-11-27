@@ -1590,6 +1590,24 @@ def init_database():
         ON agenda_notifications(famille_id, recipient_type, recipient_id, created_at)
     """)
 
+    # Suivi indépendant des livraisons Push de rappels d'agenda.
+    # Ne modifie pas les abonnements ni les livraisons de la messagerie/liste de courses.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agenda_notification_push_deliveries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            notification_id INTEGER NOT NULL,
+            subscription_id INTEGER NOT NULL,
+            sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(notification_id, subscription_id),
+            FOREIGN KEY(notification_id) REFERENCES agenda_notifications(id),
+            FOREIGN KEY(subscription_id) REFERENCES push_subscriptions(id)
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_agenda_push_delivery_notification
+        ON agenda_notification_push_deliveries(notification_id)
+    """)
+
     conn.commit()
     conn.close()
 
@@ -1655,7 +1673,32 @@ def process_agenda_reminders():
             if cursor.rowcount:
                 created += 1
     conn.commit()
+
+    # Les notifications d'agenda déjà créées (y compris lors d'un passage
+    # antérieur du Cron) sont livrées séparément en Push. Chaque appareil
+    # réussi est mémorisé pour éviter les doublons lors des prochains Cron.
+    pending_notifications = conn.execute("""
+        SELECT n.id, n.famille_id, n.recipient_type, n.recipient_id,
+               n.titre, n.message, n.event_start
+        FROM agenda_notifications n
+        WHERE EXISTS (
+            SELECT 1 FROM push_subscriptions s
+            WHERE s.famille_id=n.famille_id
+              AND s.user_type=n.recipient_type
+              AND s.user_id=n.recipient_id
+        )
+        ORDER BY n.id
+    """).fetchall()
+    push_attempts = 0
+    for notification in pending_notifications:
+        push_attempts += send_agenda_reminder_push(conn, notification)
+
+    conn.commit()
     conn.close()
+    app.logger.info(
+        "Rappels agenda : %s notification(s) interne(s) créée(s), %s tentative(s) Push.",
+        created, push_attempts
+    )
     return created
 
 
@@ -3286,6 +3329,113 @@ def conversation_is_accessible(conn, conversation_id, identity):
         WHERE c.id = ? AND c.famille_id = ?
           AND p.user_type = ? AND p.user_id = ?
     """, (conversation_id, family_id, kind, user_id)).fetchone() is not None
+
+
+def send_agenda_reminder_push(conn, notification):
+    """Envoie un rappel d'agenda aux appareils de son seul destinataire.
+
+    Fonction volontairement séparée de send_message_push_notifications :
+    aucun changement au circuit Push de la messagerie ou de la liste de courses.
+    Les succès sont enregistrés appareil par appareil pour éviter les doublons
+    et permettre de réessayer les appareils en échec au prochain Cron.
+    """
+    public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+    private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+    if not public_key or not private_key:
+        app.logger.warning(
+            "AGENDA_PUSH: clés VAPID absentes; notification_id=%s", notification["id"]
+        )
+        return 0
+
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        app.logger.exception("AGENDA_PUSH: dépendance pywebpush absente.")
+        return 0
+
+    devices = conn.execute("""
+        SELECT s.id, s.user_type, s.user_id, s.subscription_json
+        FROM push_subscriptions s
+        WHERE s.famille_id=? AND s.user_type=? AND s.user_id=?
+          AND NOT EXISTS (
+              SELECT 1 FROM agenda_notification_push_deliveries d
+              WHERE d.notification_id=? AND d.subscription_id=s.id
+          )
+        ORDER BY s.id
+    """, (
+        notification["famille_id"], notification["recipient_type"],
+        notification["recipient_id"], notification["id"]
+    )).fetchall()
+
+    if not devices:
+        app.logger.info(
+            "AGENDA_PUSH: aucun nouvel appareil à notifier; notification_id=%s destinataire=%s:%s",
+            notification["id"], notification["recipient_type"], notification["recipient_id"]
+        )
+        return 0
+
+    sent = 0
+    for device in devices:
+        key_path = None
+        try:
+            private_key_pem = private_key.replace("\\n", "\n").strip()
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", suffix=".pem",
+                prefix="dismoitout-agenda-vapid-", delete=False
+            ) as key_file:
+                key_file.write(private_key_pem)
+                key_path = key_file.name
+
+            payload = json.dumps({
+                "type": "agenda_reminder",
+                "notificationId": int(notification["id"]),
+                "title": notification["titre"] or "Rappel Dis-moi tout",
+                "body": notification["message"] or "Vous avez un événement à venir.",
+                "url": url_for("calendar", _external=False)
+            }, ensure_ascii=False)
+
+            webpush(
+                subscription_info=json.loads(device["subscription_json"]),
+                data=payload,
+                vapid_private_key=key_path,
+                vapid_claims={
+                    "sub": os.environ.get(
+                        "VAPID_SUBJECT", "mailto:contact@dismoi-tout.fr"
+                    ).strip()
+                }
+            )
+            conn.execute("""
+                INSERT OR IGNORE INTO agenda_notification_push_deliveries
+                    (notification_id, subscription_id)
+                VALUES (?, ?)
+            """, (notification["id"], device["id"]))
+            sent += 1
+            app.logger.info(
+                "AGENDA_PUSH: envoi accepté; notification_id=%s destinataire=%s:%s appareil=%s",
+                notification["id"], device["user_type"], device["user_id"], device["id"]
+            )
+        except WebPushException as exc:
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            app.logger.warning(
+                "AGENDA_PUSH: échec; notification_id=%s appareil=%s HTTP=%s erreur=%s",
+                notification["id"], device["id"], status_code, exc
+            )
+            if status_code in (404, 410):
+                conn.execute("DELETE FROM push_subscriptions WHERE id=?", (device["id"],))
+        except Exception:
+            app.logger.exception(
+                "AGENDA_PUSH: erreur inattendue; notification_id=%s appareil=%s",
+                notification["id"], device["id"]
+            )
+        finally:
+            if key_path and os.path.exists(key_path):
+                try:
+                    os.remove(key_path)
+                except OSError:
+                    app.logger.warning("AGENDA_PUSH: impossible de supprimer le fichier temporaire VAPID.")
+
+    conn.commit()
+    return sent
 
 
 def send_message_push_notifications(conn, conversation_id, sender_identity):
