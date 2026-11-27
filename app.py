@@ -1615,7 +1615,41 @@ def init_database():
 # INITIALISATION DE LA BASE
 # ==========================================================
 
+
 init_database()
+
+def cleanup_agenda_notifications(conn, now_text=None):
+    """Supprime les rappels expirés ou qui ne correspondent plus à un événement actif."""
+    if now_text is None:
+        now_text = datetime.now(ZoneInfo("Europe/Paris")).replace(tzinfo=None).isoformat()
+
+    stale_condition = """
+        n.event_start <= ?
+        OR NOT EXISTS (
+            SELECT 1
+            FROM evenements e
+            WHERE e.id = n.event_id
+              AND e.famille_id = n.famille_id
+              AND COALESCE(e.rappel, 0) = 1
+              AND COALESCE(e.statut_validation, 'accepte') = 'accepte'
+              AND strftime(
+                    '%Y-%m-%dT%H:%M:%S',
+                    e.date || ' ' || substr(COALESCE(NULLIF(e.heure, ''), '00:00'), 1, 5)
+                  ) = n.event_start
+        )
+    """
+    conn.execute(
+        "DELETE FROM agenda_notification_push_deliveries "
+        "WHERE notification_id IN (SELECT n.id FROM agenda_notifications n WHERE "
+        + stale_condition + ")",
+        (now_text,)
+    )
+    cursor = conn.execute(
+        "DELETE FROM agenda_notifications AS n WHERE " + stale_condition,
+        (now_text,)
+    )
+    return cursor.rowcount
+
 
 def process_agenda_reminders():
     """Crée une notification interne une seule fois par événement et destinataire."""
@@ -1623,6 +1657,8 @@ def process_agenda_reminders():
     now = datetime.now(tz).replace(tzinfo=None)
     conn = get_connection()
     cursor = conn.cursor()
+    # Nettoyer d'abord les rappels expirés, orphelins ou devenus invalides.
+    cleanup_agenda_notifications(conn, now.isoformat())
     cursor.execute("""
         SELECT id, famille_id, membre_id, titre, description, date, heure,
                rappel, rappel_delai_minutes, concerne_admin, statut_validation
@@ -1693,9 +1729,8 @@ def process_agenda_reminders():
     for notification in pending_notifications:
         push_attempts += send_agenda_reminder_push(conn, notification)
 
-    # Supprimer uniquement les notifications de rappel lorsque l'événement
-    # correspondant est terminé. L'événement lui-même reste dans le calendrier.
-    conn.execute("DELETE FROM agenda_notifications WHERE event_start <= ?", (now.isoformat(),))
+    # Deuxième nettoyage après le traitement ; les événements restent intacts.
+    cleanup_agenda_notifications(conn, now.isoformat())
     conn.commit()
     conn.close()
     app.logger.info(
@@ -4682,6 +4717,9 @@ def edit_event(event_id):
         if series_id and int(evenement["recurrence_index"] or 0) == 0:
             _promote_recurrence_master(cursor, series_id, famille_id)
 
+    # Supprimer immédiatement les rappels des événements qui viennent d'être
+    # supprimés (y compris les occurrences d'une série), sans toucher aux autres.
+    cleanup_agenda_notifications(conn)
     conn.commit()
     conn.close()
 
@@ -4967,8 +5005,8 @@ def agenda_reminders_status():
 
     now_text = datetime.now(ZoneInfo("Europe/Paris")).replace(tzinfo=None).isoformat()
     conn = get_connection()
-    # Nettoyage automatique des seuls rappels : aucun événement n'est supprimé.
-    conn.execute("DELETE FROM agenda_notifications WHERE event_start <= ?", (now_text,))
+    # Nettoyage automatique des rappels expirés ou sans événement valide.
+    cleanup_agenda_notifications(conn, now_text)
 
     if session.get("admin_logged") is True:
         rows = conn.execute(
