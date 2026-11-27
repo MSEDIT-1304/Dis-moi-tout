@@ -2809,10 +2809,35 @@ def liste_courses():
         return redirect(url_for("home"))
 
     conn = get_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS shopping_list_hidden (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            list_id INTEGER NOT NULL,
+            user_type TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            UNIQUE(list_id, user_type, user_id)
+        )
+    """)
     list_id = request.values.get("liste_id", type=int)
 
     if request.method == "POST":
         action = request.form.get("action", "").strip()
+    if action == "hide_admin" and is_admin:
+            allowed = conn.execute("""
+                SELECT id FROM shopping_lists
+                WHERE id=? AND famille_id=?
+            """, (list_id, family_id)).fetchone()
+
+            if allowed:
+                conn.execute("""
+                    INSERT OR IGNORE INTO shopping_list_hidden
+                    (list_id, user_type, user_id)
+                    VALUES (?, 'admin', ?)
+                """, (list_id, session.get("admin_id")))
+                conn.commit()
+
+            conn.close()
+            return redirect(url_for("liste_courses"))
 
         if action == "create" and is_admin:
             selected_ids = request.form.getlist("membres")
@@ -2900,6 +2925,11 @@ def liste_courses():
                         (conversation_id, member_id, f"[[LISTE_COURSES_ADMIN:{list_id}:validated]]")
                     )
                     conn.execute("DELETE FROM conversation_hidden WHERE conversation_id=?", (conversation_id,))
+                    conn.execute("""
+                        INSERT OR IGNORE INTO shopping_list_hidden
+                        (list_id, user_type, user_id)
+                        VALUES (?, 'membre', ?)
+                    """, (list_id, member_id))
                 conn.commit()
                 if total and total == validated:
                     # Diagnostic ciblé : validation de liste de courses.
@@ -2975,9 +3005,16 @@ def liste_courses():
             SELECT l.*,
                    (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id) AS total_recipients,
                    (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id AND r.validated=1) AS validated_recipients
-            FROM shopping_lists l WHERE l.famille_id=?
+            FROM shopping_lists l
+            WHERE l.famille_id=?
+              AND NOT EXISTS (
+                  SELECT 1 FROM shopping_list_hidden h
+                  WHERE h.list_id=l.id
+                    AND h.user_type='admin'
+                    AND h.user_id=?
+              )
             ORDER BY l.created_at DESC, l.id DESC
-        """, (family_id,)).fetchall()
+        """, (family_id, session.get("admin_id"))).fetchall()
         active_list = conn.execute("""
             SELECT l.*,
                    (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id) AS total_recipients,
@@ -2992,15 +3029,26 @@ def liste_courses():
     else:
         lists = conn.execute("""
             SELECT l.*,r.validated,r.validated_at
-            FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
-            WHERE l.famille_id=? AND r.membre_id=?
-            ORDER BY l.created_at DESC,l.id DESC
-        """, (family_id, member_id)).fetchall()
+            FROM shopping_lists l
+            WHERE l.id=? AND l.famille_id=?
+              AND NOT EXISTS (
+                  SELECT 1 FROM shopping_list_hidden h
+                  WHERE h.list_id=l.id
+                    AND h.user_type='admin'
+                    AND h.user_id=?
+              )
+        """, (list_id, family_id, session.get("admin_id"))).fetchone() if list_id else (lists[0] if lists else None)
         active_list = conn.execute("""
             SELECT l.*,r.validated,r.validated_at
             FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
             WHERE l.id=? AND l.famille_id=? AND r.membre_id=?
-        """, (list_id, family_id, member_id)).fetchone() if list_id else (lists[0] if lists else None)
+              AND NOT EXISTS (
+                  SELECT 1 FROM shopping_list_hidden h
+                  WHERE h.list_id=l.id
+                    AND h.user_type='membre'
+                    AND h.user_id=?
+              )
+        """, (list_id, family_id, member_id, member_id)).fetchone() if list_id else (lists[0] if lists else None)
         members = []
         recipients = []
         pending_count = conn.execute(
