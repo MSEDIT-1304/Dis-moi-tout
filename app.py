@@ -2822,12 +2822,12 @@ def liste_courses():
 
     if request.method == "POST":
         action = request.form.get("action", "").strip()
-    if action == "hide_admin" and is_admin:
+
+        if action == "hide_admin" and is_admin:
             allowed = conn.execute("""
                 SELECT id FROM shopping_lists
                 WHERE id=? AND famille_id=?
             """, (list_id, family_id)).fetchone()
-
             if allowed:
                 conn.execute("""
                     INSERT OR IGNORE INTO shopping_list_hidden
@@ -2835,7 +2835,6 @@ def liste_courses():
                     VALUES (?, 'admin', ?)
                 """, (list_id, session.get("admin_id")))
                 conn.commit()
-
             conn.close()
             return redirect(url_for("liste_courses"))
 
@@ -2910,6 +2909,11 @@ def liste_courses():
                     UPDATE shopping_list_recipients SET validated=1, validated_at=CURRENT_TIMESTAMP
                     WHERE list_id=? AND membre_id=?
                 """, (list_id, member_id))
+                conn.execute("""
+                    INSERT OR IGNORE INTO shopping_list_hidden
+                    (list_id, user_type, user_id)
+                    VALUES (?, 'membre', ?)
+                """, (list_id, member_id))
                 total = conn.execute("SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE list_id=?", (list_id,)).fetchone()["n"]
                 validated = conn.execute("SELECT COUNT(*) AS n FROM shopping_list_recipients WHERE list_id=? AND validated=1", (list_id,)).fetchone()["n"]
                 if total and total == validated:
@@ -2925,11 +2929,6 @@ def liste_courses():
                         (conversation_id, member_id, f"[[LISTE_COURSES_ADMIN:{list_id}:validated]]")
                     )
                     conn.execute("DELETE FROM conversation_hidden WHERE conversation_id=?", (conversation_id,))
-                    conn.execute("""
-                        INSERT OR IGNORE INTO shopping_list_hidden
-                        (list_id, user_type, user_id)
-                        VALUES (?, 'membre', ?)
-                    """, (list_id, member_id))
                 conn.commit()
                 if total and total == validated:
                     # Diagnostic ciblé : validation de liste de courses.
@@ -3019,16 +3018,6 @@ def liste_courses():
             SELECT l.*,
                    (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id) AS total_recipients,
                    (SELECT COUNT(*) FROM shopping_list_recipients r WHERE r.list_id=l.id AND r.validated=1) AS validated_recipients
-            FROM shopping_lists l WHERE l.id=? AND l.famille_id=?
-        """, (list_id, family_id)).fetchone() if list_id else (lists[0] if lists else None)
-        members = conn.execute("SELECT id,prenom,nom,pseudo FROM membres WHERE famille_id=? ORDER BY prenom,nom", (family_id,)).fetchall()
-        recipients = conn.execute("""
-            SELECT r.*,m.prenom,m.nom FROM shopping_list_recipients r
-            JOIN membres m ON m.id=r.membre_id WHERE r.list_id=? ORDER BY m.prenom,m.nom
-        """, (active_list["id"],)).fetchall() if active_list else []
-    else:
-        lists = conn.execute("""
-            SELECT l.*,r.validated,r.validated_at
             FROM shopping_lists l
             WHERE l.id=? AND l.famille_id=?
               AND NOT EXISTS (
@@ -3038,6 +3027,24 @@ def liste_courses():
                     AND h.user_id=?
               )
         """, (list_id, family_id, session.get("admin_id"))).fetchone() if list_id else (lists[0] if lists else None)
+        members = conn.execute("SELECT id,prenom,nom,pseudo FROM membres WHERE famille_id=? ORDER BY prenom,nom", (family_id,)).fetchall()
+        recipients = conn.execute("""
+            SELECT r.*,m.prenom,m.nom FROM shopping_list_recipients r
+            JOIN membres m ON m.id=r.membre_id WHERE r.list_id=? ORDER BY m.prenom,m.nom
+        """, (active_list["id"],)).fetchall() if active_list else []
+    else:
+        lists = conn.execute("""
+            SELECT l.*,r.validated,r.validated_at
+            FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
+            WHERE l.famille_id=? AND r.membre_id=?
+              AND NOT EXISTS (
+                  SELECT 1 FROM shopping_list_hidden h
+                  WHERE h.list_id=l.id
+                    AND h.user_type='membre'
+                    AND h.user_id=?
+              )
+            ORDER BY l.created_at DESC,l.id DESC
+        """, (family_id, member_id, member_id)).fetchall()
         active_list = conn.execute("""
             SELECT l.*,r.validated,r.validated_at
             FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
