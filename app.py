@@ -2823,6 +2823,21 @@ def liste_courses():
     if request.method == "POST":
         action = request.form.get("action", "").strip()
 
+        if action == "delete_admin" and is_admin:
+            allowed = conn.execute("""
+                SELECT id FROM shopping_lists
+                WHERE id=? AND famille_id=?
+            """, (list_id, family_id)).fetchone()
+            if allowed:
+                conn.execute("DELETE FROM shopping_list_items WHERE list_id=?", (list_id,))
+                conn.execute("DELETE FROM shopping_list_recipients WHERE list_id=?", (list_id,))
+                conn.execute("DELETE FROM shopping_list_hidden WHERE list_id=?", (list_id,))
+                conn.execute("DELETE FROM shopping_lists WHERE id=? AND famille_id=?", (list_id, family_id))
+                conn.commit()
+                flash("La liste de courses a été supprimée.")
+            conn.close()
+            return redirect(url_for("liste_courses"))
+
         if action == "hide_admin" and is_admin:
             allowed = conn.execute("""
                 SELECT id FROM shopping_lists
@@ -2987,6 +3002,10 @@ def liste_courses():
                     INSERT OR IGNORE INTO shopping_list_recipients (list_id,membre_id,validated,validated_at)
                     VALUES (?,?,1,CURRENT_TIMESTAMP)
                 """, (list_id, target_id))
+                conn.execute("""
+                    DELETE FROM shopping_list_hidden
+                    WHERE list_id=? AND user_type='membre' AND user_id=?
+                """, (list_id, target_id))
                 conn.commit()
                 _shopping_send_internal_message(conn, family_id, session.get("admin_id"), target_id, list_id, final=True)
                 flash("La liste finale a été envoyée dans la messagerie du membre.")
@@ -3037,6 +3056,7 @@ def liste_courses():
             SELECT l.*,r.validated,r.validated_at
             FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
             WHERE l.famille_id=? AND r.membre_id=?
+              AND (r.validated=0 OR l.assigned_member_id=r.membre_id)
               AND NOT EXISTS (
                   SELECT 1 FROM shopping_list_hidden h
                   WHERE h.list_id=l.id
@@ -3049,6 +3069,7 @@ def liste_courses():
             SELECT l.*,r.validated,r.validated_at
             FROM shopping_lists l JOIN shopping_list_recipients r ON r.list_id=l.id
             WHERE l.id=? AND l.famille_id=? AND r.membre_id=?
+              AND (r.validated=0 OR l.assigned_member_id=r.membre_id)
               AND NOT EXISTS (
                   SELECT 1 FROM shopping_list_hidden h
                   WHERE h.list_id=l.id
