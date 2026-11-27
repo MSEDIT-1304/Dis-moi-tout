@@ -1,1 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mailbox-page">
+  <header class="mailbox-header">
+    <div><h1>Ma boîte mail</h1><p>Retrouvez vos boîtes personnelles et professionnelles au même endroit.</p></div>
+  </header>
+  <section class="mailbox-switcher" aria-label="Choisir une boîte mail">
+    <button type="button" class="mailbox-tab active" data-mailbox="perso">BOÎTE MAIL PERSO</button>
+    {% if afficher_pro %}<button type="button" class="mailbox-tab" data-mailbox="pro">BOÎTE MAIL PRO</button>{% endif %}
+  </section>
+  <section class="mailbox-panel active" id="mailbox-perso">
+    <h2>Boîte mail personnelle</h2>
+    <p>Connectez votre adresse personnelle pour retrouver vos messages dans Dis-moi tout.</p>
+    <div class="mailbox-providers">
+      <div class="mailbox-provider"><span class="mailbox-provider-name">Gmail</span><span>Google</span><button type="button" class="mailbox-connect" disabled>Connexion à configurer</button></div>
+      <div class="mailbox-provider"><span class="mailbox-provider-name">Yahoo</span><span>Yahoo Mail</span><button type="button" class="mailbox-connect" disabled>Connexion à configurer</button></div>
+      <div class="mailbox-provider"><span class="mailbox-provider-name">Outlook</span><span>Hotmail / Outlook</span><button type="button" class="mailbox-connect" disabled>Connexion à configurer</button></div>
+    </div>
+  </section>
+  {% if afficher_pro %}
+  <section class="mailbox-panel" id="mailbox-pro" hidden>
+    <h2>Boîte mail professionnelle</h2>
+    <p>Connectez votre adresse professionnelle pour retrouver vos messages dans Dis-moi tout.</p>
+    <div class="mailbox-providers">
+      <div class="mailbox-provider"><span class="mailbox-provider-name">Google Workspace</span><span>Gmail professionnel</span><button type="button" class="mailbox-connect" disabled>Connexion à configurer</button></div>
+      <div class="mailbox-provider"><span class="mailbox-provider-name">Microsoft 365</span><span>Outlook professionnel</span><button type="button" class="mailbox-connect" disabled>Connexion à configurer</button></div>
+      <div class="mailbox-provider"><span class="mailbox-provider-name">Autre adresse pro</span><span>IMAP / SMTP selon fournisseur</span><button type="button" class="mailbox-connect" disabled>Connexion à configurer</button></div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+<script>
+(function () {
+  const tabs = document.querySelectorAll(".mailbox-tab");
+  const panels = document.querySelectorAll(".mailbox-panel");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      const target = tab.dataset.mailbox;
+      tabs.forEach(function (item) { item.classList.toggle("active", item === tab); });
+      panels.forEach(function (panel) {
+        const active = panel.id === "mailbox-" + target;
+        panel.hidden = !active;
+        panel.classList.toggle("active", active);
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}
 
