@@ -25,10 +25,19 @@
     <aside class="shopping-card shopping-history">
       <h3>{% if is_admin %}Listes créées{% else %}Mes listes{% endif %}</h3>
       {% for entry in lists %}
-        <a class="{{ 'active' if active_list and active_list.id == entry.id else '' }}" href="{{ url_for('liste_courses', liste_id=entry.id) }}">
-          Liste #{{ entry.id }}
-          {% if is_admin and entry.status in ['validated','assigned'] %}<span class="shopping-status"> ✓</span>{% elif not is_admin and entry.validated %}<span class="shopping-status"> ✓</span>{% endif %}
-        </a>
+        <div style="display:flex;align-items:center;gap:6px;justify-content:space-between">
+          <a style="flex:1;min-width:0" class="{{ 'active' if active_list and active_list.id == entry.id else '' }}" href="{{ url_for('liste_courses', liste_id=entry.id) }}">
+            Liste #{{ entry.id }}
+            {% if is_admin and entry.status in ['validated','assigned'] %}<span class="shopping-status"> ✓</span>{% elif not is_admin and entry.validated %}<span class="shopping-status"> ✓</span>{% endif %}
+          </a>
+          {% if is_admin %}
+            <form method="post" style="margin:0;flex-shrink:0">
+              <input type="hidden" name="action" value="delete_admin">
+              <input type="hidden" name="liste_id" value="{{ entry.id }}">
+              <button class="shopping-button secondary" type="submit" style="padding:6px 9px" onclick="return confirm('Supprimer définitivement cette liste de courses ?')">Supprimer</button>
+            </form>
+          {% endif %}
+        </div>
       {% else %}
         <p>Aucune liste pour le moment.</p>
       {% endfor %}
@@ -146,4 +155,3 @@
 })();
 </script>
 {% endblock %}
-
