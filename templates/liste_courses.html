@@ -39,6 +39,14 @@
         <section class="shopping-card">
           <h2>Liste des courses #{{ active_list.id }}</h2>
           {% if is_admin %}
+            <form method="post" style="margin:8px 0 14px">
+              <input type="hidden" name="action" value="hide_admin">
+              <input type="hidden" name="liste_id" value="{{ active_list.id }}">
+              <button class="shopping-button secondary" type="submit"
+                      onclick="return confirm('Masquer cette liste uniquement de votre affichage ?')">
+                Masquer cette liste
+              </button>
+            </form>
             {% if validated_all %}
               <p class="shopping-status">✓ Validée par tous les membres</p>
             {% elif active_list.status == 'assigned' %}
