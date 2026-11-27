@@ -2188,3 +2188,74 @@ html body .shopping-wrap .shopping-card .shopping-status {
 html body .shopping-wrap .shopping-card .shopping-status.pending {
     color: #FFE0A8 !important;
 }
+
+
+
+/* ======================================================
+   LISTES DE COURSES — 3 CADRES CÔTE À CÔTE SUR PC
+   Liste créée | Détail de la liste | Créer une liste
+   Hauteur naturelle : aucun min-height ni hauteur fixe
+   ====================================================== */
+
+@media (min-width: 769px) {
+    html body .shopping-wrap {
+        display: grid !important;
+        grid-template-columns: minmax(150px, 0.72fr) minmax(300px, 1.45fr) minmax(280px, 1.25fr) !important;
+        align-items: start !important;
+        column-gap: 12px !important;
+        row-gap: 8px !important;
+        width: calc(100% - 32px) !important;
+        max-width: 1250px !important;
+        margin: 12px auto !important;
+    }
+
+    /* Le titre reste au-dessus des trois cadres */
+    html body .shopping-wrap > h1 {
+        grid-column: 1 / -1 !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Les deux cadres du bloc central deviennent des éléments de la grille */
+    html body .shopping-wrap > .shopping-layout {
+        display: contents !important;
+    }
+
+    /* Cadre de création : troisième colonne, aligné en haut */
+    html body .shopping-wrap > .shopping-card,
+    html body .shopping-wrap > .shopping-create,
+    html body .shopping-wrap > .create-list-card {
+        grid-column: 3 !important;
+        grid-row: 2 !important;
+        align-self: start !important;
+        height: fit-content !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* Les cartes internes gardent leur hauteur dictée par leur contenu */
+    html body .shopping-wrap .shopping-card {
+        height: fit-content !important;
+        min-height: 0 !important;
+        align-self: start !important;
+    }
+}
+
+/* Sur mobile, on conserve l'affichage vertical existant */
+@media (max-width: 768px) {
+    html body .shopping-wrap {
+        display: block !important;
+        width: 100% !important;
+    }
+
+    html body .shopping-wrap > .shopping-layout {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+    }
+
+    html body .shopping-wrap > .shopping-card,
+    html body .shopping-wrap > .shopping-create,
+    html body .shopping-wrap > .create-list-card {
+        grid-column: auto !important;
+        grid-row: auto !important;
+    }
+}
