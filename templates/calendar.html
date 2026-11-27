@@ -10,6 +10,21 @@
         <button type="button" id="open-add-event" class="calendar-button">Ajouter un événement</button>
     </header>
 
+    {% if notifications_agenda %}
+    <section class="agenda-reminder-notifications" aria-label="Notifications de rappel">
+        <h3>Rappels de l'agenda</h3>
+        <ul>
+            {% for notification in notifications_agenda %}
+            <li>
+                <strong>{{ notification["titre"] }}</strong>
+                <span>{{ notification["message"] }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+
     <div class="calendar-import-links" aria-label="Importer des événements">
         <span>Importer des événements depuis :</span>
         <a href="#google-import-panel" class="calendar-import-link" data-import-panel="google-import-panel">Google Agenda</a>
