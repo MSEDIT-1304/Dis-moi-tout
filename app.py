@@ -5056,6 +5056,7 @@ def agenda_reminders_status():
 def boite_mail():
     if not session.get("logged"):
         return redirect(url_for("home"))
+
     famille_id = session.get("famille_id")
     if famille_id is None:
         return redirect(url_for("dashboard"))
@@ -5063,11 +5064,19 @@ def boite_mail():
     est_admin = session.get("admin_logged") is True
     owner_type = "admin" if est_admin else "membre"
     owner_id = session.get("admin_id") if est_admin else session.get("membre_id")
-    afficher_pro = est_admin
 
     conn = get_connection()
     cursor = conn.cursor()
-    if not est_admin:
+
+    # Vérification serveur de l'appartenance à la famille et des droits PRO.
+    if est_admin:
+        cursor.execute(
+            "SELECT id FROM famille WHERE id = ? AND admin_id = ?",
+            (famille_id, owner_id)
+        )
+        utilisateur = cursor.fetchone()
+        afficher_pro = utilisateur is not None
+    else:
         cursor.execute(
             "SELECT role FROM membres WHERE id = ? AND famille_id = ?",
             (owner_id, famille_id)
@@ -5077,7 +5086,12 @@ def boite_mail():
             conn.close()
             session.clear()
             return redirect(url_for("home"))
-        afficher_pro = (membre["role"] or "").lower() == "conjoint"
+        afficher_pro = (membre["role"] or "").strip().lower() == "conjoint"
+
+    if est_admin and not afficher_pro:
+        conn.close()
+        session.clear()
+        return redirect(url_for("home"))
 
     cursor.execute(
         """SELECT mailbox_type, provider, email
@@ -5852,6 +5866,216 @@ def calendar_access_required():
     return utilisateur is not None
 
 # ==========================================================
+# BOITE MAIL — CONNEXION GMAIL
+# OAuth Gmail indépendant de Google Agenda, même client Google
+# ==========================================================
+
+GMAIL_OAUTH_SCOPES = [
+    "openid",
+    "email",
+    "https://www.googleapis.com/auth/gmail.modify"
+]
+
+
+def mailbox_owner_access(mailbox_type):
+    """Retourne l'identité propriétaire après contrôle des droits côté serveur."""
+    if session.get("logged") is not True:
+        return None
+
+    famille_id = session.get("famille_id")
+    owner_type, owner_id = get_calendar_owner()
+    if not famille_id or not owner_id or mailbox_type not in ("perso", "pro"):
+        return None
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    if owner_type == "admin":
+        cursor.execute(
+            "SELECT id FROM famille WHERE id = ? AND admin_id = ?",
+            (famille_id, owner_id)
+        )
+        autorise = cursor.fetchone() is not None
+        afficher_pro = autorise
+    else:
+        cursor.execute(
+            "SELECT role FROM membres WHERE id = ? AND famille_id = ?",
+            (owner_id, famille_id)
+        )
+        membre = cursor.fetchone()
+        autorise = membre is not None
+        afficher_pro = bool(
+            membre and (membre["role"] or "").strip().lower() == "conjoint"
+        )
+
+    conn.close()
+
+    if not autorise or (mailbox_type == "pro" and not afficher_pro):
+        return None
+
+    return owner_type, int(owner_id), int(famille_id)
+
+
+@app.route("/boite-mail/gmail/connect/<mailbox_type>", methods=["POST"])
+def mailbox_gmail_connect(mailbox_type):
+    owner = mailbox_owner_access(mailbox_type)
+    if not owner:
+        flash("Accès à cette boîte mail non autorisé.")
+        return redirect(url_for("boite_mail"))
+
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        flash("La configuration Google Auth est introuvable dans Render.")
+        return redirect(url_for("boite_mail"))
+
+    owner_type, owner_id, famille_id = owner
+    state = secrets.token_urlsafe(32)
+
+    session["gmail_oauth_state"] = state
+    session["gmail_oauth_owner_type"] = owner_type
+    session["gmail_oauth_owner_id"] = owner_id
+    session["gmail_oauth_family_id"] = famille_id
+    session["gmail_oauth_mailbox_type"] = mailbox_type
+    session["gmail_oauth_redirect_uri"] = get_google_redirect_uri()
+
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": session["gmail_oauth_redirect_uri"],
+        "response_type": "code",
+        "scope": " ".join(GMAIL_OAUTH_SCOPES),
+        "access_type": "offline",
+        "prompt": "consent select_account",
+        "include_granted_scopes": "true",
+        "state": state
+    }
+    auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return redirect(auth_url)
+
+
+def handle_gmail_oauth_callback():
+    """Traite le retour Gmail sur l'URI /google/callback déjà utilisée par Agenda."""
+    saved_state = session.pop("gmail_oauth_state", "")
+    state = request.args.get("state", "")
+    owner_type = session.pop("gmail_oauth_owner_type", None)
+    owner_id = session.pop("gmail_oauth_owner_id", None)
+    famille_id = session.pop("gmail_oauth_family_id", None)
+    mailbox_type = session.pop("gmail_oauth_mailbox_type", None)
+    redirect_uri = session.pop("gmail_oauth_redirect_uri", None)
+
+    google_error = request.args.get("error")
+    if google_error:
+        flash("Google a refusé l'accès à Gmail : " + google_error)
+        return redirect(url_for("boite_mail"))
+
+    if not state or not saved_state or not secrets.compare_digest(state, saved_state):
+        flash("Vérification de sécurité Gmail échouée. Recommencez.")
+        return redirect(url_for("boite_mail"))
+
+    current_owner = mailbox_owner_access(mailbox_type)
+    if (
+        not current_owner
+        or current_owner[0] != owner_type
+        or current_owner[1] != int(owner_id or 0)
+        or current_owner[2] != int(famille_id or 0)
+    ):
+        flash("La session a changé pendant la connexion Gmail. Recommencez.")
+        return redirect(url_for("boite_mail"))
+
+    code = request.args.get("code")
+    if not code:
+        flash("Google n'a pas transmis le code d'autorisation Gmail.")
+        return redirect(url_for("boite_mail"))
+
+    redirect_uri = redirect_uri or get_google_redirect_uri()
+
+    try:
+        token_response = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code"
+            },
+            timeout=30
+        )
+        token_data = token_response.json()
+    except Exception:
+        app.logger.exception("Erreur échange du code OAuth Gmail")
+        flash("Impossible de finaliser la connexion Gmail.")
+        return redirect(url_for("boite_mail"))
+
+    if token_response.status_code != 200 or not token_data.get("access_token"):
+        app.logger.error(
+            "Gmail OAuth error: %s",
+            token_data.get("error", "réponse invalide")
+        )
+        flash("Google n'a pas délivré de jeton Gmail. Vérifiez que l'API Gmail est activée.")
+        return redirect(url_for("boite_mail"))
+
+    access_token = token_data["access_token"]
+
+    try:
+        profile_response = requests.get(
+            "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=20
+        )
+        profile_response.raise_for_status()
+        email_address = (
+            profile_response.json().get("emailAddress", "").strip().lower()
+        )
+    except Exception:
+        app.logger.exception("Impossible de lire le profil Gmail")
+        flash("Autorisation reçue, mais impossible de lire l'adresse Gmail.")
+        return redirect(url_for("boite_mail"))
+
+    if not email_address:
+        flash("Google n'a pas retourné l'adresse de la boîte Gmail.")
+        return redirect(url_for("boite_mail"))
+
+    expires_at = (
+        datetime.now() + timedelta(seconds=int(token_data.get("expires_in", 3600)))
+    ).isoformat()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO mailbox_connections
+            (famille_id, owner_type, owner_id, mailbox_type, provider,
+             email, access_token, refresh_token, token_expires_at, updated_at)
+        VALUES (?, ?, ?, ?, 'gmail', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(owner_type, owner_id, mailbox_type) DO UPDATE SET
+            famille_id = excluded.famille_id,
+            provider = excluded.provider,
+            email = excluded.email,
+            access_token = excluded.access_token,
+            refresh_token = COALESCE(
+                excluded.refresh_token, mailbox_connections.refresh_token
+            ),
+            token_expires_at = excluded.token_expires_at,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (
+            famille_id,
+            owner_type,
+            owner_id,
+            mailbox_type,
+            email_address,
+            access_token,
+            token_data.get("refresh_token"),
+            expires_at
+        )
+    )
+    conn.commit()
+    conn.close()
+
+    flash(f"Boîte Gmail {mailbox_type.upper()} connectée : {email_address}")
+    return redirect(url_for("boite_mail"))
+
+
+# ==========================================================
 # CONNEXION GOOGLE CALENDAR
 # ==========================================================
 
@@ -5906,6 +6130,10 @@ def google_connect():
 
 @app.route("/google/callback")
 def google_callback():
+
+    # Le retour Gmail partage l'URI OAuth existante, mais garde son propre état.
+    if session.get("gmail_oauth_state"):
+        return handle_gmail_oauth_callback()
 
     # Google peut retourner une erreur avant même de fournir un code.
     google_error = request.args.get("error")
