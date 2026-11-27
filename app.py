@@ -25,11 +25,15 @@ import secrets
 import base64
 import tempfile
 import uuid
+import sys
+import threading
+import time
 import io
 import calendar as pycal
 from werkzeug.utils import secure_filename
 
 from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
 from urllib.parse import urlencode
 
 from config import (
@@ -1566,6 +1570,26 @@ def init_database():
         ON push_subscriptions(user_type, user_id, famille_id)
     """)
 
+    # Notifications internes des rappels d'agenda (indépendantes du Push messagerie).
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS agenda_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            event_id INTEGER NOT NULL,
+            recipient_type TEXT NOT NULL CHECK(recipient_type IN ('admin', 'membre')),
+            recipient_id INTEGER NOT NULL,
+            titre TEXT NOT NULL,
+            message TEXT NOT NULL,
+            event_start TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(event_id, recipient_type, recipient_id)
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_agenda_notifications_recipient
+        ON agenda_notifications(famille_id, recipient_type, recipient_id, created_at)
+    """)
+
     conn.commit()
     conn.close()
 
@@ -1574,6 +1598,90 @@ def init_database():
 # ==========================================================
 
 init_database()
+
+def process_agenda_reminders():
+    """Crée une notification interne une seule fois par événement et destinataire."""
+    tz = ZoneInfo("Europe/Paris")
+    now = datetime.now(tz).replace(tzinfo=None)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, famille_id, membre_id, titre, description, date, heure,
+               rappel, rappel_delai_minutes, concerne_admin, statut_validation
+        FROM evenements
+        WHERE COALESCE(rappel, 0) = 1
+          AND COALESCE(statut_validation, 'accepte') = 'accepte'
+    """)
+    rows = cursor.fetchall()
+    created = 0
+    for event in rows:
+        try:
+            event_day = date.fromisoformat(str(event["date"])[:10])
+            time_text = (event["heure"] or "00:00").strip()
+            event_time = datetime.strptime(time_text[:5], "%H:%M").time()
+            event_start = datetime.combine(event_day, event_time)
+            delay = int(event["rappel_delai_minutes"] or 60)
+            due_at = event_start - timedelta(minutes=delay)
+        except (TypeError, ValueError):
+            app.logger.warning("Rappel ignoré : date/heure/délai invalide pour événement %s", event["id"])
+            continue
+
+        # Ne pas envoyer un rappel après le début du rendez-vous.
+        if due_at > now or event_start <= now:
+            continue
+
+        recipients = []
+        if event["concerne_admin"] == 1:
+            admin_row = cursor.execute(
+                "SELECT admin_id FROM famille WHERE id=?", (event["famille_id"],)
+            ).fetchone()
+            if admin_row and admin_row["admin_id"] is not None:
+                recipients.append(("admin", int(admin_row["admin_id"])))
+        elif event["membre_id"] is not None:
+            recipients.append(("membre", int(event["membre_id"])))
+
+        for recipient_type, recipient_id in recipients:
+            cursor.execute("""
+                INSERT OR IGNORE INTO agenda_notifications
+                    (famille_id, event_id, recipient_type, recipient_id,
+                     titre, message, event_start)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                event["famille_id"], event["id"], recipient_type, recipient_id,
+                "Rappel : " + (event["titre"] or "Événement"),
+                "Votre événement commence le " + event_start.strftime("%d/%m/%Y à %H:%M") + ".",
+                event_start.isoformat()
+            ))
+            if cursor.rowcount:
+                created += 1
+    conn.commit()
+    conn.close()
+    return created
+
+
+def _agenda_reminder_worker():
+    """Vérifie les rappels toutes les 60 secondes dans le processus web."""
+    while True:
+        try:
+            total = process_agenda_reminders()
+            if total:
+                app.logger.info("%s notification(s) de rappel agenda créée(s).", total)
+        except Exception:
+            app.logger.exception("Erreur du traitement automatique des rappels agenda")
+        time.sleep(60)
+
+
+# Un worker autonome évite de dépendre de l'ouverture du calendrier.
+# Plusieurs workers Gunicorn peuvent démarrer ce contrôle : la contrainte
+# UNIQUE de agenda_notifications empêche les doublons par destinataire.
+if os.environ.get("DISABLE_AGENDA_REMINDER_WORKER", "").lower() not in {"1", "true", "yes"}:
+    threading.Thread(
+        target=_agenda_reminder_worker,
+        name="agenda-reminder-worker",
+        daemon=True
+    ).start()
+
+
 
 # ==========================================================
 # INSCRIPTION ADMINISTRATEUR
@@ -4901,9 +5009,27 @@ def calendar():
                 app.logger.exception("Lecture des calendriers Google impossible")
                 google_error = "Google est connecté, mais la liste des agendas est inaccessible."
 
+    notifications_conn = get_connection()
+    if est_admin:
+        notifications_agenda = notifications_conn.execute("""
+            SELECT titre, message, event_start, created_at
+            FROM agenda_notifications
+            WHERE famille_id=? AND recipient_type='admin' AND recipient_id=?
+            ORDER BY created_at DESC LIMIT 10
+        """, (famille_id, admin_id)).fetchall()
+    else:
+        notifications_agenda = notifications_conn.execute("""
+            SELECT titre, message, event_start, created_at
+            FROM agenda_notifications
+            WHERE famille_id=? AND recipient_type='membre' AND recipient_id=?
+            ORDER BY created_at DESC LIMIT 10
+        """, (famille_id, membre_id)).fetchall()
+    notifications_conn.close()
+
     return render_template(
         "calendar.html",
         evenements=evenements,
+        notifications_agenda=notifications_agenda,
         evenements_pro=evenements_pro,
         evenements_perso=evenements_perso,
         membres=membres,
@@ -5873,12 +5999,19 @@ def get_user_by_id(user_id):
 # ==========================================================
 
 if __name__ == "__main__":
-
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True
-    )
+    if "--send-agenda-reminders" in sys.argv:
+        try:
+            total = process_agenda_reminders()
+            print(f"{total} notification(s) de rappel créée(s).")
+        except Exception:
+            app.logger.exception("Échec du traitement des rappels agenda")
+            raise
+    else:
+        app.run(
+            host="0.0.0.0",
+            port=5000,
+            debug=True
+        )
 
 
 
