@@ -1,3 +1,4 @@
+
 const CACHE_NAME = "dis-moi-tout-v3";
 
 self.addEventListener("install", (event) => {
@@ -27,9 +28,23 @@ self.addEventListener("push", (event) => {
         }
     }
 
+    const isAgendaReminder = data.type === "agenda_reminder";
     const title = data.title || "Dis-moi tout";
 
-    const options = {
+    // Les rappels d'agenda ont leur propre tag et leur propre destination.
+    // Les autres notifications conservent leur traitement existant.
+    const options = isAgendaReminder ? {
+        body: data.body || "Vous avez un événement à venir.",
+        icon: "/static/images/app-icon-192.png",
+        badge: "/static/images/favicon-32.png",
+        tag: "dis-moi-tout-rappel-" + String(data.notificationId || "agenda"),
+        renotify: false,
+        data: {
+            url: data.url || "/calendar",
+            type: "agenda_reminder",
+            notificationId: data.notificationId || null
+        }
+    } : {
         body: data.body || "Vous avez reçu un nouveau message.",
         icon: "/static/images/app-icon-192.png",
         badge: "/static/images/favicon-32.png",
