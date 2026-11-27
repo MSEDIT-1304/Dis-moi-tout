@@ -115,7 +115,7 @@
             console.warn("Vérification abonnement reportée :", error);
         }
     }
-    window.setInterval(verifySubscription, 1 * 60 * 1000);
+    window.setInterval(verifySubscription, 15 * 60 * 1000);
     const badge = document.getElementById("message-unread-badge");
     async function updateMessageBadge() {
         if (!badge) return;
@@ -133,7 +133,7 @@
         } catch (error) { console.warn("Notification messagerie indisponible", error); }
     }
     updateMessageBadge();
-    window.setInterval(updateMessageBadge, 15000);
+    window.setInterval(updateMessageBadge, 15 * 1000);
 
     // Activation volontaire des notifications sur cet appareil.
     const pushButton = document.getElementById("enable-push-notifications");
