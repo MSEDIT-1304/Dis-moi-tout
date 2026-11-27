@@ -1693,6 +1693,9 @@ def process_agenda_reminders():
     for notification in pending_notifications:
         push_attempts += send_agenda_reminder_push(conn, notification)
 
+    # Supprimer uniquement les notifications de rappel lorsque l'événement
+    # correspondant est terminé. L'événement lui-même reste dans le calendrier.
+    conn.execute("DELETE FROM agenda_notifications WHERE event_start <= ?", (now.isoformat(),))
     conn.commit()
     conn.close()
     app.logger.info(
@@ -4952,6 +4955,46 @@ def subscription_check():
 # CALENDRIER
 # ==========================================================
 
+@app.route("/agenda/reminders", methods=["GET"])
+def agenda_reminders_status():
+    """Retourne les rappels actifs et retire ceux dont l'événement est terminé."""
+    if not session.get("logged"):
+        return jsonify({"success": False, "reminders": []}), 401
+
+    famille_id = session.get("famille_id")
+    if famille_id is None:
+        return jsonify({"success": False, "reminders": []}), 403
+
+    now_text = datetime.now(ZoneInfo("Europe/Paris")).replace(tzinfo=None).isoformat()
+    conn = get_connection()
+    # Nettoyage automatique des seuls rappels : aucun événement n'est supprimé.
+    conn.execute("DELETE FROM agenda_notifications WHERE event_start <= ?", (now_text,))
+
+    if session.get("admin_logged") is True:
+        rows = conn.execute(
+            """SELECT titre, message FROM agenda_notifications
+               WHERE famille_id=? AND recipient_type='admin' AND recipient_id=?
+                 AND event_start > ?
+               ORDER BY created_at DESC LIMIT 10""",
+            (famille_id, session.get("admin_id"), now_text)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT titre, message FROM agenda_notifications
+               WHERE famille_id=? AND recipient_type='membre' AND recipient_id=?
+                 AND event_start > ?
+               ORDER BY created_at DESC LIMIT 10""",
+            (famille_id, session.get("membre_id"), now_text)
+        ).fetchall()
+
+    conn.commit()
+    conn.close()
+    return jsonify({
+        "success": True,
+        "reminders": [{"titre": row["titre"], "message": row["message"]} for row in rows]
+    })
+
+
 @app.route("/calendar")
 def calendar():
     if not session.get("logged"):
@@ -5199,16 +5242,16 @@ def calendar():
         notifications_agenda = notifications_conn.execute("""
             SELECT titre, message, event_start, created_at
             FROM agenda_notifications
-            WHERE famille_id=? AND recipient_type='admin' AND recipient_id=?
+            WHERE famille_id=? AND recipient_type='admin' AND recipient_id=? AND event_start > ?
             ORDER BY created_at DESC LIMIT 10
-        """, (famille_id, admin_id)).fetchall()
+        """, (famille_id, admin_id, datetime.now(ZoneInfo('Europe/Paris')).replace(tzinfo=None).isoformat())).fetchall()
     else:
         notifications_agenda = notifications_conn.execute("""
             SELECT titre, message, event_start, created_at
             FROM agenda_notifications
-            WHERE famille_id=? AND recipient_type='membre' AND recipient_id=?
+            WHERE famille_id=? AND recipient_type='membre' AND recipient_id=? AND event_start > ?
             ORDER BY created_at DESC LIMIT 10
-        """, (famille_id, membre_id)).fetchall()
+        """, (famille_id, membre_id, datetime.now(ZoneInfo('Europe/Paris')).replace(tzinfo=None).isoformat())).fetchall()
     notifications_conn.close()
 
     return render_template(
