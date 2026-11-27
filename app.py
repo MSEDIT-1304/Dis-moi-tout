@@ -1608,6 +1608,25 @@ def init_database():
         ON agenda_notification_push_deliveries(notification_id)
     """)
 
+    # BOITES MAIL : connexions privées, indépendantes des agendas
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mailbox_connections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            owner_type TEXT NOT NULL CHECK(owner_type IN ('admin', 'membre')),
+            owner_id INTEGER NOT NULL,
+            mailbox_type TEXT NOT NULL CHECK(mailbox_type IN ('perso', 'pro')),
+            provider TEXT NOT NULL,
+            email TEXT,
+            access_token TEXT,
+            refresh_token TEXT,
+            token_expires_at TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(owner_type, owner_id, mailbox_type)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -5031,6 +5050,50 @@ def agenda_reminders_status():
         "success": True,
         "reminders": [{"titre": row["titre"], "message": row["message"]} for row in rows]
     })
+
+
+@app.route("/boite-mail")
+def boite_mail():
+    if not session.get("logged"):
+        return redirect(url_for("home"))
+    famille_id = session.get("famille_id")
+    if famille_id is None:
+        return redirect(url_for("dashboard"))
+
+    est_admin = session.get("admin_logged") is True
+    owner_type = "admin" if est_admin else "membre"
+    owner_id = session.get("admin_id") if est_admin else session.get("membre_id")
+    afficher_pro = est_admin
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    if not est_admin:
+        cursor.execute(
+            "SELECT role FROM membres WHERE id = ? AND famille_id = ?",
+            (owner_id, famille_id)
+        )
+        membre = cursor.fetchone()
+        if membre is None:
+            conn.close()
+            session.clear()
+            return redirect(url_for("home"))
+        afficher_pro = (membre["role"] or "").lower() == "conjoint"
+
+    cursor.execute(
+        """SELECT mailbox_type, provider, email
+           FROM mailbox_connections
+           WHERE famille_id = ? AND owner_type = ? AND owner_id = ?""",
+        (famille_id, owner_type, owner_id)
+    )
+    connections = {row["mailbox_type"]: dict(row) for row in cursor.fetchall()}
+    conn.close()
+
+    return render_template(
+        "boite_mail.html",
+        est_admin=est_admin,
+        afficher_pro=afficher_pro,
+        connections=connections
+    )
 
 
 @app.route("/calendar")
