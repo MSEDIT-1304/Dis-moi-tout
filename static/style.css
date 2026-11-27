@@ -2109,3 +2109,82 @@ html body .shopping-wrap .shopping-list-items li {
         grid-template-columns: 1fr !important;
     }
 }
+
+
+
+/* ======================================================
+   LISTES DE COURSES — CADRES BORDEAUX, FORMULAIRES BLANCS
+   Page administrateur et page membre uniquement
+   ====================================================== */
+
+/* Cadres extérieurs */
+html body .shopping-wrap .shopping-card {
+    background: #A52D68 !important;
+    color: #FFFFFF !important;
+    border: 1px solid #8B2457 !important;
+    border-radius: 12px !important;
+    box-shadow: 0 3px 10px rgba(69, 100, 127, 0.14) !important;
+}
+
+/* Titres et textes directement dans les cadres */
+html body .shopping-wrap .shopping-card > h1,
+html body .shopping-wrap .shopping-card > h2,
+html body .shopping-wrap .shopping-card > h3,
+html body .shopping-wrap .shopping-card > p,
+html body .shopping-wrap .shopping-card > strong,
+html body .shopping-wrap .shopping-card .shopping-status,
+html body .shopping-wrap .shopping-card label {
+    color: #FFFFFF !important;
+}
+
+/* Liste latérale : liens lisibles sur le fond bordeaux */
+html body .shopping-wrap .shopping-history a {
+    color: #FFFFFF !important;
+}
+
+html body .shopping-wrap .shopping-history a.active,
+html body .shopping-wrap .shopping-history a:hover {
+    background: #8B2457 !important;
+    color: #FFFFFF !important;
+}
+
+/* Formulaires blancs à l'intérieur des cadres bordeaux */
+html body .shopping-wrap .shopping-card form {
+    background: #FFFFFF !important;
+    color: #45647F !important;
+    border: 1px solid #E4D4DC !important;
+    border-radius: 9px !important;
+    box-shadow: none !important;
+}
+
+/* Libellés et textes dans les formulaires blancs */
+html body .shopping-wrap .shopping-card form label,
+html body .shopping-wrap .shopping-card form strong {
+    color: #45647F !important;
+}
+
+/* Champs de saisie blancs */
+html body .shopping-wrap .shopping-card form input:not([type="checkbox"]),
+html body .shopping-wrap .shopping-card form select,
+html body .shopping-wrap .shopping-card form textarea,
+html body .shopping-wrap .shopping-card form .shopping-field {
+    background: #FFFFFF !important;
+    color: #45647F !important;
+    border: 1px solid #D8CBD2 !important;
+}
+
+/* Les cases destinataires restent blanches et lisibles */
+html body .shopping-wrap .shopping-card form .shopping-checks label {
+    background: #FFFFFF !important;
+    color: #45647F !important;
+    border: 1px solid #EADCE4 !important;
+}
+
+/* Le texte de validation conserve ses couleurs de statut */
+html body .shopping-wrap .shopping-card .shopping-status {
+    color: #FFFFFF !important;
+}
+
+html body .shopping-wrap .shopping-card .shopping-status.pending {
+    color: #FFE0A8 !important;
+}
