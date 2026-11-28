@@ -521,11 +521,20 @@ def members():
     )
 
     membres = cursor.fetchall()
+    attributions = {}
+    for ex in membres:
+        if ex["role"] == "ex-conjoint":
+            rows = cursor.execute(
+                "SELECT enfant_id FROM garde_partagee_attributions WHERE famille_id=? AND ex_conjoint_id=?",
+                (famille_id, ex["id"])
+            ).fetchall()
+            attributions[ex["id"]] = {r["enfant_id"] for r in rows}
+    enfants = [m for m in membres if m["role"] == "enfant"]
     conn.close()
 
     return render_template(
         "dashboard_member.html",
-        membres=membres
+        membres=membres, enfants=enfants, attributions=attributions
     )
 
 
@@ -1113,6 +1122,18 @@ def init_database():
         )
         """
     )
+
+    # Associations individuelles entre chaque ex-conjoint et ses enfants.
+    # Table additive : aucune donnée de garde existante n'est supprimée.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS garde_partagee_attributions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            ex_conjoint_id INTEGER NOT NULL,
+            enfant_id INTEGER NOT NULL,
+            UNIQUE(famille_id, ex_conjoint_id, enfant_id)
+        )
+    """)
 
     # ======================================================
     # ÉVÉNEMENTS
@@ -2581,6 +2602,7 @@ def edit_member_route(membre_id):
 
     conn = get_connection()
     cursor = conn.cursor()
+    enfants_selectionnes = request.form.getlist("enfants_garde_partagee") if role == "ex-conjoint" else []
     if email:
         cursor.execute(
             "SELECT id FROM membres WHERE lower(email) = lower(?) AND id != ?",
@@ -2639,6 +2661,27 @@ def edit_member_route(membre_id):
         )
     )
     modifie = cursor.rowcount > 0
+
+    if modifie:
+        cursor.execute(
+            "DELETE FROM garde_partagee_attributions WHERE famille_id=? AND ex_conjoint_id=?",
+            (famille_id, membre_id)
+        )
+        if role == "ex-conjoint" and enfants_selectionnes:
+            for enfant_id in enfants_selectionnes:
+                try:
+                    enfant_id_int = int(enfant_id)
+                except (TypeError, ValueError):
+                    continue
+                cursor.execute(
+                    "SELECT id FROM membres WHERE id=? AND famille_id=? AND role='enfant'",
+                    (enfant_id_int, famille_id)
+                )
+                if cursor.fetchone():
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO garde_partagee_attributions (famille_id, ex_conjoint_id, enfant_id) VALUES (?, ?, ?)",
+                        (famille_id, membre_id, enfant_id_int)
+                    )
 
     if modifie:
         # Conserver toutes les gardes passées. Seules les gardes futures
@@ -5524,6 +5567,12 @@ def calendar():
         (famille_id,)
     )
     tous_evenements = cursor.fetchall()
+    enfants_garde_ex = set()
+    if not est_admin and membre and membre["role"] == "ex-conjoint":
+        enfants_garde_ex = {r["enfant_id"] for r in cursor.execute(
+            "SELECT enfant_id FROM garde_partagee_attributions WHERE famille_id=? AND ex_conjoint_id=?",
+            (famille_id, membre_id)
+        ).fetchall()}
     evenements = []
 
     for ev in tous_evenements:
@@ -5558,6 +5607,15 @@ def calendar():
                 )
             ):
                 evenements.append(ev_dict)
+            continue
+
+        # Un ex-conjoint voit aussi les événements de garde des seuls enfants
+        # qui lui ont été individuellement attribués par l'administrateur.
+        if (membre["role"] == "ex-conjoint"
+                and ev_dict.get("type_evenement") == "garde_partagee"
+                and ev_dict.get("membre_id") in enfants_garde_ex):
+            ev_dict["peut_gerer"] = False
+            evenements.append(ev_dict)
             continue
 
         # Le membre voit ses propres rendez-vous.
