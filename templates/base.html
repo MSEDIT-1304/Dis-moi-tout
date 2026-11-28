@@ -44,7 +44,7 @@
             {% if session.get("admin_logged") %}
                 <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint == 'members' else '' }}">Gérer les membres</a>
             {% endif %}
-            <a href="{{ url_for('taches_missions') }}" class="{{ 'active' if request.endpoint == 'taches_missions' else '' }}">Tâches &amp; Missions</a>
+            <a href="{{ url_for('taches_missions') }}" class="{{ 'active' if request.endpoint == 'taches_missions' else '' }}">Tâches &amp; Missions <span id="task-unread-badge" data-url="{{ url_for('taches_non_lues') }}" style="display:none;background:#A52D68;color:#fff;border-radius:50%;min-width:18px;height:18px;line-height:18px;text-align:center;font-size:11px;font-weight:700;margin-left:4px;padding:1px 5px;"></span></a>
             <a href="{{ url_for('messagerie') }}" class="{{ 'active' if request.endpoint == 'messagerie' else '' }}">Messagerie <span id="message-unread-badge" style="display:none;background:#a52d68;color:#fff;border-radius:12px;padding:1px 6px;font-size:11px;margin-left:3px"></span></a>
             <a href="{{ url_for('liste_courses') }}" class="{{ 'active' if request.endpoint == 'liste_courses' else '' }}">Liste des courses{% if not session.get("admin_logged") and pending_count|default(0) > 0 %} <span style="display:inline-block;background:#A52D68;color:#fff;border-radius:50%;min-width:18px;height:18px;line-height:18px;text-align:center;font-size:11px;font-weight:700;margin-left:4px;">{{ pending_count }}</span>{% endif %}</a>
             <a href="{{ url_for('profile') }}" class="{{ 'active' if request.endpoint == 'profile' else '' }}">Profil</a>
