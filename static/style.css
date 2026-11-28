@@ -2298,3 +2298,35 @@ html body .members-dashboard .members-card .member-edit-form .member-custody-set
 html body .members-dashboard .members-card .member-edit-form .member-custody-note {
     color: #FFFFFF !important;
 }
+
+
+/* TÂCHES & MISSIONS — styles isolés, palette existante conservée */
+.tasks-page{max-width:1050px;margin:0 auto;padding:12px 10px}
+.tasks-header{margin:0 0 14px}
+.tasks-header h1{margin:0 0 4px}
+.tasks-header p{margin:0}
+.tasks-card{background:#A52D68;color:#fff;border:1px solid #8B2457;border-radius:12px;padding:14px 16px;margin:0 0 14px}
+.tasks-card h2{color:#fff;font-size:18px;margin:0 0 12px}
+.tasks-card label{display:block;color:#fff;font-weight:600;margin:0 0 5px}
+.tasks-form-grid{display:grid;grid-template-columns:2fr 1.4fr 1fr;gap:12px}
+.tasks-card input,.tasks-card select,.tasks-card textarea{background:#fff;color:#244967;border:1px solid #d6d6d6;border-radius:7px;padding:8px 10px;margin:0 0 10px;width:100%;min-width:0}
+.tasks-card button{background:#A9CBEA!important;color:#244967!important;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}
+.tasks-inline-form{display:grid;grid-template-columns:1fr 1.4fr auto;align-items:end;gap:10px}
+.tasks-inline-form label{margin:0}
+.tasks-table-wrap{overflow-x:auto}
+.tasks-table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden}
+.tasks-table th{background:#8B2457;color:#fff;padding:9px 10px;text-align:left;white-space:nowrap}
+.tasks-table td{background:#fff;color:#244967;padding:9px 10px;border-bottom:1px solid #ead5e0;vertical-align:middle}
+.tasks-table td small{display:block;color:#45647F;margin-top:3px;white-space:normal}
+.tasks-table tr.task-done td{background:#f1f8f1}
+.task-check{color:#218838;font-size:22px;font-weight:800}
+.task-pending{color:#8B2457;font-weight:700}
+.task-validate{padding:6px 10px!important;font-size:12px!important;white-space:nowrap}
+.tasks-empty{color:#fff!important;margin:0}
+@media(max-width:700px){
+ .tasks-page{padding:8px 4px}
+ .tasks-card{padding:12px}
+ .tasks-form-grid{grid-template-columns:1fr;gap:4px}
+ .tasks-inline-form{grid-template-columns:1fr}
+ .tasks-table{min-width:620px}
+}
