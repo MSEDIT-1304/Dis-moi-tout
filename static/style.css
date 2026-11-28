@@ -2330,3 +2330,124 @@ html body .members-dashboard .members-card .member-edit-form .member-custody-not
  .tasks-inline-form{grid-template-columns:1fr}
  .tasks-table{min-width:620px}
 }
+
+
+/* TÂCHES & MISSIONS — présentation en deux colonnes, sans cadre Nom personnel */
+.tasks-page {
+    max-width: 1280px;
+}
+.tasks-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+    gap: 16px;
+    align-items: start;
+}
+.tasks-card {
+    min-width: 0;
+    margin: 0;
+    padding: 14px;
+}
+.tasks-card h2 {
+    margin: 0 0 9px;
+}
+.tasks-form {
+    padding: 12px !important;
+    margin: 0;
+}
+.tasks-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.9fr);
+    gap: 8px 10px;
+    align-items: end;
+}
+.tasks-field {
+    min-width: 0;
+}
+.tasks-field-title {
+    grid-column: 1 / -1;
+}
+.tasks-field label,
+.tasks-form label {
+    display: block;
+    margin: 0 0 3px;
+    line-height: 1.25;
+}
+.tasks-card input,
+.tasks-card select,
+.tasks-card textarea {
+    margin: 0;
+    padding: 7px 9px;
+    min-height: 35px;
+    font-size: 13px;
+}
+.tasks-field-description {
+    margin: 8px 0;
+}
+.tasks-card textarea {
+    min-height: 56px;
+    resize: vertical;
+}
+.tasks-card button {
+    padding: 7px 12px;
+    font-size: 12px;
+}
+.tasks-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+}
+.tasks-table {
+    min-width: 490px;
+    font-size: 12px;
+}
+.tasks-table th,
+.tasks-table td {
+    padding: 7px 6px;
+}
+.tasks-table th {
+    white-space: normal;
+}
+.tasks-table td {
+    overflow-wrap: anywhere;
+}
+.tasks-table td small {
+    font-size: 11px;
+}
+.task-complete-form {
+    padding: 0 !important;
+    margin: 0;
+    background: transparent !important;
+}
+.tasks-notice {
+    margin: 0 0 12px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: #e8f5e9;
+    color: #216b32;
+    font-weight: 700;
+}
+@media (max-width: 900px) {
+    .tasks-columns {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 700px) {
+    .tasks-page {
+        padding: 8px 4px;
+    }
+    .tasks-card {
+        padding: 11px;
+    }
+    .tasks-form {
+        padding: 10px !important;
+    }
+    .tasks-form-grid {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+    .tasks-field-title {
+        grid-column: auto;
+    }
+    .tasks-table {
+        min-width: 490px;
+    }
+}
