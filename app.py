@@ -5239,11 +5239,17 @@ def taches_missions():
         SELECT * FROM taches
         WHERE famille_id=? AND (
             ((destinataire_type=? AND destinataire_id=?) AND terminee=0)
-            OR (assignateur_type=? AND assignateur_id=?)
+            OR (
+                assignateur_type=? AND assignateur_id=?
+                AND (
+                    terminee=0
+                    OR NOT (destinataire_type=? AND destinataire_id=?)
+                )
+            )
         )
         ORDER BY CASE WHEN date_echeance IS NULL THEN 1 ELSE 0 END,
                  date_echeance, id DESC
-    """, (family_id,kind,user_id,kind,user_id)).fetchall()
+    """, (family_id,kind,user_id,kind,user_id,kind,user_id)).fetchall()
 
     tasks = []
     for row in rows:
@@ -5278,11 +5284,17 @@ def taches_actualiser():
         SELECT * FROM taches
         WHERE famille_id=? AND (
             ((destinataire_type=? AND destinataire_id=?) AND terminee=0)
-            OR (assignateur_type=? AND assignateur_id=?)
+            OR (
+                assignateur_type=? AND assignateur_id=?
+                AND (
+                    terminee=0
+                    OR NOT (destinataire_type=? AND destinataire_id=?)
+                )
+            )
         )
         ORDER BY CASE WHEN date_echeance IS NULL THEN 1 ELSE 0 END,
                  date_echeance, id DESC
-    """, (family_id, kind, user_id, kind, user_id)).fetchall()
+    """, (family_id, kind, user_id, kind, user_id, kind, user_id)).fetchall()
     tasks = []
     for row in rows:
         tasks.append({
