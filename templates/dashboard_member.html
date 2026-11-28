@@ -171,8 +171,7 @@
                                             Autoriser l'accès à mon agenda PERSO
                                         </label>
                                     </div>
-                                    {% if membre['role'] == 'ex-conjoint' %}
-                                    <div class="member-custody-settings ex-custody-selection">
+                                    <div id="ex-garde-selection-{{ membre['id'] }}" class="member-custody-settings ex-custody-selection" style="display: none;">
                                         <strong>Enfants concernés par la garde partagée</strong>
                                         <p class="member-custody-note">Cochez uniquement les enfants dont cet ex-conjoint doit voir les dates de garde dans son agenda.</p>
                                         <div class="ex-custody-children">
@@ -186,7 +185,6 @@
                                             {% endfor %}
                                         </div>
                                     </div>
-                                    {% endif %}
                                     <div id="garde-partagee-{{ membre['id'] }}" class="member-custody-settings" style="display: none;">
                                         <label class="members-checkbox">
                                             <input type="checkbox" name="garde_partagee" value="oui" {% if membre['garde_partagee'] %}checked{% endif %}>
@@ -214,12 +212,14 @@
                                             const roleSelect = document.getElementById("role-{{ membre['id'] }}");
                                             const partageAgendas = document.getElementById("partage-agendas-{{ membre['id'] }}");
                                             const gardePartagee = document.getElementById("garde-partagee-{{ membre['id'] }}");
+                                            const selectionExConjoint = document.getElementById("ex-garde-selection-{{ membre['id'] }}");
                                             function actualiserOptionsMembre() {
                                                 partageAgendas.style.display =
                                                     ["conjoint", "ex-conjoint"].includes(roleSelect.value)
                                                     ? "block"
                                                     : "none";
                                                 gardePartagee.style.display = roleSelect.value === "enfant" ? "block" : "none";
+                                                selectionExConjoint.style.display = roleSelect.value === "ex-conjoint" ? "block" : "none";
                                             }
                                             roleSelect.addEventListener("change", actualiserOptionsMembre);
                                             actualiserOptionsMembre();
