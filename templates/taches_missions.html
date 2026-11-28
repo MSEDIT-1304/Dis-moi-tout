@@ -7,95 +7,105 @@
         <p>Les missions de la famille, simplement.</p>
     </header>
 
-    {% if nickname_target %}
-    <section class="tasks-card tasks-nickname">
-        <h2>Nom personnel</h2>
-        <form method="POST" class="tasks-inline-form">
-            <input type="hidden" name="action" value="nickname">
-            <input type="hidden" name="target_type" value="{{ nickname_target.type }}">
-            <input type="hidden" name="target_id" value="{{ nickname_target.id }}">
-            <label for="nickname">Nom que vous donnez à {{ nickname_target.label }}</label>
-            <input id="nickname" name="nickname" maxlength="80" value="{{ nickname_target.value }}" placeholder="Laisser vide pour afficher le prénom">
-            <button type="submit">Enregistrer</button>
-        </form>
-    </section>
+    {% if new_task_notifications|default(0) > 0 %}
+    <div class="tasks-notice" role="status">
+        Vous avez reçu {{ new_task_notifications }} nouvelle{% if new_task_notifications > 1 %}s{% endif %} mission{% if new_task_notifications > 1 %}s{% endif %}.
+    </div>
     {% endif %}
 
-    {% if recipients %}
-    <section class="tasks-card">
-        <h2>Attribuer une mission</h2>
-        <form method="POST" class="tasks-form">
-            <input type="hidden" name="action" value="create">
-            <div class="tasks-form-grid">
-                <div>
-                    <label for="task-title">Mission</label>
-                    <input id="task-title" name="titre" maxlength="120" required placeholder="Ex. Ranger sa chambre">
-                </div>
-                <div>
-                    <label for="task-recipient">Attribuer à</label>
-                    <select id="task-recipient" name="destinataire_id" required>
-                        {% for person in recipients %}
-                        <option value="{{ person.id }}" data-type="{{ person.type }}">{{ person.label }}</option>
-                        {% endfor %}
-                    </select>
-                    <input type="hidden" id="task-recipient-type" name="destinataire_type" value="{{ recipients[0].type }}">
-                </div>
-                <div>
-                    <label for="task-date">Date limite (facultative)</label>
-                    <input id="task-date" type="date" name="date_echeance">
-                </div>
+    <div class="tasks-columns">
+        <section class="tasks-card tasks-board">
+            <h2>Mes tableaux de missions</h2>
+            {% if tasks %}
+            <div class="tasks-table-wrap">
+                <table class="tasks-table">
+                    <thead>
+                        <tr>
+                            <th>Mission</th>
+                            <th>Attribuée par</th>
+                            <th>Pour</th>
+                            <th>Échéance</th>
+                            <th>État</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for task in tasks %}
+                        <tr class="{{ 'task-done' if task.terminee else '' }}">
+                            <td><strong>{{ task.titre }}</strong>{% if task.description %}<small>{{ task.description }}</small>{% endif %}</td>
+                            <td>{{ task.assignateur }}</td>
+                            <td>{{ task.destinataire }}</td>
+                            <td>{{ task.date_echeance|replace('-', '/') if task.date_echeance else '—' }}</td>
+                            <td>
+                                {% if task.terminee %}
+                                    <span class="task-check" title="Mission terminée">✓</span>
+                                {% elif task.est_destinataire %}
+                                    <form method="POST" class="task-complete-form">
+                                        <input type="hidden" name="action" value="complete">
+                                        <input type="hidden" name="task_id" value="{{ task.id }}">
+                                        <button type="submit" class="task-validate">Valider ✓</button>
+                                    </form>
+                                {% else %}
+                                    <span class="task-pending">En attente</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
-            <label for="task-description">Détail (facultatif)</label>
-            <textarea id="task-description" name="description" rows="2" maxlength="1000" placeholder="Précisions utiles..."></textarea>
-            <button type="submit">Ajouter la mission</button>
-        </form>
-    </section>
-    <script>
-    (function(){
-        const select=document.getElementById("task-recipient");
-        const type=document.getElementById("task-recipient-type");
-        if(select && type){
-            function sync(){ type.value=select.options[select.selectedIndex].dataset.type; }
-            select.addEventListener("change",sync); sync();
-        }
-    })();
-    </script>
-    {% endif %}
+            {% else %}
+            <p class="tasks-empty">Aucune mission pour le moment.</p>
+            {% endif %}
+        </section>
 
-    <section class="tasks-card">
-        <h2>Mes tableaux de missions</h2>
-        {% if tasks %}
-        <div class="tasks-table-wrap">
-            <table class="tasks-table">
-                <thead><tr><th>Mission</th><th>Attribuée par</th><th>Pour</th><th>Échéance</th><th>État</th></tr></thead>
-                <tbody>
-                {% for task in tasks %}
-                <tr class="{{ 'task-done' if task.terminee else '' }}">
-                    <td><strong>{{ task.titre }}</strong>{% if task.description %}<small>{{ task.description }}</small>{% endif %}</td>
-                    <td>{{ task.assignateur }}</td>
-                    <td>{{ task.destinataire }}</td>
-                    <td>{{ task.date_echeance|replace('-', '/') if task.date_echeance else '—' }}</td>
-                    <td>
-                        {% if task.terminee %}
-                            <span class="task-check" title="Mission terminée">✓</span>
-                        {% elif task.est_destinataire %}
-                            <form method="POST" class="task-complete-form">
-                                <input type="hidden" name="action" value="complete">
-                                <input type="hidden" name="task_id" value="{{ task.id }}">
-                                <button type="submit" class="task-validate">Valider ✓</button>
-                            </form>
-                        {% else %}
-                            <span class="task-pending">En attente</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="tasks-empty">Aucune mission pour le moment.</p>
+        {% if recipients %}
+        <section class="tasks-card tasks-assignment">
+            <h2>Attribuer une mission</h2>
+            <form method="POST" class="tasks-form">
+                <input type="hidden" name="action" value="create">
+                <div class="tasks-form-grid">
+                    <div class="tasks-field tasks-field-title">
+                        <label for="task-title">Mission</label>
+                        <input id="task-title" name="titre" maxlength="120" required placeholder="Ex. Ranger sa chambre">
+                    </div>
+                    <div class="tasks-field">
+                        <label for="task-recipient">Attribuer à</label>
+                        <select id="task-recipient" name="destinataire_id" required>
+                            {% for person in recipients %}
+                            <option value="{{ person.id }}" data-type="{{ person.type }}">{{ person.label }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="hidden" id="task-recipient-type" name="destinataire_type" value="{{ recipients[0].type }}">
+                    </div>
+                    <div class="tasks-field">
+                        <label for="task-date">Date limite</label>
+                        <input id="task-date" type="date" name="date_echeance">
+                    </div>
+                </div>
+                <div class="tasks-field tasks-field-description">
+                    <label for="task-description">Précisions (facultatif)</label>
+                    <textarea id="task-description" name="description" rows="2" maxlength="1000" placeholder="Précisions utiles..."></textarea>
+                </div>
+                <button type="submit">Ajouter la mission</button>
+            </form>
+        </section>
         {% endif %}
-    </section>
+    </div>
 </div>
+
+{% if recipients %}
+<script>
+(function () {
+    const select = document.getElementById("task-recipient");
+    const type = document.getElementById("task-recipient-type");
+    if (select && type) {
+        function syncRecipientType() {
+            type.value = select.options[select.selectedIndex].dataset.type;
+        }
+        select.addEventListener("change", syncRecipientType);
+        syncRecipientType();
+    }
+})();
+</script>
+{% endif %}
 {% endblock %}
