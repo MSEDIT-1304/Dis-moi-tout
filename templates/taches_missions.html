@@ -7,17 +7,12 @@
         <p>Les missions de la famille, simplement.</p>
     </header>
 
-    {% if new_task_notifications|default(0) > 0 %}
-    <div class="tasks-notice" role="status">
-        Vous avez reçu {{ new_task_notifications }} nouvelle{% if new_task_notifications > 1 %}s{% endif %} mission{% if new_task_notifications > 1 %}s{% endif %}.
-    </div>
-    {% endif %}
+
 
     <div class="tasks-columns">
         <section class="tasks-card tasks-board">
             <h2>Mes tableaux de missions</h2>
-            {% if tasks %}
-            <div class="tasks-table-wrap">
+            <div class="tasks-table-wrap" id="tasks-table-wrap" {% if not tasks %}style="display:none"{% endif %}>
                 <table class="tasks-table">
                     <thead>
                         <tr>
@@ -28,7 +23,7 @@
                             <th>État</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="tasks-table-body">
                     {% for task in tasks %}
                         <tr class="{{ 'task-done' if task.terminee else '' }}">
                             <td><strong>{{ task.titre }}</strong>{% if task.description %}<small>{{ task.description }}</small>{% endif %}</td>
@@ -53,9 +48,7 @@
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <p class="tasks-empty">Aucune mission pour le moment.</p>
-            {% endif %}
+            {% if not tasks %}<p class="tasks-empty" id="tasks-empty">Aucune mission pour le moment.</p>{% endif %}
         </section>
 
         {% if recipients %}
@@ -93,7 +86,6 @@
     </div>
 </div>
 
-{% if recipients %}
 <script>
 (function () {
     const select = document.getElementById("task-recipient");
@@ -105,7 +97,87 @@
         select.addEventListener("change", syncRecipientType);
         syncRecipientType();
     }
+
+    const body = document.getElementById("tasks-table-body");
+    const refreshUrl = "{{ url_for('taches_actualiser') }}";
+    if (!body || !refreshUrl) return;
+
+    function cell(text, strong) {
+        const td = document.createElement("td");
+        if (strong) {
+            const b = document.createElement("strong");
+            b.textContent = text || "";
+            td.appendChild(b);
+        } else {
+            td.textContent = text || "";
+        }
+        return td;
+    }
+
+    function renderTasks(tasks) {
+        const wrap = document.getElementById("tasks-table-wrap");
+        let empty = document.getElementById("tasks-empty");
+        if (!tasks.length) {
+            if (wrap) wrap.style.display = "none";
+            if (!empty && wrap) {
+                empty = document.createElement("p");
+                empty.id = "tasks-empty";
+                empty.className = "tasks-empty";
+                empty.textContent = "Aucune mission pour le moment.";
+                wrap.parentNode.insertBefore(empty, wrap.nextSibling);
+            }
+            return;
+        }
+        if (wrap) wrap.style.display = "";
+        if (empty) empty.remove();
+        body.replaceChildren();
+        tasks.forEach(task => {
+            const tr = document.createElement("tr");
+            const mission = cell(task.titre, true);
+            if (task.description) {
+                const small = document.createElement("small");
+                small.textContent = task.description;
+                mission.appendChild(small);
+            }
+            tr.appendChild(mission);
+            tr.appendChild(cell(task.assignateur));
+            tr.appendChild(cell(task.destinataire));
+            tr.appendChild(cell(task.date_echeance ? task.date_echeance.replaceAll("-", "/") : "—"));
+            const state = document.createElement("td");
+            if (task.est_destinataire) {
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.className = "task-complete-form";
+                const action = document.createElement("input");
+                action.type = "hidden"; action.name = "action"; action.value = "complete";
+                const id = document.createElement("input");
+                id.type = "hidden"; id.name = "task_id"; id.value = task.id;
+                const button = document.createElement("button");
+                button.type = "submit"; button.className = "task-validate"; button.textContent = "Valider ✓";
+                form.append(action, id, button);
+                state.appendChild(form);
+            } else {
+                const pending = document.createElement("span");
+                pending.className = "task-pending";
+                pending.textContent = "En attente";
+                state.appendChild(pending);
+            }
+            tr.appendChild(state);
+            body.appendChild(tr);
+        });
+    }
+
+    async function refreshTasks() {
+        try {
+            const response = await fetch(refreshUrl, {credentials: "same-origin", cache: "no-store"});
+            if (!response.ok) return;
+            const data = await response.json();
+            if (data.success && Array.isArray(data.tasks)) renderTasks(data.tasks);
+        } catch (error) {
+            console.debug("Actualisation des missions reportée", error);
+        }
+    }
+    window.setInterval(refreshTasks, 5000);
 })();
 </script>
-{% endif %}
-{% endblock %}
+{% endblock %}}
