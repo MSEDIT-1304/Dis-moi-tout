@@ -5098,6 +5098,148 @@ def task_person_name(conn, family_id, person_type, person_id, viewer_type, viewe
     return (alias["surnom"] if alias and alias["surnom"] else fallback)
 
 
+def send_task_push_notification(conn, task_id, event):
+    """Envoi Push propre aux tâches, via les abonnements déjà enregistrés.
+    Cette fonction est indépendante du Push de la messagerie et des rappels d'agenda.
+    """
+    try:
+        task = conn.execute("""
+            SELECT * FROM taches WHERE id=?
+        """, (task_id,)).fetchone()
+        if not task:
+            return
+
+        if event == "assigned":
+            target_type = task["destinataire_type"]
+            target_id = task["destinataire_id"]
+            sender_type = task["assignateur_type"]
+            sender_id = task["assignateur_id"]
+            title = "Nouvelle mission"
+            body = f"Une mission vous a été attribuée : {task['titre']}"
+        elif event == "completed":
+            target_type = task["assignateur_type"]
+            target_id = task["assignateur_id"]
+            sender_type = task["destinataire_type"]
+            sender_id = task["destinataire_id"]
+            title = "Mission effectuée"
+            body = f"La mission « {task['titre']} » a été effectuée."
+        else:
+            return
+
+        # Ne jamais envoyer de notification à la personne qui vient d'agir.
+        if target_type == sender_type and int(target_id) == int(sender_id):
+            return
+
+        public_key = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+        private_key = os.environ.get("VAPID_PRIVATE_KEY", "").strip()
+        if not public_key or not private_key:
+            app.logger.warning("TACHES_PUSH: clés VAPID absentes.")
+            return
+
+        try:
+            from pywebpush import webpush, WebPushException
+        except ImportError:
+            app.logger.exception("TACHES_PUSH: dépendance pywebpush absente.")
+            return
+
+        devices = conn.execute("""
+            SELECT id, subscription_json
+            FROM push_subscriptions
+            WHERE famille_id=? AND user_type=? AND user_id=?
+        """, (task["famille_id"], target_type, target_id)).fetchall()
+
+        if not devices:
+            app.logger.info(
+                "TACHES_PUSH: aucun appareil enregistré pour %s:%s",
+                target_type, target_id
+            )
+            return
+
+        pending = conn.execute("""
+            SELECT COUNT(*) AS total
+            FROM taches
+            WHERE famille_id=?
+              AND (
+                (destinataire_type=? AND destinataire_id=? AND terminee=0)
+                OR (
+                    assignateur_type=? AND assignateur_id=? AND terminee=1
+                    AND NOT (
+                        destinataire_type=assignateur_type
+                        AND destinataire_id=assignateur_id
+                    )
+                )
+              )
+        """, (
+            task["famille_id"], target_type, target_id,
+            target_type, target_id
+        )).fetchone()
+        badge_count = int(pending["total"] if pending else 0)
+
+        payload = json.dumps({
+            "title": title,
+            "body": body,
+            "url": url_for("taches_missions", _external=False),
+            "badgeCount": badge_count
+        }, ensure_ascii=False)
+
+        private_key_pem = private_key.replace("\\n", "\n").strip()
+        key_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", suffix=".pem",
+                prefix="dismoitout-taches-vapid-", delete=False
+            ) as key_file:
+                key_file.write(private_key_pem)
+                key_path = key_file.name
+
+            for device in devices:
+                try:
+                    webpush(
+                        subscription_info=json.loads(device["subscription_json"]),
+                        data=payload,
+                        vapid_private_key=key_path,
+                        vapid_claims={
+                            "sub": os.environ.get(
+                                "VAPID_SUBJECT", "mailto:contact@dismoi-tout.fr"
+                            ).strip()
+                        }
+                    )
+                    app.logger.info(
+                        "TACHES_PUSH: envoi accepté; task_id=%s event=%s device=%s",
+                        task_id, event, device["id"]
+                    )
+                except WebPushException as exc:
+                    status_code = getattr(
+                        getattr(exc, "response", None), "status_code", None
+                    )
+                    app.logger.warning(
+                        "TACHES_PUSH: échec appareil=%s HTTP=%s erreur=%s",
+                        device["id"], status_code, exc
+                    )
+                    if status_code in (404, 410):
+                        conn.execute(
+                            "DELETE FROM push_subscriptions WHERE id=?",
+                            (device["id"],)
+                        )
+                except Exception:
+                    app.logger.exception(
+                        "TACHES_PUSH: erreur inattendue appareil=%s", device["id"]
+                    )
+        finally:
+            if key_path and os.path.exists(key_path):
+                try:
+                    os.remove(key_path)
+                except OSError:
+                    app.logger.warning("TACHES_PUSH: fichier VAPID temporaire non supprimé.")
+
+        conn.commit()
+    except Exception:
+        # Une panne Push ne doit jamais empêcher l'attribution ou la validation d'une mission.
+        app.logger.exception("TACHES_PUSH: erreur générale task_id=%s event=%s", task_id, event)
+
+
+
+
 @app.route("/taches", methods=["GET", "POST"])
 def taches_missions():
     identity = task_identity()
@@ -5125,6 +5267,7 @@ def taches_missions():
                     WHERE id=? AND famille_id=? AND terminee=0
                 """, (task_id, family_id))
                 conn.commit()
+                send_task_push_notification(conn, task_id, "completed")
                 flash("Mission validée !")
             conn.close()
             return redirect(url_for("taches_missions"))
@@ -5196,6 +5339,7 @@ def taches_missions():
 
 
             conn.commit()
+            send_task_push_notification(conn, new_task_id, "assigned")
             flash("Mission ajoutée.")
         else:
             flash("Vous n'avez pas l'autorisation d'attribuer cette mission à ce destinataire.")
@@ -5310,6 +5454,33 @@ def taches_actualiser():
         })
     conn.close()
     return jsonify({"success": True, "tasks": tasks})
+
+
+@app.route("/taches/non-lues")
+def taches_non_lues():
+    """Compteur indépendant : missions reçues à faire + missions attribuées effectuées à supprimer."""
+    identity = task_identity()
+    if identity is None:
+        return jsonify({"count": 0}), 401
+    kind, user_id, family_id = identity
+    conn = get_connection()
+    row = conn.execute("""
+        SELECT COUNT(*) AS total
+        FROM taches
+        WHERE famille_id=?
+          AND (
+            (destinataire_type=? AND destinataire_id=? AND terminee=0)
+            OR (
+                assignateur_type=? AND assignateur_id=? AND terminee=1
+                AND NOT (
+                    destinataire_type=assignateur_type
+                    AND destinataire_id=assignateur_id
+                )
+            )
+          )
+    """, (family_id, kind, user_id, kind, user_id)).fetchone()
+    conn.close()
+    return jsonify({"count": int(row["total"] if row else 0)})
 
 
 @app.route("/calendar")
