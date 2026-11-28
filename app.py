@@ -521,20 +521,21 @@ def members():
     )
 
     membres = cursor.fetchall()
-    attributions = {}
-    for ex in membres:
-        if ex["role"] == "ex-conjoint":
-            rows = cursor.execute(
-                "SELECT enfant_id FROM garde_partagee_attributions WHERE famille_id=? AND ex_conjoint_id=?",
-                (famille_id, ex["id"])
-            ).fetchall()
-            attributions[ex["id"]] = {r["enfant_id"] for r in rows}
-    enfants = [m for m in membres if m["role"] == "enfant"]
+    ex_conjoints = [m for m in membres if m["role"] == "ex-conjoint"]
+    attributions_enfant = {}
+    rows = cursor.execute(
+        "SELECT enfant_id, ex_conjoint_id FROM garde_partagee_attributions WHERE famille_id=?",
+        (famille_id,)
+    ).fetchall()
+    for row in rows:
+        attributions_enfant.setdefault(row["enfant_id"], set()).add(row["ex_conjoint_id"])
     conn.close()
 
     return render_template(
         "dashboard_member.html",
-        membres=membres, enfants=enfants, attributions=attributions
+        membres=membres,
+        ex_conjoints=ex_conjoints,
+        attributions_enfant=attributions_enfant
     )
 
 
@@ -2602,7 +2603,7 @@ def edit_member_route(membre_id):
 
     conn = get_connection()
     cursor = conn.cursor()
-    enfants_selectionnes = request.form.getlist("enfants_garde_partagee") if role == "ex-conjoint" else []
+    ex_conjoints_selectionnes = request.form.getlist("ex_conjoints_garde_partagee") if role == "enfant" else []
     if email:
         cursor.execute(
             "SELECT id FROM membres WHERE lower(email) = lower(?) AND id != ?",
@@ -2663,24 +2664,27 @@ def edit_member_route(membre_id):
     modifie = cursor.rowcount > 0
 
     if modifie:
+        # L'association est choisie depuis la fiche de chaque ENFANT :
+        # un enfant peut être lié à un ex-conjoint précis (ou plusieurs),
+        # indépendamment des autres enfants de la famille.
         cursor.execute(
-            "DELETE FROM garde_partagee_attributions WHERE famille_id=? AND ex_conjoint_id=?",
+            "DELETE FROM garde_partagee_attributions WHERE famille_id=? AND enfant_id=?",
             (famille_id, membre_id)
         )
-        if role == "ex-conjoint" and enfants_selectionnes:
-            for enfant_id in enfants_selectionnes:
+        if role == "enfant" and garde_partagee and ex_conjoints_selectionnes:
+            for ex_id in ex_conjoints_selectionnes:
                 try:
-                    enfant_id_int = int(enfant_id)
+                    ex_id_int = int(ex_id)
                 except (TypeError, ValueError):
                     continue
                 cursor.execute(
-                    "SELECT id FROM membres WHERE id=? AND famille_id=? AND role='enfant'",
-                    (enfant_id_int, famille_id)
+                    "SELECT id FROM membres WHERE id=? AND famille_id=? AND role='ex-conjoint'",
+                    (ex_id_int, famille_id)
                 )
                 if cursor.fetchone():
                     cursor.execute(
                         "INSERT OR IGNORE INTO garde_partagee_attributions (famille_id, ex_conjoint_id, enfant_id) VALUES (?, ?, ?)",
-                        (famille_id, membre_id, enfant_id_int)
+                        (famille_id, ex_id_int, membre_id)
                     )
 
     if modifie:
