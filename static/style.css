@@ -2511,3 +2511,96 @@ html body .tasks-page .tasks-table td small {
         min-width: 490px !important;
     }
 }
+
+
+/* Formulaire d'ajout d'événement : version compacte PC et mobile */
+html body .calendar-page .calendar-inline-add {
+    width: min(100% - 24px, 850px) !important;
+    max-width: 850px !important;
+    margin: 12px auto !important;
+    padding: 12px !important;
+    box-sizing: border-box !important;
+}
+html body .calendar-page .calendar-inline-add-header {
+    margin: 0 0 6px !important;
+    gap: 8px !important;
+}
+html body .calendar-page .calendar-inline-add-header h2 {
+    margin: 0 !important;
+    font-size: 19px !important;
+}
+html body .calendar-page .calendar-inline-add .voice-command {
+    padding: 6px 9px !important;
+    margin: 4px 0 8px !important;
+}
+html body .calendar-page .calendar-inline-add .voice-command h3 {
+    margin: 0 0 2px !important;
+    font-size: 14px !important;
+}
+html body .calendar-page .calendar-inline-add .voice-command p {
+    margin: 2px 0 5px !important;
+    font-size: 12px !important;
+}
+html body .calendar-page .calendar-inline-add .calendar-form-grid {
+    gap: 8px 12px !important;
+    padding: 10px !important;
+}
+html body .calendar-page .calendar-inline-add .destinataires-list {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px 10px !important;
+    padding: 5px 7px !important;
+    max-height: 115px !important;
+    overflow-y: auto !important;
+}
+html body .calendar-page .calendar-inline-add .destinataire-option,
+html body .calendar-page .calendar-inline-add .calendar-reminder-block .calendar-checkbox {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    margin: 2px 5px 2px 0 !important;
+    line-height: 1.2 !important;
+    font-size: 13px !important;
+}
+html body .calendar-page .calendar-inline-add .destinataires-list input[type="checkbox"],
+html body .calendar-page .calendar-inline-add .calendar-reminder-block input[type="checkbox"] {
+    flex: 0 0 13px !important;
+    width: 13px !important;
+    height: 13px !important;
+    min-width: 13px !important;
+    min-height: 13px !important;
+    margin: 0 2px 0 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    outline-offset: 1px !important;
+}
+html body .calendar-page .calendar-inline-add .destinataires-help {
+    margin: 4px 0 0 !important;
+    font-size: 11px !important;
+}
+html body .calendar-page .calendar-inline-add .calendar-description textarea {
+    min-height: 42px !important;
+    height: 42px !important;
+}
+html body .calendar-page .calendar-inline-add .calendar-form-grid > div > label {
+    margin: 0 0 3px !important;
+}
+html body .calendar-page .calendar-inline-add .calendar-form-grid input:not([type="checkbox"]),
+html body .calendar-page .calendar-inline-add .calendar-form-grid select {
+    min-height: 34px !important;
+    height: 34px !important;
+    padding: 5px 8px !important;
+}
+@media (max-width: 768px) {
+  html body .calendar-page .calendar-inline-add {
+    width: calc(100% - 14px) !important;
+    padding: 9px !important;
+  }
+  html body .calendar-page .calendar-inline-add .calendar-form-grid {
+    gap: 7px !important;
+    padding: 8px !important;
+  }
+  html body .calendar-page .calendar-inline-add .destinataires-list {
+    max-height: 100px !important;
+  }
+}
