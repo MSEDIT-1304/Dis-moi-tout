@@ -1630,6 +1630,25 @@ def init_database():
         ON taches(famille_id, destinataire_type, destinataire_id, terminee)
     """)
 
+    # Notifications internes Tâches & Missions : table indépendante.
+    # Aucun changement aux notifications Push ou aux notifications des autres modules.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tache_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            destinataire_type TEXT NOT NULL,
+            destinataire_id INTEGER NOT NULL,
+            tache_id INTEGER NOT NULL,
+            lu INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(tache_id, destinataire_type, destinataire_id)
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_tache_notifications_unread
+        ON tache_notifications(famille_id, destinataire_type, destinataire_id, lu)
+    """)
+
     conn.commit()
     conn.close()
 
@@ -5075,6 +5094,28 @@ def task_identity():
     return ("membre", member_id, member["famille_id"])
 
 
+
+
+def ensure_task_notifications_table(conn):
+    """Crée au besoin la table de notifications des missions, sans toucher aux autres tables."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tache_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            destinataire_type TEXT NOT NULL,
+            destinataire_id INTEGER NOT NULL,
+            tache_id INTEGER NOT NULL,
+            lu INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(tache_id, destinataire_type, destinataire_id)
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_tache_notifications_unread
+        ON tache_notifications(famille_id, destinataire_type, destinataire_id, lu)
+    """)
+
+
 def task_person_name(conn, family_id, person_type, person_id, viewer_type, viewer_id):
     """Nom visible depuis le compte connecté : surnom privé, sinon prénom."""
     if person_type == "admin":
@@ -5101,6 +5142,7 @@ def taches_missions():
         return redirect(url_for("login"))
     kind, user_id, family_id = identity
     conn = get_connection()
+    ensure_task_notifications_table(conn)
 
     # Autorisations : admin/conjoint peuvent s'attribuer des tâches et en donner
     # aux enfants ; l'ex-conjoint ne peut viser que les enfants en garde partagée.
@@ -5204,6 +5246,17 @@ def taches_missions():
                  destinataire_type,destinataire_id)
                 VALUES (?,?,?,?,?,?,?,?)
             """, (family_id, titre, description, echeance, kind, user_id, target[0], target[1]))
+            new_task_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+            # Notification interne uniquement si la mission est attribuée à une autre personne.
+            # Elle alimente le compteur de l'onglet sans toucher au système Push existant.
+            if target[0] != kind or target[1] != user_id:
+                conn.execute("""
+                    INSERT OR IGNORE INTO tache_notifications
+                    (famille_id, destinataire_type, destinataire_id, tache_id)
+                    VALUES (?, ?, ?, ?)
+                """, (family_id, target[0], target[1], new_task_id))
+
             conn.commit()
             flash("Mission ajoutée.")
         else:
@@ -5265,31 +5318,43 @@ def taches_missions():
             "est_destinataire":row["destinataire_type"]==kind and row["destinataire_id"]==user_id
         })
 
-    # Gestion du surnom de l'administrateur envers le conjoint depuis son tableau.
-    nickname_target = None
-    if kind == "admin":
-        spouse = next((m for m in members if m["role"] == "conjoint"), None)
-        if spouse:
-            alias = conn.execute("""
-                SELECT surnom FROM messagerie_surnoms
-                WHERE famille_id=? AND owner_type='admin' AND owner_id=?
-                  AND target_type='membre' AND target_id=?
-            """, (family_id,user_id,spouse["id"])).fetchone()
-            nickname_target = {"type":"membre","id":spouse["id"],"label":spouse["prenom"],"value":alias["surnom"] if alias else ""}
-    elif me_role == "conjoint" and admin_row:
-        alias = conn.execute("""
-            SELECT surnom FROM messagerie_surnoms
-            WHERE famille_id=? AND owner_type='membre' AND owner_id=?
-              AND target_type='admin' AND target_id=?
-        """, (family_id,user_id,admin_row["id"])).fetchone()
-        nickname_target = {"type":"admin","id":admin_row["id"],"label":admin_row["prenom"],"value":alias["surnom"] if alias else ""}
+    # Notifications internes non lues pour cet utilisateur.
+    new_task_notifications = conn.execute("""
+        SELECT COUNT(*) AS n FROM tache_notifications
+        WHERE famille_id=? AND destinataire_type=? AND destinataire_id=? AND lu=0
+    """, (family_id, kind, user_id)).fetchone()["n"]
+
+    if new_task_notifications:
+        conn.execute("""
+            UPDATE tache_notifications SET lu=1
+            WHERE famille_id=? AND destinataire_type=? AND destinataire_id=? AND lu=0
+        """, (family_id, kind, user_id))
+        conn.commit()
 
     conn.close()
     return render_template(
         "taches_missions.html", tasks=tasks, recipients=recipients,
-        nickname_target=nickname_target, current_kind=kind,
-        current_role=me_role, current_user_id=user_id
+        current_kind=kind, current_role=me_role, current_user_id=user_id,
+        new_task_notifications=new_task_notifications
     )
+
+
+@app.route("/taches/non-lues")
+def taches_non_lues():
+    identity = task_identity()
+    if identity is None:
+        return jsonify({"count": 0}), 401
+    kind, user_id, family_id = identity
+    conn = get_connection()
+    ensure_task_notifications_table(conn)
+    # Le compteur reflète les missions encore à effectuer, comme le compteur
+    # de la liste des courses reflète les listes non validées.
+    row = conn.execute("""
+        SELECT COUNT(*) AS n FROM taches
+        WHERE famille_id=? AND destinataire_type=? AND destinataire_id=? AND terminee=0
+    """, (family_id, kind, user_id)).fetchone()
+    conn.close()
+    return jsonify({"count": int(row["n"] if row else 0)})
 
 
 @app.route("/calendar")
