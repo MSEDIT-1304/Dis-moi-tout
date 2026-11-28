@@ -1608,6 +1608,28 @@ def init_database():
         ON agenda_notification_push_deliveries(notification_id)
     """)
 
+    # Tâches & Missions : données indépendantes des agendas et notifications.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS taches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            famille_id INTEGER NOT NULL,
+            titre TEXT NOT NULL,
+            description TEXT,
+            date_echeance TEXT,
+            assignateur_type TEXT NOT NULL,
+            assignateur_id INTEGER NOT NULL,
+            destinataire_type TEXT NOT NULL,
+            destinataire_id INTEGER NOT NULL,
+            terminee INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_taches_destinataire
+        ON taches(famille_id, destinataire_type, destinataire_id, terminee)
+    """)
+
     conn.commit()
     conn.close()
 
@@ -5031,6 +5053,243 @@ def agenda_reminders_status():
         "success": True,
         "reminders": [{"titre": row["titre"], "message": row["message"]} for row in rows]
     })
+
+
+
+# ==========================================================
+# TÂCHES & MISSIONS
+# ==========================================================
+
+def task_identity():
+    """Identité fiable de l'utilisateur connecté pour les tâches."""
+    if not session.get("logged"):
+        return None
+    if session.get("admin_logged"):
+        admin_id = session.get("admin_id")
+        family_id = session.get("famille_id") or get_family_id(admin_id)
+        return ("admin", admin_id, family_id) if admin_id and family_id else None
+    member_id = session.get("membre_id")
+    member = get_member_by_id(member_id) if member_id else None
+    if not member or member["famille_id"] != session.get("famille_id"):
+        return None
+    return ("membre", member_id, member["famille_id"])
+
+
+def task_person_name(conn, family_id, person_type, person_id, viewer_type, viewer_id):
+    """Nom visible depuis le compte connecté : surnom privé, sinon prénom."""
+    if person_type == "admin":
+        row = conn.execute("SELECT prenom FROM admin WHERE id=?", (person_id,)).fetchone()
+        fallback = row["prenom"] if row else "Administrateur"
+    else:
+        row = conn.execute(
+            "SELECT prenom, pseudo FROM membres WHERE id=? AND famille_id=?",
+            (person_id, family_id)
+        ).fetchone()
+        fallback = (row["prenom"] if row else "Membre")
+    alias = conn.execute("""
+        SELECT surnom FROM messagerie_surnoms
+        WHERE famille_id=? AND owner_type=? AND owner_id=?
+          AND target_type=? AND target_id=?
+    """, (family_id, viewer_type, viewer_id, person_type, person_id)).fetchone()
+    return (alias["surnom"] if alias and alias["surnom"] else fallback)
+
+
+@app.route("/taches", methods=["GET", "POST"])
+def taches_missions():
+    identity = task_identity()
+    if identity is None:
+        return redirect(url_for("login"))
+    kind, user_id, family_id = identity
+    conn = get_connection()
+
+    # Autorisations : admin/conjoint peuvent s'attribuer des tâches et en donner
+    # aux enfants ; l'ex-conjoint ne peut viser que les enfants en garde partagée.
+    if request.method == "POST":
+        action = request.form.get("action", "create")
+        if action == "nickname":
+            target_type = request.form.get("target_type", "").strip()
+            target_id = request.form.get("target_id", type=int)
+            nickname = request.form.get("nickname", "").strip()[:80]
+            valid = False
+            if target_type == "admin":
+                family_row = conn.execute(
+                    "SELECT admin_id FROM famille WHERE id=?", (family_id,)
+                ).fetchone()
+                valid = bool(family_row and int(family_row["admin_id"]) == target_id and kind != "admin")
+            elif target_type == "membre" and target_id and not (kind == "membre" and target_id == user_id):
+                valid = conn.execute(
+                    "SELECT 1 FROM membres WHERE id=? AND famille_id=?", (target_id, family_id)
+                ).fetchone() is not None
+            if valid:
+                if nickname:
+                    conn.execute("""
+                        INSERT INTO messagerie_surnoms
+                        (famille_id,owner_type,owner_id,target_type,target_id,surnom)
+                        VALUES (?,?,?,?,?,?)
+                        ON CONFLICT(famille_id,owner_type,owner_id,target_type,target_id)
+                        DO UPDATE SET surnom=excluded.surnom
+                    """, (family_id, kind, user_id, target_type, target_id, nickname))
+                else:
+                    conn.execute("""
+                        DELETE FROM messagerie_surnoms
+                        WHERE famille_id=? AND owner_type=? AND owner_id=?
+                          AND target_type=? AND target_id=?
+                    """, (family_id, kind, user_id, target_type, target_id))
+                conn.commit()
+                flash("Nom d'affichage enregistré.")
+            else:
+                flash("Ce destinataire n'est pas valide.")
+            conn.close()
+            return redirect(url_for("taches_missions"))
+
+        if action == "complete":
+            task_id = request.form.get("task_id", type=int)
+            task = conn.execute("""
+                SELECT id FROM taches
+                WHERE id=? AND famille_id=? AND destinataire_type=? AND destinataire_id=?
+            """, (task_id, family_id, kind, user_id)).fetchone()
+            if task:
+                conn.execute("""
+                    UPDATE taches SET terminee=1, completed_at=CURRENT_TIMESTAMP
+                    WHERE id=? AND famille_id=?
+                """, (task_id, family_id))
+                conn.commit()
+                flash("Mission validée !")
+            conn.close()
+            return redirect(url_for("taches_missions"))
+
+        titre = request.form.get("titre", "").strip()[:120]
+        description = request.form.get("description", "").strip()[:1000]
+        echeance = request.form.get("date_echeance", "").strip() or None
+        target_type = request.form.get("destinataire_type", "").strip()
+        target_id = request.form.get("destinataire_id", type=int)
+        target = None
+        if target_type == "admin":
+            fam = conn.execute("SELECT admin_id FROM famille WHERE id=?", (family_id,)).fetchone()
+            if fam and int(fam["admin_id"]) == target_id:
+                target = ("admin", target_id)
+        elif target_type == "membre":
+            target = conn.execute("""
+                SELECT id, role, garde_partagee
+                FROM membres WHERE id=? AND famille_id=?
+            """, (target_id, family_id)).fetchone()
+            if target:
+                target = ("membre", target_id, target["role"], target["garde_partagee"])
+
+        allowed = False
+        if target and titre:
+            if kind == "admin":
+                allowed = (target[0] == "admin" and target[1] == user_id) or (
+                    target[0] == "membre" and target[2] in ("enfant", "conjoint")
+                )
+            else:
+                me = conn.execute(
+                    "SELECT role FROM membres WHERE id=? AND famille_id=?",
+                    (user_id, family_id)
+                ).fetchone()
+                my_role = me["role"] if me else ""
+                if my_role == "conjoint":
+                    allowed = (target[0] == "admin") or (
+                        target[0] == "membre" and target[2] == "enfant"
+                    )
+                elif my_role == "ex-conjoint":
+                    allowed = target[0] == "membre" and target[2] == "enfant" and bool(target[3])
+                elif my_role == "enfant":
+                    allowed = False
+
+        if allowed:
+            conn.execute("""
+                INSERT INTO taches
+                (famille_id,titre,description,date_echeance,assignateur_type,assignateur_id,
+                 destinataire_type,destinataire_id)
+                VALUES (?,?,?,?,?,?,?,?)
+            """, (family_id, titre, description, echeance, kind, user_id, target[0], target[1]))
+            conn.commit()
+            flash("Mission ajoutée.")
+        else:
+            flash("Vous n'avez pas l'autorisation d'attribuer cette mission à ce destinataire.")
+        conn.close()
+        return redirect(url_for("taches_missions"))
+
+    # Informations de la famille et destinataires autorisés.
+    admin_row = conn.execute(
+        "SELECT id, prenom FROM admin WHERE id=(SELECT admin_id FROM famille WHERE id=?)",
+        (family_id,)
+    ).fetchone()
+    members = conn.execute("""
+        SELECT id, prenom, pseudo, role, garde_partagee
+        FROM membres WHERE famille_id=? ORDER BY prenom, nom
+    """, (family_id,)).fetchall()
+    me_role = None
+    if kind == "membre":
+        me = conn.execute("SELECT role FROM membres WHERE id=?", (user_id,)).fetchone()
+        me_role = me["role"] if me else None
+
+    recipients = []
+    if kind == "admin":
+        recipients.append({"type":"admin","id":user_id,"label":"Moi"})
+        for m in members:
+            if m["role"] in ("enfant", "conjoint"):
+                recipients.append({"type":"membre","id":m["id"],"label":m["pseudo"] or m["prenom"]})
+    elif me_role == "conjoint":
+        if admin_row:
+            recipients.append({"type":"admin","id":admin_row["id"],"label":task_person_name(conn,family_id,"admin",admin_row["id"],kind,user_id)})
+        for m in members:
+            if m["role"] == "enfant":
+                recipients.append({"type":"membre","id":m["id"],"label":m["pseudo"] or m["prenom"]})
+        recipients.append({"type":"membre","id":user_id,"label":"Moi"})
+    elif me_role == "ex-conjoint":
+        for m in members:
+            if m["role"] == "enfant" and m["garde_partagee"]:
+                recipients.append({"type":"membre","id":m["id"],"label":m["pseudo"] or m["prenom"]})
+
+    # L'utilisateur voit ses missions reçues et celles qu'il a attribuées.
+    rows = conn.execute("""
+        SELECT * FROM taches
+        WHERE famille_id=? AND (
+            (destinataire_type=? AND destinataire_id=?) OR
+            (assignateur_type=? AND assignateur_id=?)
+        )
+        ORDER BY terminee ASC, CASE WHEN date_echeance IS NULL THEN 1 ELSE 0 END,
+                 date_echeance, id DESC
+    """, (family_id,kind,user_id,kind,user_id)).fetchall()
+
+    tasks = []
+    for row in rows:
+        sender = task_person_name(conn,family_id,row["assignateur_type"],row["assignateur_id"],kind,user_id)
+        recipient = task_person_name(conn,family_id,row["destinataire_type"],row["destinataire_id"],kind,user_id)
+        tasks.append({
+            "id":row["id"],"titre":row["titre"],"description":row["description"],
+            "date_echeance":row["date_echeance"],"terminee":row["terminee"],
+            "assignateur":sender,"destinataire":recipient,
+            "est_destinataire":row["destinataire_type"]==kind and row["destinataire_id"]==user_id
+        })
+
+    # Gestion du surnom de l'administrateur envers le conjoint depuis son tableau.
+    nickname_target = None
+    if kind == "admin":
+        spouse = next((m for m in members if m["role"] == "conjoint"), None)
+        if spouse:
+            alias = conn.execute("""
+                SELECT surnom FROM messagerie_surnoms
+                WHERE famille_id=? AND owner_type='admin' AND owner_id=?
+                  AND target_type='membre' AND target_id=?
+            """, (family_id,user_id,spouse["id"])).fetchone()
+            nickname_target = {"type":"membre","id":spouse["id"],"label":spouse["prenom"],"value":alias["surnom"] if alias else ""}
+    elif me_role == "conjoint" and admin_row:
+        alias = conn.execute("""
+            SELECT surnom FROM messagerie_surnoms
+            WHERE famille_id=? AND owner_type='membre' AND owner_id=?
+              AND target_type='admin' AND target_id=?
+        """, (family_id,user_id,admin_row["id"])).fetchone()
+        nickname_target = {"type":"admin","id":admin_row["id"],"label":admin_row["prenom"],"value":alias["surnom"] if alias else ""}
+
+    conn.close()
+    return render_template(
+        "taches_missions.html", tasks=tasks, recipients=recipients,
+        nickname_target=nickname_target, current_kind=kind,
+        current_role=me_role, current_user_id=user_id
+    )
 
 
 @app.route("/calendar")
