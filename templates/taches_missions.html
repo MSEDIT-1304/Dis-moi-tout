@@ -32,7 +32,14 @@
                             <td>{{ task.date_echeance|replace('-', '/') if task.date_echeance else '—' }}</td>
                             <td>
                                 {% if task.terminee %}
-                                    <span class="task-check" title="Mission terminée">✓</span>
+                                    <span class="task-check" title="Mission effectuée">Effectuée ✓</span>
+                                    {% if task.est_assignateur %}
+                                    <form method="POST" class="task-delete-form" onsubmit="return confirm('Supprimer définitivement cette mission de votre tableau ?');">
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="task_id" value="{{ task.id }}">
+                                        <button type="submit" class="task-delete">Supprimer</button>
+                                    </form>
+                                    {% endif %}
                                 {% elif task.est_destinataire %}
                                     <form method="POST" class="task-complete-form">
                                         <input type="hidden" name="action" value="complete">
@@ -85,6 +92,19 @@
         {% endif %}
     </div>
 </div>
+
+<style>
+.tasks-delete-form, .task-delete-form { margin-top: 5px; }
+.tasks-page .task-delete {
+    padding: 5px 9px;
+    font-size: 12px;
+    border-radius: 7px;
+    background: #A9CBEA;
+    color: #244967;
+}
+.tasks-page .task-delete:hover { background: #8FB8DE; }
+.tasks-page .task-check { display: inline-block; font-weight: 700; }
+</style>
 
 <script>
 (function () {
@@ -144,7 +164,32 @@
             tr.appendChild(cell(task.destinataire));
             tr.appendChild(cell(task.date_echeance ? task.date_echeance.replaceAll("-", "/") : "—"));
             const state = document.createElement("td");
-            if (task.est_destinataire) {
+            if (task.terminee) {
+                const done = document.createElement("span");
+                done.className = "task-check";
+                done.title = "Mission effectuée";
+                done.textContent = "Effectuée ✓";
+                state.appendChild(done);
+
+                if (task.est_assignateur) {
+                    const form = document.createElement("form");
+                    form.method = "POST";
+                    form.className = "task-delete-form";
+                    form.addEventListener("submit", function (event) {
+                        if (!window.confirm("Supprimer définitivement cette mission de votre tableau ?")) {
+                            event.preventDefault();
+                        }
+                    });
+                    const action = document.createElement("input");
+                    action.type = "hidden"; action.name = "action"; action.value = "delete";
+                    const id = document.createElement("input");
+                    id.type = "hidden"; id.name = "task_id"; id.value = task.id;
+                    const button = document.createElement("button");
+                    button.type = "submit"; button.className = "task-delete"; button.textContent = "Supprimer";
+                    form.append(action, id, button);
+                    state.appendChild(form);
+                }
+            } else if (task.est_destinataire) {
                 const form = document.createElement("form");
                 form.method = "POST";
                 form.className = "task-complete-form";
