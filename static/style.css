@@ -2417,14 +2417,7 @@ html body .members-dashboard .members-card .member-edit-form .member-custody-not
     margin: 0;
     background: transparent !important;
 }
-.tasks-notice {
-    margin: 0 0 12px;
-    padding: 9px 12px;
-    border-radius: 9px;
-    background: #e8f5e9;
-    color: #216b32;
-    font-weight: 700;
-}
+
 @media (max-width: 900px) {
     .tasks-columns {
         grid-template-columns: 1fr;
@@ -2451,3 +2444,7 @@ html body .members-dashboard .members-card .member-edit-form .member-custody-not
         min-width: 490px;
     }
 }
+
+/* Tâches & Missions : espacement compact des précisions */
+.tasks-field-description { margin-top: 5px; margin-bottom: 6px; }
+.tasks-field-description label { margin-bottom: 2px; }
