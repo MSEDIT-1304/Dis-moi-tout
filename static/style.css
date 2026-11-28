@@ -2285,3 +2285,16 @@ html body .shopping-wrap .shopping-card .shopping-status.pending {
 .agenda-reminder-notifications li span {
     display: block;
 }
+
+
+/* GÉRER LES MEMBRES — FORMULAIRE « MODIFIER » : TEXTES BLANCS
+   Le fond bordeaux est conservé. Les libellés situés dans les
+   encadrés blancs gardent leur couleur foncée pour rester lisibles. */
+html body .members-dashboard .members-card .member-edit-form > .members-form-grid label,
+html body .members-dashboard .members-card .member-edit-form > .members-checkbox,
+html body .members-dashboard .members-card .member-edit-form > .member-agenda-permissions > label,
+html body .members-dashboard .members-card .member-edit-form > .member-custody-settings > label,
+html body .members-dashboard .members-card .member-edit-form .member-custody-settings .members-form-grid label,
+html body .members-dashboard .members-card .member-edit-form .member-custody-note {
+    color: #FFFFFF !important;
+}
