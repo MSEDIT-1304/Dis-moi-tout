@@ -5115,15 +5115,34 @@ def taches_missions():
             task_id = request.form.get("task_id", type=int)
             task = conn.execute("""
                 SELECT id FROM taches
-                WHERE id=? AND famille_id=? AND destinataire_type=? AND destinataire_id=?
+                WHERE id=? AND famille_id=?
+                  AND destinataire_type=? AND destinataire_id=?
+                  AND terminee=0
             """, (task_id, family_id, kind, user_id)).fetchone()
             if task:
                 conn.execute("""
                     UPDATE taches SET terminee=1, completed_at=CURRENT_TIMESTAMP
-                    WHERE id=? AND famille_id=?
+                    WHERE id=? AND famille_id=? AND terminee=0
                 """, (task_id, family_id))
                 conn.commit()
                 flash("Mission validée !")
+            conn.close()
+            return redirect(url_for("taches_missions"))
+
+        if action == "delete":
+            task_id = request.form.get("task_id", type=int)
+            # Seule la personne qui a attribué la mission peut la supprimer,
+            # et uniquement après sa validation par le destinataire.
+            task = conn.execute("""
+                SELECT id FROM taches
+                WHERE id=? AND famille_id=?
+                  AND assignateur_type=? AND assignateur_id=?
+                  AND terminee=1
+            """, (task_id, family_id, kind, user_id)).fetchone()
+            if task:
+                conn.execute("DELETE FROM taches WHERE id=? AND famille_id=?", (task_id, family_id))
+                conn.commit()
+                flash("Mission supprimée de votre tableau.")
             conn.close()
             return redirect(url_for("taches_missions"))
 
@@ -5218,9 +5237,9 @@ def taches_missions():
     # L'utilisateur voit ses missions reçues et celles qu'il a attribuées.
     rows = conn.execute("""
         SELECT * FROM taches
-        WHERE famille_id=? AND terminee=0 AND (
-            (destinataire_type=? AND destinataire_id=?) OR
-            (assignateur_type=? AND assignateur_id=?)
+        WHERE famille_id=? AND (
+            ((destinataire_type=? AND destinataire_id=?) AND terminee=0)
+            OR (assignateur_type=? AND assignateur_id=?)
         )
         ORDER BY CASE WHEN date_echeance IS NULL THEN 1 ELSE 0 END,
                  date_echeance, id DESC
@@ -5234,7 +5253,8 @@ def taches_missions():
             "id":row["id"],"titre":row["titre"],"description":row["description"],
             "date_echeance":row["date_echeance"],"terminee":row["terminee"],
             "assignateur":sender,"destinataire":recipient,
-            "est_destinataire":row["destinataire_type"]==kind and row["destinataire_id"]==user_id
+            "est_destinataire":row["destinataire_type"]==kind and row["destinataire_id"]==user_id,
+            "est_assignateur":row["assignateur_type"]==kind and row["assignateur_id"]==user_id
         })
 
 
@@ -5256,9 +5276,9 @@ def taches_actualiser():
     conn = get_connection()
     rows = conn.execute("""
         SELECT * FROM taches
-        WHERE famille_id=? AND terminee=0 AND (
-            (destinataire_type=? AND destinataire_id=?) OR
-            (assignateur_type=? AND assignateur_id=?)
+        WHERE famille_id=? AND (
+            ((destinataire_type=? AND destinataire_id=?) AND terminee=0)
+            OR (assignateur_type=? AND assignateur_id=?)
         )
         ORDER BY CASE WHEN date_echeance IS NULL THEN 1 ELSE 0 END,
                  date_echeance, id DESC
@@ -5272,7 +5292,9 @@ def taches_actualiser():
             "date_echeance": row["date_echeance"] or "",
             "assignateur": task_person_name(conn, family_id, row["assignateur_type"], row["assignateur_id"], kind, user_id),
             "destinataire": task_person_name(conn, family_id, row["destinataire_type"], row["destinataire_id"], kind, user_id),
-            "est_destinataire": row["destinataire_type"] == kind and row["destinataire_id"] == user_id
+            "est_destinataire": row["destinataire_type"] == kind and row["destinataire_id"] == user_id,
+            "est_assignateur": row["assignateur_type"] == kind and row["assignateur_id"] == user_id,
+            "terminee": bool(row["terminee"])
         })
     conn.close()
     return jsonify({"success": True, "tasks": tasks})
