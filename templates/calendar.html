@@ -201,7 +201,8 @@
                     </div>
                     <p class="destinataires-help">{% if est_admin %}L'événement sera ajouté directement dans tous les agendas sélectionnés.{% else %}Les autres personnes sélectionnées devront accepter la proposition avant son ajout dans leur agenda.{% endif %}</p>
                 </div>
-                <div><label for="date">Date</label><input type="date" id="date" name="date" required></div>
+                <div class="calendar-date-range-field"><label for="date">Du</label><input type="date" id="date" name="date" required></div>
+                <div class="calendar-date-range-field"><label for="date_fin">Au</label><input type="date" id="date_fin" name="date_fin" required></div>
                 <div><label for="heure">Heure</label><input type="time" id="heure" name="heure"></div>
                 <div class="calendar-recurrence-field">
                     <label for="recurrence_rule">Répétition</label>
@@ -1206,10 +1207,17 @@ document.addEventListener("DOMContentLoaded", function () {
     const openAddButton = document.getElementById("open-add-event");
     const closeAddButton = document.getElementById("close-add-event");
     const addDateInput = document.getElementById("date");
+    const addEndDateInput = document.getElementById("date_fin");
     function showAddForm(dateValue) {
         if (!inlineForm) return;
         inlineForm.hidden = false;
         if (dateValue && addDateInput) addDateInput.value = dateValue;
+        if (addEndDateInput && addDateInput) {
+            addEndDateInput.min = addDateInput.value;
+            if (!addEndDateInput.value || addEndDateInput.value < addDateInput.value) {
+                addEndDateInput.value = addDateInput.value;
+            }
+        }
         const agendaField = document.getElementById("type_agenda");
         if (agendaField) agendaField.value = activeAgenda;
         inlineForm.scrollIntoView({behavior:"smooth", block:"start"});
@@ -1262,3 +1270,18 @@ document.addEventListener("DOMContentLoaded", function () {
 </script>
 {% endblock %}
 
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const start = document.getElementById("date");
+  const end = document.getElementById("date_fin");
+  if (!start || !end) return;
+  start.addEventListener("change", function () {
+    end.min = start.value;
+    if (!end.value || end.value < start.value) end.value = start.value;
+  });
+  end.addEventListener("change", function () {
+    if (start.value) end.min = start.value;
+  });
+});
+</script>
