@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", function () {
 
     // Confirmation avant suppression
@@ -33,4 +32,3 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
 });
-
