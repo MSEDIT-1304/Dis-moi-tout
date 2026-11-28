@@ -2074,144 +2074,116 @@ def register():
 # CRÉATION DES ÉVÉNEMENTS DE GARDE PARTAGÉE
 # ==========================================================
 
-def create_shared_custody_events(
-    famille_id,
-    prochaine_date,
-    frequence,
-    membre_id=None
-):
-
-    if not prochaine_date:
+def create_shared_custody_events(famille_id, prochaine_date, frequence, membre_id=None):
+    """Crée les dates de garde dans l'agenda de l'enfant ET en copie dans
+    l'agenda personnel de chaque ex-conjoint qui lui est attribué.
+    Les copies ex-conjoint sont consultables uniquement et indépendantes.
+    """
+    if not prochaine_date or not membre_id:
+        return
+    try:
+        date_garde = datetime.strptime(prochaine_date, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
         return
 
-    try:
-        date_depart = datetime.strptime(
-            prochaine_date,
-            "%Y-%m-%d"
-        ).date()
-    except ValueError:
+    if frequence == "1 semaine sur deux":
+        intervalle = 14
+    elif frequence == "Tous les quinze jours":
+        intervalle = 15
+    elif frequence == "Tous les mois":
+        intervalle = None
+    else:
         return
 
     conn = get_connection()
     cursor = conn.cursor()
-
-    # Une année de gardes prévisionnelles
-    nombre_evenements = 24
-
-    if frequence == "1 semaine sur deux":
-        intervalle = 7
-
-    elif frequence == "Tous les quinze jours":
-        intervalle = 15
-
-    elif frequence == "Tous les mois":
-        intervalle = None
-
-    else:
+    enfant = cursor.execute(
+        "SELECT prenom FROM membres WHERE id=? AND famille_id=? AND role='enfant'",
+        (membre_id, famille_id)
+    ).fetchone()
+    if not enfant:
         conn.close()
         return
 
-    date_garde = date_depart
+    nom_enfant = (enfant["prenom"] or "Enfant").strip()
+    admin_id = get_family_admin(famille_id)
+    ex_rows = cursor.execute(
+        """SELECT ex_conjoint_id FROM garde_partagee_attributions
+           WHERE famille_id=? AND enfant_id=?""",
+        (famille_id, membre_id)
+    ).fetchall()
+    ex_ids = [r["ex_conjoint_id"] for r in ex_rows]
 
-    for numero in range(nombre_evenements):
-
+    for _ in range(24):
         date_str = date_garde.strftime("%Y-%m-%d")
+        titre = f"Garde de {nom_enfant}"
+        description_source = f"Garde partagée — enfant_id={membre_id}"
 
-        cursor.execute(
-            """
-            SELECT id
-            FROM evenements
-            WHERE famille_id = ?
-            AND date = ?
-            AND type_evenement = ?
-            AND membre_id IS ?
-            """,
-            (
-                famille_id,
-                date_str,
-                "garde_partagee",
-                membre_id
-            )
-        )
-
-        existe = cursor.fetchone()
-
-        if not existe:
-
+        # Événement source dans l'agenda de l'enfant (visible à l'administratrice).
+        source = cursor.execute(
+            """SELECT id FROM evenements WHERE famille_id=? AND date=?
+               AND type_evenement='garde_partagee' AND membre_id=?
+               AND (description IS NULL OR description NOT LIKE 'Garde partagée — copie%')""",
+            (famille_id, date_str, membre_id)
+        ).fetchone()
+        if source:
             cursor.execute(
-                """
-                INSERT INTO evenements
-                (
-                    famille_id,
-                    membre_id,
-                    titre,
-                    description,
-                    date,
-                    heure,
-                    calendrier,
-                    rappel,
-                    type_evenement,
-                    created_by_admin_id,
-                    statut_validation,
-                    valide_par_admin_id,
-                    concerne_admin,
-                    type_agenda
-                )
-                VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    famille_id,
-                    membre_id,
-                    "Garde partagée",
-                    "Garde chez l'autre personne",
-                    date_str,
-                    "",
-                    "Agenda personnel",
-                    1,
-                    "garde_partagee",
-                    get_family_admin(famille_id),
-                    "accepte",
-                    get_family_admin(famille_id),
-                    1,
-                    "admin_perso"
-                )
+                """UPDATE evenements SET titre=?, description=?, concerne_admin=1,
+                   statut_validation='accepte', type_agenda='admin_perso'
+                   WHERE id=?""",
+                (titre, description_source, source["id"])
             )
-
-        if frequence == "Tous les mois":
-
-            mois = date_garde.month
-            annee = date_garde.year
-
-            if mois == 12:
-                mois_suivant = 1
-                annee_suivante = annee + 1
-            else:
-                mois_suivant = mois + 1
-                annee_suivante = annee
-
-            try:
-                date_garde = date_garde.replace(
-                    year=annee_suivante,
-                    month=mois_suivant
-                )
-            except ValueError:
-                # Pour les dates comme le 31
-                # lorsque le mois suivant n'a pas ce jour
-                date_garde = date_garde.replace(
-                    year=annee_suivante,
-                    month=mois_suivant,
-                    day=1
-                )
-
         else:
-
-            from datetime import timedelta
-
-            date_garde = (
-                date_garde
-                + timedelta(days=intervalle)
+            cursor.execute(
+                """INSERT INTO evenements
+                   (famille_id,membre_id,titre,description,date,heure,calendrier,rappel,
+                    type_evenement,created_by_admin_id,statut_validation,valide_par_admin_id,
+                    concerne_admin,type_agenda)
+                   VALUES (?,?,?,?,?,'','Agenda personnel',0,'garde_partagee',?,
+                           'accepte',?,1,'admin_perso')""",
+                (famille_id,membre_id,titre,description_source,date_str,admin_id,admin_id)
             )
+
+        # Copie distincte dans l'agenda PERSO de chaque ex-conjoint désigné.
+        for ex_id in ex_ids:
+            ex_valide = cursor.execute(
+                "SELECT id FROM membres WHERE id=? AND famille_id=? AND role='ex-conjoint'",
+                (ex_id, famille_id)
+            ).fetchone()
+            if not ex_valide:
+                continue
+            description_copie = f"Garde partagée — copie enfant_id={membre_id}"
+            copie = cursor.execute(
+                """SELECT id FROM evenements WHERE famille_id=? AND membre_id=?
+                   AND date=? AND type_evenement='garde_partagee'
+                   AND description=?""",
+                (famille_id, ex_id, date_str, description_copie)
+            ).fetchone()
+            if copie:
+                cursor.execute(
+                    "UPDATE evenements SET titre=?, heure='', calendrier='Agenda personnel', rappel=0, statut_validation='accepte', concerne_admin=0, type_agenda='membre_perso' WHERE id=?",
+                    (titre, copie["id"])
+                )
+            else:
+                cursor.execute(
+                    """INSERT INTO evenements
+                       (famille_id,membre_id,titre,description,date,heure,calendrier,rappel,
+                        type_evenement,created_by_admin_id,statut_validation,valide_par_admin_id,
+                        concerne_admin,type_agenda)
+                       VALUES (?,?,?,?,?,'','Agenda personnel',0,'garde_partagee',?,
+                               'accepte',?,0,'membre_perso')""",
+                    (famille_id,ex_id,titre,description_copie,date_str,admin_id,admin_id)
+                )
+
+        if intervalle is not None:
+            from datetime import timedelta
+            date_garde += timedelta(days=intervalle)
+        else:
+            import calendar as _calendar
+            mois_suivant = date_garde.month % 12 + 1
+            annee_suivante = date_garde.year + (1 if date_garde.month == 12 else 0)
+            jour = min(date_garde.day, _calendar.monthrange(annee_suivante, mois_suivant)[1])
+            date_garde = date_garde.replace(year=annee_suivante, month=mois_suivant, day=jour)
 
     conn.commit()
     conn.close()
@@ -2691,13 +2663,11 @@ def edit_member_route(membre_id):
         # Conserver toutes les gardes passées. Seules les gardes futures
         # générées pour cet enfant sont remplacées.
         cursor.execute(
-            """
-            DELETE FROM evenements
-            WHERE famille_id = ? AND membre_id = ?
-              AND type_evenement = 'garde_partagee'
-              AND date >= date('now', 'localtime')
-            """,
-            (famille_id, membre_id)
+            """DELETE FROM evenements
+               WHERE famille_id=? AND type_evenement='garde_partagee'
+                 AND date >= date('now','localtime')
+                 AND (membre_id=? OR description LIKE ?)""",
+            (famille_id, membre_id, f"Garde partagée — copie enfant_id={membre_id}")
         )
         conn.commit()
 
@@ -4467,6 +4437,7 @@ def add_event():
     titre = request.form.get("titre", "").strip()
     description = request.form.get("description", "").strip()
     date = request.form.get("date", "").strip()
+    date_fin = request.form.get("date_fin", "").strip() or date
     heure = request.form.get("heure", "").strip()
     couleur = request.form.get("couleur_evenement", "#4f8fc9").strip()
     if couleur.lower() == "#d94f9b":
@@ -4474,8 +4445,20 @@ def add_event():
     if couleur.lower() not in {"#4f8fc9", "#a52d68", "#54a66b", "#e2a43b"}:
         couleur = "#4f8fc9"
     if not titre or not date:
-        flash("Veuillez saisir un titre et une date.")
-        return _calendar_return_redirect(agenda if "agenda" in locals() else "perso")
+        flash("Veuillez saisir un titre et une date de début.")
+        return _calendar_return_redirect("perso")
+    try:
+        date_debut_obj = __import__("datetime").date.fromisoformat(date)
+        date_fin_obj = __import__("datetime").date.fromisoformat(date_fin)
+        if date_fin_obj < date_debut_obj:
+            raise ValueError
+        nombre_jours = (date_fin_obj - date_debut_obj).days + 1
+        if nombre_jours > 366:
+            flash("Un événement ne peut pas dépasser 366 jours.")
+            return _calendar_return_redirect("perso")
+    except (TypeError, ValueError):
+        flash("La date de fin doit être égale ou postérieure à la date de début.")
+        return _calendar_return_redirect("perso")
 
     rappel = 1 if request.form.get("rappel") == "oui" else 0
     delais_autorises = {60, 1440, 21600, 43200}
@@ -4493,6 +4476,9 @@ def add_event():
     recurrence_end = request.form.get("recurrence_end", "").strip() or None
     if recurrence_rule == "none":
         recurrence_end = None
+    elif date_fin_obj > date_debut_obj:
+        flash("Pour un événement sur plusieurs jours, choisissez d'abord '1 seule fois'.")
+        return _calendar_return_redirect("perso")
     elif recurrence_end:
         try:
             if __import__("datetime").date.fromisoformat(recurrence_end) < __import__("datetime").date.fromisoformat(date):
@@ -4594,26 +4580,28 @@ def add_event():
         valide_admin = admin_id if est_admin else None
         valide_membre = auteur_membre_id if (not est_admin and est_son_propre_agenda) else None
 
-        cursor.execute(
-            """
-            INSERT INTO evenements (
-                famille_id, membre_id, titre, description, date, heure,
-                calendrier, rappel, rappel_delai_minutes, type_evenement, created_by_admin_id,
-                created_by_membre_id, statut_validation, valide_par_admin_id,
-                valide_par_membre_id, concerne_admin, type_agenda,
-                recurrence_rule, recurrence_end, recurrence_series_id, recurrence_index, recurrence_skips
+        for jour_evenement in range((date_fin_obj - date_debut_obj).days + 1):
+            date_evenement = (date_debut_obj + timedelta(days=jour_evenement)).isoformat()
+            cursor.execute(
+                """
+                INSERT INTO evenements (
+                    famille_id, membre_id, titre, description, date, heure,
+                    calendrier, rappel, rappel_delai_minutes, type_evenement, created_by_admin_id,
+                    created_by_membre_id, statut_validation, valide_par_admin_id,
+                    valide_par_membre_id, concerne_admin, type_agenda,
+                    recurrence_rule, recurrence_end, recurrence_series_id, recurrence_index, recurrence_skips
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    famille_id, destinataire_id, titre, description, date_evenement, heure,
+                    couleur, rappel, rappel_delai_minutes, "normal", created_by_admin_id,
+                    created_by_membre_id, statut, valide_admin,
+                    valide_membre, concerne_admin, type_agenda,
+                    recurrence_rule if recurrence_rule != "none" else None,
+                    recurrence_end, recurrence_series_id, 0, "[]"
+                )
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                famille_id, destinataire_id, titre, description, date, heure,
-                couleur, rappel, rappel_delai_minutes, "normal", created_by_admin_id,
-                created_by_membre_id, statut, valide_admin,
-                valide_membre, concerne_admin, type_agenda,
-                recurrence_rule if recurrence_rule != "none" else None,
-                recurrence_end, recurrence_series_id, 0, "[]"
-            )
-        )
         if recurrence_series_id and statut == "accepte":
             _ensure_recurrence_occurrences(conn, famille_id)
         if statut == "en_attente":
@@ -5542,6 +5530,25 @@ def calendar():
     est_admin = session.get("admin_logged") is True
     membre_id = session.get("membre_id")
     admin_id = session.get("admin_id")
+
+    # Synchronisation non destructive : crée les copies des dates déjà
+    # enregistrées dans les agendas des ex-conjoints attribués, y compris
+    # pour les gardes configurées avant cette correction.
+    sync_conn = get_connection()
+    enfants_garde = sync_conn.execute(
+        """SELECT id, prochaine_date_garde, frequence_garde
+           FROM membres WHERE famille_id=? AND role='enfant' AND garde_partagee=1""",
+        (famille_id,)
+    ).fetchall()
+    sync_conn.close()
+    for enfant_garde in enfants_garde:
+        create_shared_custody_events(
+            famille_id,
+            enfant_garde["prochaine_date_garde"],
+            enfant_garde["frequence_garde"],
+            membre_id=enfant_garde["id"]
+        )
+
     conn = get_connection()
     cursor = conn.cursor()
     _ensure_recurrence_occurrences(conn, famille_id)
@@ -5613,13 +5620,14 @@ def calendar():
                 evenements.append(ev_dict)
             continue
 
-        # Un ex-conjoint voit aussi les événements de garde des seuls enfants
-        # qui lui ont été individuellement attribués par l'administrateur.
-        if (membre["role"] == "ex-conjoint"
-                and ev_dict.get("type_evenement") == "garde_partagee"
-                and ev_dict.get("membre_id") in enfants_garde_ex):
-            ev_dict["peut_gerer"] = False
-            evenements.append(ev_dict)
+        # Les dates de garde sont copiées comme événements consultables dans
+        # l'agenda PERSO de l'ex-conjoint désigné. Les copies sont identifiées
+        # par leur description et ne sont jamais modifiables par celui-ci.
+        if membre["role"] == "ex-conjoint" and ev_dict.get("type_evenement") == "garde_partagee":
+            if (ev_dict.get("membre_id") == membre_id
+                    and (ev_dict.get("description") or "").startswith("Garde partagée — copie")):
+                ev_dict["peut_gerer"] = False
+                evenements.append(ev_dict)
             continue
 
         # Le membre voit ses propres rendez-vous.
