@@ -258,19 +258,6 @@
     </section>
     {% endif %}
 
-    {% if not est_admin %}
-    <section class="member-account-delete" id="delete-account">
-        <a href="#delete-account-form" class="member-delete-link">Supprimer mon compte</a>
-        <form id="delete-account-form" method="POST"
-              action="{{ url_for('delete_account') }}"
-              onsubmit="return confirm('Confirmez-vous la suppression définitive de votre compte et de vos données ? Cette action est irréversible.');">
-            <label for="delete-account-confirmation">Pour confirmer, saisissez SUPPRIMER :</label>
-            <input id="delete-account-confirmation" name="confirmation"
-                   type="text" autocomplete="off" required>
-            <button type="submit" class="calendar-delete">Confirmer la suppression de mon compte</button>
-        </form>
-    </section>
-    {% endif %}
 </div>
 
 <dialog id="calendar-event-dialog" class="calendar-event-dialog">
@@ -403,11 +390,6 @@
 .event-actions summary { cursor:pointer; color:#dfbd78; margin-bottom:12px; }
 .event-actions form { margin-top:10px; }
 .calendar-delete { background:#a94442; color:white; border:0; border-radius:6px; padding:10px 15px; cursor:pointer; }
-.member-account-delete { margin:24px 0 10px; text-align:center; }
-.member-delete-link { color:#a93226; font-weight:bold; text-decoration:underline; }
-#delete-account-form { max-width:420px; margin:16px auto 0; text-align:left; }
-#delete-account-form label { display:block; margin-bottom:7px; }
-#delete-account-form input { width:100%; box-sizing:border-box; padding:10px; border:1px solid #bbb; border-radius:6px; margin-bottom:10px; }
 .calendar-messages { margin-bottom:15px; }
 .proposal-item { display:flex; justify-content:space-between; gap:18px; align-items:flex-start; padding:16px 0; border-bottom:1px solid rgba(255,255,255,.25); }
 .proposal-item:last-child { border-bottom:0; }
