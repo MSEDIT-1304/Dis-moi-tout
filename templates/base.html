@@ -52,4 +52,263 @@
 
     {% if session.get("logged") %}
         <section id="push-notification-banner" role="region" aria-label="Notifications"
-                 style="display:
+                 style="display:none;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:12px auto;padding:12px 16px;max-width:1000px;background:#fff0f6;border:1px solid #e6a4c2;border-radius:10px;text-align:center;">
+            <span style="color:#71304f;font-weight:600;">Recevez une alerte lorsque vous avez un nouveau message.</span>
+            <button type="button" id="enable-push-notifications"
+                    style="border:0;border-radius:8px;padding:9px 14px;background:#a52d68;color:#fff;font-weight:600;cursor:pointer;">
+                Activer les notifications
+            </button>
+            <span id="push-notification-status" role="status" aria-live="polite"
+                  style="font-size:13px;color:#71304f;"></span>
+        </section>
+    {% endif %}
+
+    <main class="page-content">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+
+    </main>
+
+<br>
+
+
+    <footer class="site-footer">
+    Dis-moi tout — Organisons notre quotidien ensemble
+
+    <p>© Tous droits réservés à Studio Web & Applications</p>
+    <nav class="legal-footer-links" aria-label="Informations légales">
+        <a href="{{ url_for('politique_confidentialite') }}">Politique de confidentialité</a>
+        <span aria-hidden="true">|</span>
+        <a href="{{ url_for('conditions_utilisation') }}">Conditions d’utilisation</a>
+    </nav>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+{% if session.get("logged") %}
+<script>
+(function () {
+    const checkUrl = "{{ url_for('subscription_check') }}";
+    async function verifySubscription() {
+        try {
+            const response = await fetch(checkUrl, {
+                method: "GET",
+                credentials: "same-origin",
+                cache: "no-store"
+            });
+            if (response.status === 401 || response.status === 403) {
+                const data = await response.json();
+                window.location.href = data.redirect || "{{ url_for('login', abonnement='expire') }}";
+            }
+        } catch (error) {
+            console.warn("Vérification abonnement reportée :", error);
+        }
+    }
+    window.setInterval(verifySubscription, 15 * 60 * 1000);
+    const badge = document.getElementById("message-unread-badge");
+    async function updateMessageBadge() {
+        if (!badge) return;
+        try {
+            const response = await fetch("{{ url_for('messagerie_non_lus') }}", {credentials:"same-origin", cache:"no-store"});
+            if (!response.ok) return;
+            const data = await response.json();
+            badge.textContent = data.count > 99 ? "99+" : data.count;
+            badge.style.display = data.count > 0 ? "inline-block" : "none";
+            // Badge sur l'icône de l'application installée (si pris en charge).
+            if ("setAppBadge" in navigator) {
+                if (data.count > 0) await navigator.setAppBadge(data.count);
+                else if ("clearAppBadge" in navigator) await navigator.clearAppBadge();
+            }
+        } catch (error) { console.warn("Notification messagerie indisponible", error); }
+    }
+    updateMessageBadge();
+    window.setInterval(updateMessageBadge, 15 * 1000);
+
+    // Activation volontaire des notifications sur cet appareil.
+    const pushButton = document.getElementById("enable-push-notifications");
+    const pushStatus = document.getElementById("push-notification-status");
+
+    function urlBase64ToUint8Array(base64String) {
+        const padding = "=".repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+        const raw = window.atob(base64);
+        return Uint8Array.from([...raw].map(char => char.charCodeAt(0)));
+    }
+
+    async function savePushSubscription(subscription) {
+        const saveResponse = await fetch("{{ url_for('push_subscribe') }}", {
+            method: "POST",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(subscription)
+        });
+        if (!saveResponse.ok) {
+            const details = await saveResponse.json().catch(() => ({}));
+            throw new Error(details.error || "Impossible d'enregistrer cet appareil sur le serveur.");
+        }
+        return true;
+    }
+
+    async function getVapidPublicKey() {
+        const keyResponse = await fetch("{{ url_for('push_vapid_public_key') }}", {
+            credentials: "same-origin",
+            cache: "no-store"
+        });
+        if (!keyResponse.ok) {
+            throw new Error("Le service de notifications n'est pas disponible sur le serveur.");
+        }
+        const keyData = await keyResponse.json();
+        if (!keyData.publicKey) throw new Error("Clé publique de notification absente.");
+        return keyData.publicKey;
+    }
+
+    const pushBannerPreferenceKey = "dis-moi-tout-push-activated-v1";
+
+    function hidePushBanner() {
+        const banner = document.getElementById("push-notification-banner");
+        if (banner) banner.style.display = "none";
+    }
+
+    function showPushBanner() {
+        const banner = document.getElementById("push-notification-banner");
+        if (banner) banner.style.display = "flex";
+    }
+
+    async function refreshPushButton() {
+        if (!pushButton) return;
+
+        if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+            pushButton.disabled = true;
+            pushButton.textContent = "Notifications non disponibles";
+            showPushBanner();
+            return;
+        }
+
+        try {
+            // La demande initiale reste déclenchée par le bouton (geste utilisateur).
+            // Dès que l'autorisation est accordée, le bandeau ne réapparaît plus,
+            // y compris après F5, fermeture ou réouverture de l'application.
+            if (Notification.permission !== "granted") {
+                showPushBanner();
+                return;
+            }
+
+            hidePushBanner();
+            localStorage.setItem(pushBannerPreferenceKey, "1");
+
+            // À chaque ouverture, on vérifie et synchronise l'abonnement de cet appareil.
+            const registration = await navigator.serviceWorker.ready;
+            let subscription = await registration.pushManager.getSubscription();
+
+            if (!subscription) {
+                const publicKey = await getVapidPublicKey();
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(publicKey)
+                });
+            }
+
+            await savePushSubscription(subscription);
+        } catch (error) {
+            console.warn("Synchronisation automatique des notifications impossible :", error);
+            // Ne pas réafficher le bandeau si l'autorisation a déjà été accordée.
+            if (Notification.permission === "granted") hidePushBanner();
+            if (pushStatus) pushStatus.textContent = "La synchronisation des notifications sera retentée à la prochaine ouverture.";
+        }
+    }
+
+    if (pushButton) {
+        refreshPushButton();
+        pushButton.addEventListener("click", async function () {
+            pushButton.disabled = true;
+            if (pushStatus) pushStatus.textContent = "";
+
+            try {
+                if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+                    throw new Error("Ce navigateur ne prend pas en charge les notifications Push.");
+                }
+
+                const permission = await Notification.requestPermission();
+                if (permission !== "granted") {
+                    throw new Error("Autorisation des notifications non accordée.");
+                }
+
+                const keyResponse = await fetch("{{ url_for('push_vapid_public_key') }}", {
+                    credentials: "same-origin",
+                    cache: "no-store"
+                });
+                if (!keyResponse.ok) {
+                    throw new Error("Le service de notifications n'est pas encore configuré.");
+                }
+                const keyData = await keyResponse.json();
+                const registration = await navigator.serviceWorker.ready;
+                let subscription = await registration.pushManager.getSubscription();
+
+                if (!subscription) {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+                    });
+                }
+
+                await savePushSubscription(subscription);
+
+                // Mémoriser l'activation sur cet appareil pour ne plus
+                // réafficher le bandeau à chaque F5.
+                localStorage.setItem(pushBannerPreferenceKey, "1");
+                hidePushBanner();
+            } catch (error) {
+                if (pushStatus) pushStatus.textContent = error.message || "Activation impossible.";
+                console.warn("Activation des notifications impossible", error);
+            } finally {
+                pushButton.disabled = false;
+            }
+        });
+    }
+})();
+</script>
+{% endif %}
+{% if request.endpoint == "calendar" %}
+<script>
+(function () {
+    const flashContainer = document.querySelector(".flash-messages");
+    if (!flashContainer) return;
+
+    window.setTimeout(function () {
+        flashContainer.style.transition = "opacity 0.5s ease";
+        flashContainer.style.opacity = "0";
+        window.setTimeout(function () {
+            flashContainer.remove();
+        }, 500);
+    }, 4000);
+})();
+</script>
+{% endif %}
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+        navigator.serviceWorker.register(
+            "/service-worker.js",
+            { scope: "/", updateViaCache: "none" }
+        ).catch(function (error) {
+            console.warn("Enregistrement du service worker impossible", error);
+        });
+    });
+}
+</script>
+
+</body>
+</html>
+
