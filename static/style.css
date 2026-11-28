@@ -2448,3 +2448,66 @@ html body .members-dashboard .members-card .member-edit-form .member-custody-not
 /* Tâches & Missions : espacement compact des précisions */
 .tasks-field-description { margin-top: 5px; margin-bottom: 6px; }
 .tasks-field-description label { margin-bottom: 2px; }
+
+
+/* TÂCHES & MISSIONS — TABLEAU COMPACT (sans toucher aux autres pages) */
+html body .tasks-page .tasks-table {
+    table-layout: auto !important;
+    min-width: 0 !important;
+    font-size: 12px !important;
+}
+html body .tasks-page .tasks-table th,
+html body .tasks-page .tasks-table td {
+    padding: 6px 7px !important;
+    line-height: 1.25 !important;
+    vertical-align: middle !important;
+}
+html body .tasks-page .tasks-table td form,
+html body .tasks-page .tasks-table td .task-delete-form,
+html body .tasks-page .tasks-table td .task-complete-form {
+    display: inline-block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    margin: 3px 0 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+html body .tasks-page .tasks-table td button {
+    display: inline-block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 5px 9px !important;
+    margin: 0 !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+}
+html body .tasks-page .tasks-table td .task-check {
+    display: inline-block !important;
+    font-size: 15px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+}
+html body .tasks-page .tasks-table td .task-pending {
+    white-space: nowrap !important;
+    font-size: 12px !important;
+}
+html body .tasks-page .tasks-table td small {
+    margin-top: 2px !important;
+    line-height: 1.2 !important;
+}
+@media (min-width: 901px) {
+    html body .tasks-page .tasks-columns {
+        grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr) !important;
+        gap: 16px !important;
+        align-items: start !important;
+    }
+}
+@media (max-width: 700px) {
+    html body .tasks-page .tasks-table {
+        min-width: 490px !important;
+    }
+}
