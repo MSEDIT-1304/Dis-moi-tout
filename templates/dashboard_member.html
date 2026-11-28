@@ -178,7 +178,7 @@
                                         <div class="ex-custody-children">
                                             {% for enfant in enfants %}
                                             <label class="members-checkbox">
-                                                <input type="checkbox" name="enfants_garde_partagee" value="{{ enfant['id'] }}" {% if enfant['id'] in attributions.get(membre['id'], set()) %}checked{% endif %}>
+                                                <input type="checkbox" name="enfants_garde_partagee" value="{{ enfant['id'] }}" {% if enfant['id'] in attributions.get(membre['id'], []) %}checked{% endif %}>
                                                 {{ enfant['prenom'] }} {{ enfant['nom'] }}
                                             </label>
                                             {% else %}
